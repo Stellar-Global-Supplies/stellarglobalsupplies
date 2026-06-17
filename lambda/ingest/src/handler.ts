@@ -52,7 +52,15 @@ function split(line: string): string[] {
 }
 
 const cleanAmt = (s: string|undefined): number => { const n = parseFloat(String(s??'').replace(/,/g,'').replace(/\s/g,'')); return isNaN(n)?0:n; };
-const isData   = (cols: string[]) => /^\d+$/.test((cols[0]??'').trim());
+function findDataRow(dataCols: string[]): string[] | null {
+  const idx = dataCols.findIndex(v =>
+    /^\d+$/.test(String(v).trim())
+  );
+
+  if (idx === -1) return null;
+
+  return dataCols.slice(idx);
+}
 const slugify  = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,60);
 
 function parseDate(s: string|undefined): string {
@@ -100,18 +108,43 @@ function makeItemPurchRow(c: string[], src: string): Record<string,unknown>|null
   return { PK:`PO#${m}`,SK:`ITEM#${inv}#${skuSlug}`,GSI1PK:`VENDOR#${supSlug}`,GSI1SK:`DATE#${dISO}`,GSI2PK:`SKU#${skuSlug}`,GSI2SK:`DATE#${dISO}`,entityType:'PURCHASE_ITEM',invoice_no:inv,date:d,vendor_name:sup,product_sku:item,quantity:c[5]?.trim(),base_amount:base,gst_amount:gst,total_amount:total,source_key:src,ingested_at:new Date().toISOString() };
 }
 
-async function* streamCSV(body: Readable, ft: SGSFileType, src: string): AsyncGenerator<Record<string,unknown>> {
-  const rl = createInterface({ input: body, crlfDelay: Infinity });
+async function* streamCSV(
+  body: Readable,
+  ft: SGSFileType,
+  src: string
+): AsyncGenerator<Record<string, unknown>> {
+
+  const rl = createInterface({
+    input: body,
+    crlfDelay: Infinity,
+  });
+
   for await (const line of rl) {
-    const t = line.trim(); if (!t) continue;
+    const t = line.trim();
+    if (!t) continue;
+
     const cols = split(t);
-    if (!isData(cols)) continue;
-    let row: Record<string,unknown>|null = null;
-    if (ft==='sales_register')    row = makeSaleRow(cols, src);
-    if (ft==='purchase_register') row = makePurchRow(cols, src);
-    if (ft==='item_sales')        row = makeItemSaleRow(cols, src);
-    if (ft==='item_purchase')     row = makeItemPurchRow(cols, src);
-    if (row) yield row;
+
+    const dataCols = findDataRow(cols);
+    console.log("RAW COLS:", cols.slice(0, 15));
+    console.log("DATA COLS:", dataCols?.slice(0, 15));
+    if (!dataCols) continue;
+
+    let row: Record<string, unknown> | null = null;
+
+    if (ft === 'sales_register') {
+      row = makeSaleRow(dataCols, src);
+    } else if (ft === 'purchase_register') {
+      row = makePurchRow(dataCols, src);
+    } else if (ft === 'item_sales') {
+      row = makeItemSaleRow(dataCols, src);
+    } else if (ft === 'item_purchase') {
+      row = makeItemPurchRow(dataCols, src);
+    }
+
+    if (row) {
+      yield row;
+    }
   }
 }
 
