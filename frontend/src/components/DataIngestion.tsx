@@ -1,6 +1,5 @@
 import { useState, useRef, useCallback, useId } from 'react';
 import {
-  Upload,
   FileText,
   FileJson,
   X,
@@ -30,16 +29,16 @@ const ACCEPTED_MIME: Record<string, string> = {
   'text/plain':       'csv',  // some systems send .csv as text/plain
 };
 
-const CSV_EXPECTED_HEADERS = [
-  'Invoice_ID',
-  'Date',
-  'Customer_Name',
-  'Product_SKU',
-  'Quantity',
-  'Unit_Price',
-  'Total_Amount',
-  'Material_Type',
-];
+// const CSV_EXPECTED_HEADERS = [
+//   'Invoice_ID',
+//   'Date',
+//   'Customer_Name',
+//   'Product_SKU',
+//   'Quantity',
+//   'Unit_Price',
+//   'Total_Amount',
+//   'Material_Type',
+// ];
 
 // ────────────────────────────────────────────────────────────────────────────
 // Helpers

@@ -3,8 +3,6 @@ import { useQuery } from '@tanstack/react-query';
 import {
   BarChart,
   Bar,
-  LineChart,
-  Line,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -21,7 +19,6 @@ import {
   RefreshCw,
   AlertCircle,
   TrendingUp,
-  TrendingDown,
   Package,
   Users,
   Filter,

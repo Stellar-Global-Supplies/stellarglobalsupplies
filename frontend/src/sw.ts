@@ -172,11 +172,18 @@ self.addEventListener('fetch', (event: FetchEvent) => {
 // ────────────────────────────────────────────────────────────────────────────
 // Background Sync — replay queued requests
 // ────────────────────────────────────────────────────────────────────────────
-self.addEventListener('sync', (event: SyncEvent) => {
-  if (event.tag === SYNC_TAG_CHAT || event.tag === SYNC_TAG_INGEST) {
-    event.waitUntil(replayQueue(event.tag));
+self.addEventListener('sync', ((event: Event) => {
+  const syncEvent = event as SyncEvent;
+
+  if (
+    syncEvent.tag === SYNC_TAG_CHAT ||
+    syncEvent.tag === SYNC_TAG_INGEST
+  ) {
+    syncEvent.waitUntil(
+      replayQueue(syncEvent.tag)
+    );
   }
-});
+}) as EventListener);
 
 async function replayQueue(tag: string): Promise<void> {
   const items = await getQueuedRequests(tag);

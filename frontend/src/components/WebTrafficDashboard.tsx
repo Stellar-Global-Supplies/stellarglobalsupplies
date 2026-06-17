@@ -5,8 +5,8 @@ import {
   CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts';
 import {
-  ShieldOff, Bot, Globe, Monitor, RefreshCw,
-  AlertCircle, TrendingUp, Users, Eye, Info,
+  ShieldOff, Bot, RefreshCw,
+  AlertCircle, Info,
 } from 'lucide-react';
 import { fetchWebAnalytics } from '@/api/client';
 import type { WebAnalyticsData, AnalyticsPeriod } from '@/types';
