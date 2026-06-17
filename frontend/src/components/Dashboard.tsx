@@ -23,7 +23,7 @@ import {
   Pie,
   Cell,
 } from 'recharts';
-import { fetchAnalyticsSummary } from '@/api/client';
+import { fetchAnalyticsSummarySupabase } from '@/services/analytics';
 import type { AnalyticsSummary } from '@/types';
 import { format, parseISO } from 'date-fns';
 import { useNavStore } from '@/store';
@@ -418,7 +418,7 @@ function ErrorCard({ message, onRetry }: { message: string; onRetry: () => void 
 export default function Dashboard() {
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['analytics-summary'],
-    queryFn:  () => fetchAnalyticsSummary(6),
+    queryFn:  () => fetchAnalyticsSummarySupabase(6),
     staleTime: 5 * 60 * 1000,
   });
 

@@ -127,3 +127,11 @@ variable "analytics_bucket_name" {
   type        = string
   default     = "stellar-analytics-reports-471112840461"
 }
+variable "supabase_url" {
+  type = string
+}
+
+variable "supabase_service_role_key" {
+  type = string
+  sensitive = true
+}

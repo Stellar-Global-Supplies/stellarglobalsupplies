@@ -334,9 +334,13 @@ jobs:
         run: npm run build
         env:
           VITE_API_BASE_URL: ${{ env.VITE_API_BASE_URL }}
-          VITE_APP_VERSION:  ${{ github.sha }}
-          VITE_ENVIRONMENT:  production
-          NODE_ENV:          production
+      
+          VITE_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+      
+          VITE_APP_VERSION: ${{ github.sha }}
+          VITE_ENVIRONMENT: production
+          NODE_ENV: production
 
       - name: Sync hashed assets (long-cache, immutable)
         run: |

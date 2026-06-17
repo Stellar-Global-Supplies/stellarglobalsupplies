@@ -23,7 +23,7 @@ import {
   Users,
   Filter,
 } from 'lucide-react';
-import { fetchAnalyticsSummary } from '@/api/client';
+import { fetchAnalyticsSummarySupabase } from '@/services/analytics';
 import type { AnalyticsSummary } from '@/types';
 import { format, parseISO } from 'date-fns';
 
@@ -525,7 +525,7 @@ export default function Analytics() {
 
   const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
     queryKey: ['analytics-summary', months],
-    queryFn:  () => fetchAnalyticsSummary(months),
+    queryFn:  () => fetchAnalyticsSummarySupabase(months),
     staleTime: 5 * 60 * 1000,
   });
 

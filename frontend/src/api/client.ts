@@ -77,10 +77,12 @@ export async function sendChatMessage(
 // Analytics
 // ────────────────────────────────────────────────────────────────────────────
 
+import { fetchAnalyticsSummarySupabase } from '@/services/analytics';
+
 export async function fetchAnalyticsSummary(
   months: number = 6,
 ): Promise<AnalyticsSummary> {
-  return request<AnalyticsSummary>(`/analytics/summary?months=${months}`);
+  return fetchAnalyticsSummarySupabase(months);
 }
 
 // ────────────────────────────────────────────────────────────────────────────

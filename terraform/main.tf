@@ -662,11 +662,12 @@ resource "aws_lambda_function" "ingest" {
   timeout          = var.lambda_timeout_ingest
 
   environment {
-    variables = {
-      DYNAMODB_TABLE = aws_dynamodb_table.ops.name
-      ENVIRONMENT    = var.environment
-    }
+  variables = {
+    DYNAMODB_TABLE = aws_dynamodb_table.ops.name
+    SUPABASE_URL = var.supabase_url
+    SUPABASE_SERVICE_ROLE_KEY = var.supabase_service_role_key
   }
+}
 
   depends_on = [aws_cloudwatch_log_group.ingest]
 }

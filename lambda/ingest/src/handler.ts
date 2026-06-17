@@ -16,6 +16,12 @@ import { DynamoDBDocumentClient, BatchWriteCommand, UpdateCommand } from '@aws-s
 import type { S3Event, S3Handler } from 'aws-lambda';
 import { Readable } from 'stream';
 import { createInterface } from 'readline';
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(
+  process.env.SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
 
 const REGION         = process.env.AWS_REGION    ?? 'ap-south-1';
 const DYNAMODB_TABLE = process.env.DYNAMODB_TABLE!;
@@ -167,7 +173,84 @@ async function* streamJSON(body: Readable): AsyncGenerator<Record<string,unknown
   if (!Array.isArray(arr)) throw new Error('JSON must be array');
   for (const r of arr) yield r as Record<string,unknown>;
 }
+async function flushSupabase(
+  items: Record<string, unknown>[],
+  ft: SGSFileType,
+): Promise<void> {
+  if (!items.length) return;
 
+  switch (ft) {
+    case 'sales_register': {
+      const rows = items.map((i) => ({
+        invoice_no: i.invoice_id,
+        invoice_date: i.date,
+        customer_name: i.customer_name,
+        total_amount: i.total_amount,
+        source_file: i.source_key,
+      }));
+
+      const { error } = await supabase
+        .from('sales')
+        .upsert(rows, { onConflict: 'invoice_no' });
+
+      if (error) throw error;
+      break;
+    }
+
+    case 'purchase_register': {
+      const rows = items.map((i) => ({
+        invoice_no: i.invoice_no,
+        invoice_date: i.date,
+        vendor_name: i.vendor_name,
+        total_amount: i.total_amount,
+        source_file: i.source_key,
+      }));
+
+      const { error } = await supabase
+        .from('purchases')
+        .upsert(rows);
+
+      if (error) throw error;
+      break;
+    }
+
+    case 'item_sales': {
+      const rows = items.map((i) => ({
+        invoice_no: i.invoice_no,
+        product_sku: i.product_sku,
+        quantity: parseFloat(
+          String(i.quantity ?? '').replace(/[^\d.]/g, '')
+        ) || 0,
+        total_amount: i.total_amount,
+      }));
+
+      const { error } = await supabase
+        .from('sales_items')
+        .insert(rows);
+
+      if (error) throw error;
+      break;
+    }
+
+    case 'item_purchase': {
+      const rows = items.map((i) => ({
+        invoice_no: i.invoice_no,
+        product_sku: i.product_sku,
+        quantity: parseFloat(
+          String(i.quantity ?? '').replace(/[^\d.]/g, '')
+        ) || 0,
+        total_amount: i.total_amount,
+      }));
+
+      const { error } = await supabase
+        .from('purchase_items')
+        .insert(rows);
+
+      if (error) throw error;
+      break;
+    }
+  }
+}
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function flush(items: Record<string,unknown>[]): Promise<void> {
   if (!items.length) return;
@@ -226,11 +309,22 @@ export const handler: S3Handler = async (event: S3Event) => {
             mDeltas.set(m,{ic:ex.ic+1,rev:ex.rev+(Number(item.total_amount)||0)});
           }
         }
-        if (buf.length>=BATCH_SIZE) { await flush(buf); written+=buf.length; buf=[]; }
+        if (buf.length >= BATCH_SIZE) {
+          await flush(buf);
+          await flushSupabase(buf, ft);
+        
+          written += buf.length;
+          buf = [];
+        }
       }
       if (buf.length) { await flush(buf); written+=buf.length; }
     } catch (e) {
-      if (buf.length) { try { await flush(buf); written+=buf.length; } catch{} }
+      if (buf.length) {
+        await flush(buf);
+        await flushSupabase(buf, ft);
+      
+        written += buf.length;
+      }
       throw e;
     }
 
