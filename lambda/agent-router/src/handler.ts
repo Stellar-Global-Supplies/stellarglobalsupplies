@@ -492,17 +492,7 @@ async function getAgentProfile(agentId: string): Promise<AgentProfile | null> {
 }
 
 async function listAllAgents(): Promise<AgentProfile[]> {
-  const result = await ddb.send(
-    new QueryCommand({
-      TableName:                 DYNAMODB_TABLE,
-      IndexName:                 'GSI1',
-      KeyConditionExpression:    'GSI1PK = :type',
-      ExpressionAttributeValues: { ':type': 'ROLE#sales-analyst' },
-      Limit:                     50,
-    }),
-  );
-
-  // GSI1 only returns one role; scan for all AGENT# PKs instead
+  // Scan for all AGENT# PKs (single scan covers all 6 agents in one call)
   const scanResult = await ddb.send(
     new ScanCommand({
       TableName:                 DYNAMODB_TABLE,
@@ -535,15 +525,13 @@ async function getSessionMessages(sessionId: string): Promise<ChatMessageRecord[
   return (result.Items ?? []) as ChatMessageRecord[];
 }
 
-async function persistMessage(msg: Omit<ChatMessageRecord, 'PK' | 'SK' | 'GSI1PK' | 'GSI1SK' | 'ttl'>): Promise<void> {
-  const tsKey = msg.timestamp.replace(/[:.]/g, '-');
+// Callers supply GSI1PK/GSI1SK directly so the correct agentId is used.
+async function persistMessage(msg: Omit<ChatMessageRecord, 'PK' | 'SK' | 'ttl'>): Promise<void> {
   const record: ChatMessageRecord = {
     ...msg,
-    PK:      `SESSION#${msg.session_id}`,
-    SK:      `MSG#${msg.timestamp}#${msg.message_id}`,
-    GSI1PK:  `AGENT#${msg.session_id.split('_')[0] ?? 'unknown'}`,
-    GSI1SK:  `TS#${msg.timestamp}`,
-    ttl:     Math.floor(Date.now() / 1000) + MESSAGE_TTL_SECONDS,
+    PK:  `SESSION#${msg.session_id}`,
+    SK:  `MSG#${msg.timestamp}#${msg.message_id}`,
+    ttl: Math.floor(Date.now() / 1000) + MESSAGE_TTL_SECONDS,
   };
 
   await ddb.send(

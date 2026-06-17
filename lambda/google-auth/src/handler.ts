@@ -208,7 +208,11 @@ async function handleCallback(event: APIGatewayProxyEventV2): Promise<APIGateway
       }).toString(),
     });
 
-    tokenJson = await tokenRes.json();
+    tokenJson = (await tokenRes.json()) as {
+      access_token?: string; refresh_token?: string; scope?: string;
+      expires_in?: number; id_token?: string;
+      error?: string; error_description?: string;
+    };
 
     if (!tokenRes.ok || tokenJson.error) {
       console.error('[google-auth] Token exchange failed', tokenJson);

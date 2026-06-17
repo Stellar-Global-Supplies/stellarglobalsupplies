@@ -122,9 +122,13 @@ async function* streamJSON(body: Readable): AsyncGenerator<Record<string,unknown
   for (const r of arr) yield r as Record<string,unknown>;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function flush(items: Record<string,unknown>[]): Promise<void> {
   if (!items.length) return;
-  let rem = items.map(i => ({ PutRequest: { Item: i } })); let att = 0;
+  // Cast required: DynamoDB SDK's BatchWriteCommand has a complex union type
+  // that doesn't accept plain Record<string,unknown>; the doc client handles marshalling at runtime.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let rem: any[] = items.map(i => ({ PutRequest: { Item: i } })); let att = 0;
   while (rem.length && att < 5) {
     const res = await ddb.send(new BatchWriteCommand({ RequestItems: { [DYNAMODB_TABLE]: rem } }));
     const unp = res.UnprocessedItems?.[DYNAMODB_TABLE];
