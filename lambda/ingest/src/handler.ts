@@ -63,12 +63,25 @@ function findDataRow(dataCols: string[]): string[] | null {
 }
 const slugify  = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,60);
 
-function parseDate(s: string|undefined): string {
+function parseDate(s: string | undefined): string {
   if (!s) return '';
+
   const t = s.trim();
-  const mdy = t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-  if (mdy) return `${mdy[3]}-${mdy[1].padStart(2,'0')}-${mdy[2].padStart(2,'0')}`;
-  if (/^\d{4}-\d{2}-\d{2}/.test(t)) return t.slice(0,10);
+
+  const dmy = t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+
+  if (dmy) {
+    const day = dmy[1].padStart(2, '0');
+    const month = dmy[2].padStart(2, '0');
+    const year = dmy[3];
+
+    return `${year}-${month}-${day}`;
+  }
+
+  if (/^\d{4}-\d{2}-\d{2}/.test(t)) {
+    return t.slice(0, 10);
+  }
+
   return t;
 }
 
