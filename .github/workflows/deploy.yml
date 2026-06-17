@@ -115,7 +115,7 @@ jobs:
     strategy:
       matrix:
         lambda: [presign, ingest, agent-router, google-auth]
-      fail-fast: true
+      fail-fast: false   # ← one Lambda failure must NOT cancel the others
 
     steps:
       - name: Checkout
@@ -125,12 +125,21 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
-          cache-dependency-path: lambda/${{ matrix.lambda }}/package-lock.json
+          # No cache-dependency-path here — package-lock.json may not exist yet.
+          # npm install below generates it; caching is handled by GHA's node_modules cache.
+
+      - name: Cache node_modules
+        uses: actions/cache@v4
+        with:
+          path: lambda/${{ matrix.lambda }}/node_modules
+          key: lambda-${{ matrix.lambda }}-${{ hashFiles(format('lambda/{0}/package.json', matrix.lambda)) }}
+          restore-keys: |
+            lambda-${{ matrix.lambda }}-
 
       - name: Install dependencies
         working-directory: lambda/${{ matrix.lambda }}
-        run: npm ci --prefer-offline
+        # npm install (not npm ci) — works without a pre-existing package-lock.json
+        run: npm install
 
       - name: Build
         working-directory: lambda/${{ matrix.lambda }}
@@ -138,7 +147,8 @@ jobs:
 
       - name: Type-check
         working-directory: lambda/${{ matrix.lambda }}
-        run: npm run type-check 2>/dev/null || echo "No type-check script — skipping"
+        # Non-fatal — type errors surface in the build step anyway
+        run: npm run type-check 2>/dev/null || true
 
       - name: Upload dist artifact
         uses: actions/upload-artifact@v4
@@ -281,8 +291,15 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
-          cache-dependency-path: frontend/package-lock.json
+          # No cache-dependency-path — use explicit cache step below instead
+
+      - name: Cache frontend node_modules
+        uses: actions/cache@v4
+        with:
+          path: frontend/node_modules
+          key: frontend-${{ hashFiles('frontend/package.json') }}
+          restore-keys: |
+            frontend-
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -293,7 +310,7 @@ jobs:
 
       - name: Install dependencies
         working-directory: frontend
-        run: npm ci --prefer-offline
+        run: npm install
 
       - name: Build PWA
         working-directory: frontend
