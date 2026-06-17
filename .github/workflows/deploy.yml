@@ -166,10 +166,10 @@ jobs:
     needs: build-lambdas
 
     outputs:
-      frontend_bucket:         ${{ steps.outputs.outputs.frontend_bucket }}
-      cloudfront_id:           ${{ steps.outputs.outputs.cloudfront_id }}
-      api_endpoint:            ${{ steps.outputs.outputs.api_endpoint }}
-      google_oauth_redirect:   ${{ steps.outputs.outputs.google_oauth_redirect }}
+      frontend_bucket: ${{ steps.outputs.outputs.frontend_bucket }}
+      cloudfront_id: ${{ steps.outputs.outputs.cloudfront_id }}
+      api_endpoint_b64: ${{ steps.outputs.outputs.api_endpoint_b64 }}
+      google_oauth_redirect_b64: ${{ steps.outputs.outputs.google_oauth_redirect_b64 }}
 
     steps:
       - name: Checkout
@@ -259,11 +259,24 @@ jobs:
       - name: Extract Terraform outputs
         id: outputs
         working-directory: ${{ env.TF_DIR }}
+        shell: bash
         run: |
-          echo "frontend_bucket=$(terraform output -raw frontend_bucket_name)"       >> $GITHUB_OUTPUT
-          echo "cloudfront_id=$(terraform output -raw cloudfront_distribution_id)"   >> $GITHUB_OUTPUT
-          echo "api_endpoint=$(terraform output -raw api_endpoint)"                   >> $GITHUB_OUTPUT
-          echo "google_oauth_redirect=$(terraform output -raw google_oauth_redirect_uri)" >> $GITHUB_OUTPUT
+          FRONTEND_BUCKET=$(terraform output -raw frontend_bucket_name)
+          CLOUDFRONT_ID=$(terraform output -raw cloudfront_distribution_id)
+          API_ENDPOINT=$(terraform output -raw api_endpoint)
+          GOOGLE_REDIRECT=$(terraform output -raw google_oauth_redirect_uri)
+      
+          echo "frontend_bucket=$FRONTEND_BUCKET" >> "$GITHUB_OUTPUT"
+          echo "cloudfront_id=$CLOUDFRONT_ID" >> "$GITHUB_OUTPUT"
+      
+          echo "api_endpoint_b64=$(echo -n "$API_ENDPOINT" | base64 | tr -d '\n')" >> "$GITHUB_OUTPUT"
+          echo "google_oauth_redirect_b64=$(echo -n "$GOOGLE_REDIRECT" | base64 | tr -d '\n')" >> "$GITHUB_OUTPUT"
+      
+      - name: Debug Terraform outputs
+        run: |
+          echo "frontend_bucket=${{ steps.outputs.outputs.frontend_bucket }}"
+          echo "cloudfront_id=${{ steps.outputs.outputs.cloudfront_id }}"
+          echo "api_endpoint_b64=${{ steps.outputs.outputs.api_endpoint_b64 }}"
 
       - name: Print OAuth redirect URI (add this to Google Cloud Console)
         run: |
@@ -312,11 +325,15 @@ jobs:
         working-directory: frontend
         run: npm install
 
+      - name: Decode API endpoint
+        run: |
+          echo "VITE_API_BASE_URL=$(echo '${{ needs.terraform.outputs.api_endpoint_b64 }}' | base64 -d)" >> $GITHUB_ENV
+
       - name: Build PWA
         working-directory: frontend
         run: npm run build
         env:
-          VITE_API_BASE_URL: ${{ needs.terraform.outputs.api_endpoint }}
+          VITE_API_BASE_URL: ${{ env.VITE_API_BASE_URL }}
           VITE_APP_VERSION:  ${{ github.sha }}
           VITE_ENVIRONMENT:  production
           NODE_ENV:          production
@@ -392,7 +409,7 @@ jobs:
 
       - name: Test API health — list agents
         run: |
-          API="${{ needs.terraform.outputs.api_endpoint }}"
+          API=$(echo '${{ needs.terraform.outputs.api_endpoint_b64 }}' | base64 -d)
           if [ -z "$API" ]; then
             echo "⚠ API endpoint is empty (Terraform output not captured) — skipping curl check"
             exit 0
@@ -411,7 +428,7 @@ jobs:
 
       - name: Test API health — analytics summary
         run: |
-          API="${{ needs.terraform.outputs.api_endpoint }}"
+          API=$(echo '${{ needs.terraform.outputs.api_endpoint_b64 }}' | base64 -d)
           if [ -z "$API" ]; then echo "⚠ Skipping — empty endpoint"; exit 0; fi
           STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
             --max-time 20 \
@@ -425,7 +442,8 @@ jobs:
           echo "  ✅  DEPLOYMENT COMPLETE"
           echo ""
           echo "  App URL     : https://ops.stellarglobalsupplies.com"
-          echo "  API URL     : ${{ needs.terraform.outputs.api_endpoint }}"
+          API=$(echo '${{ needs.terraform.outputs.api_endpoint_b64 }}' | base64 -d)
+          echo "  API URL     : $API"
           echo "  Commit      : ${{ github.sha }}"
           echo "  Deployed at : $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
           echo "  Gemini model: gemini-2.5-flash-lite"
