@@ -240,8 +240,8 @@ function CampaignRecommendations({ data, period }: { data: MetaAnalyticsData; pe
     high_intent_visits: 0,
     top_locations: ['India'],
   };
-
-  const primaryLocation = topLocations?.[0] ?? 'India';
+  
+  const primaryLocation = insights.top_locations?.[0] ?? 'India';
   const warm = insights.warm_audience_size;
   const hint = insights.high_intent_visits;
 
