@@ -24,6 +24,7 @@ import {
   CalendarCheck,
 } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
+import type { LucideIcon } from 'lucide-react';
 import {
   listAgents,
   sendChatMessage,
@@ -39,7 +40,7 @@ const CURRENT_USER_ID = 'manager-001';
 // ────────────────────────────────────────────────────────────────────────────
 // Icon map
 // ────────────────────────────────────────────────────────────────────────────
-const ICON_MAP: Record<string, React.FC<{ size?: number; className?: string }>> = {
+const ICON_MAP: Record<string, LucideIcon> = {
   TrendingUp,
   Target,
   BarChart2,

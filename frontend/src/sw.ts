@@ -29,7 +29,9 @@
  */
 
 declare const self: ServiceWorkerGlobalScope;
-
+interface SyncEvent extends ExtendableEvent {
+  readonly tag: string;
+}
 const OFFLINE_FALLBACK_URL = '/offline.html';
 const SYNC_QUEUE_DB        = 'sgs-ops-sync-queue';
 const SYNC_QUEUE_STORE     = 'pending-requests';

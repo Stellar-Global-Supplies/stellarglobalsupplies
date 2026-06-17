@@ -13,6 +13,7 @@ import {
   HardDrive,
 } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
+import type { LucideIcon } from 'lucide-react';
 import { requestPresignedUrl, uploadFileToS3 } from '@/api/client';
 import { useNotificationStore } from '@/store';
 import type { UploadJob, UploadStatus } from '@/types';
@@ -70,7 +71,7 @@ function validateFile(file: File): string | null {
 // ────────────────────────────────────────────────────────────────────────────
 const STATUS_CONFIG: Record<
   UploadStatus,
-  { label: string; color: string; bg: string; Icon: React.FC<{ size?: number; className?: string }> }
+  { label: string; color: string; bg: string; Icon: LucideIcon }
 > = {
   'idle':           { label: 'Pending',     color: '#94a3b8', bg: '#1e293b', Icon: Clock       },
   'requesting-url': { label: 'Authorising', color: '#f59e0b', bg: '#451a03', Icon: Loader2     },

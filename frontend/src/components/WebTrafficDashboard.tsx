@@ -198,7 +198,13 @@ function GeoAndPages({ data }: { data: WebAnalyticsData }) {
             <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" horizontal={false} />
             <XAxis type="number" tick={{ fill: '#64748b', fontSize: 10 }} axisLine={false} tickLine={false} />
             <YAxis type="category" dataKey="country" tick={{ fill: '#94a3b8', fontSize: 10 }} axisLine={false} tickLine={false} width={100} />
-            <Tooltip {...TOOLTIP_STYLE} formatter={(v: number, _: string, ctx) => [`${v.toLocaleString()} (${geoData[ctx.dataIndex]?.pct ?? 0}%)`, 'Requests']} />
+            <Tooltip
+  {...TOOLTIP_STYLE}
+  formatter={(v: number, _: string, ctx: any) => [
+    `${v.toLocaleString()} (${ctx?.payload?.pct ?? 0}%)`,
+    'Requests'
+  ]}
+/>
             <Bar dataKey="requests" fill="#378add" radius={[0, 3, 3, 0]} maxBarSize={18} />
           </BarChart>
         </ResponsiveContainer>

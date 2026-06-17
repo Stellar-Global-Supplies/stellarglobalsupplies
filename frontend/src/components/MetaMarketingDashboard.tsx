@@ -158,7 +158,13 @@ function AudienceGeo({ data }: { data: MetaAnalyticsData }) {
                   <Cell key={i} fill={GEO_COLORS[i % GEO_COLORS.length]} />
                 ))}
               </Pie>
-              <Tooltip {...TOOLTIP_STYLE} formatter={(v: number, _: string, ctx) => [`${v.toLocaleString()} (${geoData[ctx.dataIndex]?.pct ?? 0}%)`, 'Requests']} />
+              <Tooltip
+  {...TOOLTIP_STYLE}
+  formatter={(v: number, _: string, ctx: any) => [
+    `${v.toLocaleString()} (${ctx?.payload?.pct ?? 0}%)`,
+    'Requests'
+  ]}
+/>
             </PieChart>
           </ResponsiveContainer>
         </div>

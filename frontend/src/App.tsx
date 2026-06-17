@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from 'react';
+import { useEffect } from 'react';
 import {
   LayoutDashboard,
   Bot,
@@ -11,9 +11,9 @@ import {
   Megaphone,
   Wifi,
   WifiOff,
-  RefreshCw,
   ChevronRight,
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { useNavStore, useNotificationStore } from '@/store';
 import type { NavSection } from '@/types';
 import Dashboard from '@/components/Dashboard';
@@ -26,7 +26,7 @@ import Analytics from '@/components/Analytics';
 // ────────────────────────────────────────────────────────────────────────────
 // Nav item config
 // ────────────────────────────────────────────────────────────────────────────
-const NAV_ITEMS: { section: NavSection; label: string; Icon: React.FC<{ className?: string }> }[] = [
+const NAV_ITEMS: { section: NavSection; label: string; Icon: LucideIcon }[] = [
   { section: 'dashboard', label: 'Dashboard',     Icon: LayoutDashboard },
   { section: 'agents',    label: 'AI Agents',     Icon: Bot              },
   { section: 'ingest',    label: 'Data Ingest',   Icon: Upload           },
