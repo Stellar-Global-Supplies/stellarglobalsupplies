@@ -73,40 +73,49 @@ function IntegrationNotice() {
 // KPI cards
 // ────────────────────────────────────────────────────────────────────────────
 function KPIs({ data }: { data: MetaAnalyticsData }) {
+  const insights = data?.meta_insights ?? {
+    warm_audience_size: 0,
+    high_intent_visits: 0,
+    recommended_objective: 'Traffic',
+    best_ad_time: 'N/A',
+    best_placement: 'Facebook Feed',
+    top_locations: [],
+  };
+
   const cards = [
     {
       label: 'Warm audience',
-      value: data.meta_insights.warm_audience_size.toLocaleString(),
-      sub:   'retargetable visitors',
-      icon:  <Users size={16} />,
+      value: insights.warm_audience_size.toLocaleString(),
+      sub: 'retargetable visitors',
+      icon: <Users size={16} />,
       color: '#6366f1',
     },
     {
       label: 'High-intent sessions',
-      value: data.meta_insights.high_intent_visits.toLocaleString(),
-      sub:   'full site load',
-      icon:  <Target size={16} />,
+      value: insights.high_intent_visits.toLocaleString(),
+      sub: 'full site load',
+      icon: <Target size={16} />,
       color: '#10b981',
     },
     {
       label: 'Recommended objective',
-      value: data.meta_insights.recommended_objective,
-      sub:   'for Meta campaigns',
-      icon:  <Megaphone size={16} />,
+      value: insights.recommended_objective,
+      sub: 'for Meta campaigns',
+      icon: <Megaphone size={16} />,
       color: '#8b5cf6',
     },
     {
       label: 'Best ad time',
-      value: data.meta_insights.best_ad_time,
-      sub:   '05:30–08:30 IST',
-      icon:  <Clock size={16} />,
+      value: insights.best_ad_time,
+      sub: '05:30–08:30 IST',
+      icon: <Clock size={16} />,
       color: '#f59e0b',
     },
     {
       label: 'Best placement',
-      value: data.meta_insights.best_placement,
-      sub:   'Meta platform',
-      icon:  <Send size={16} />,
+      value: insights.best_placement,
+      sub: 'Meta platform',
+      icon: <Send size={16} />,
       color: '#06b6d4',
     },
   ];
@@ -131,7 +140,7 @@ function KPIs({ data }: { data: MetaAnalyticsData }) {
 // Audience geography chart
 // ────────────────────────────────────────────────────────────────────────────
 function AudienceGeo({ data }: { data: MetaAnalyticsData }) {
-  const geoData = data.geo_distribution.slice(0, 6);
+  const geoData = (data?.geo_distribution ?? []).slice(0, 6);
 
   return (
     <div className="glass-card p-5 mb-4">
@@ -193,7 +202,7 @@ function AudienceGeo({ data }: { data: MetaAnalyticsData }) {
 // Audience trend
 // ────────────────────────────────────────────────────────────────────────────
 function AudienceTrend({ data }: { data: MetaAnalyticsData }) {
-  const chartData = data.traffic_over_time.map((d) => ({
+  const chartData = (data?.traffic_over_time ?? []).map((d) => ({
     date:     format(parseISO(d.date), 'MMM d'),
     audience: d.requests,
   }));
@@ -225,9 +234,16 @@ function AudienceTrend({ data }: { data: MetaAnalyticsData }) {
 // ────────────────────────────────────────────────────────────────────────────
 function CampaignRecommendations({ data, period }: { data: MetaAnalyticsData; period: AnalyticsPeriod }) {
   const setSection = useNavStore((s) => s.setSection);
-  const topLocations = data.meta_insights.top_locations;
-  const warm = data.meta_insights.warm_audience_size;
-  const hint = data.meta_insights.high_intent_visits;
+
+  const insights = data?.meta_insights ?? {
+    warm_audience_size: 0,
+    high_intent_visits: 0,
+    top_locations: ['India'],
+  };
+
+  const primaryLocation = topLocations?.[0] ?? 'India';
+  const warm = insights.warm_audience_size;
+  const hint = insights.high_intent_visits;
 
   const campaigns = [
     {
@@ -237,9 +253,9 @@ function CampaignRecommendations({ data, period }: { data: MetaAnalyticsData; pe
       color: '#6366f1',
     },
     {
-      title: `${topLocations[0]} — top traffic source`,
-      desc:  `${topLocations[0]} drives the most sessions (${period === 'weekly' ? '42%' : '34%'}). Run a B2B awareness campaign targeting manufacturing/industrial buyers in this market.`,
-      cta:   `Create a Meta ad campaign for the ${topLocations[0]} B2B steel market`,
+      title: `${primaryLocation} — top traffic source`,
+      desc:  `${primaryLocation} drives the most sessions (${period === 'weekly' ? '42%' : '34%'}). Run a B2B awareness campaign targeting manufacturing/industrial buyers in this market.`,
+      cta:   `Create a Meta ad campaign for the ${primaryLocation} B2B steel market`,
       color: '#8b5cf6',
     },
     {
@@ -312,7 +328,11 @@ export default function MetaMarketingDashboard() {
         <div>
           <h2 className="text-xl font-bold text-slate-100">Meta Marketing Intelligence</h2>
           <p className="text-sm text-slate-400 mt-0.5">
-            Facebook · Instagram · {data ? `generated ${format(parseISO(data.generated_at), 'MMM d, yyyy')}` : 'refreshes daily from analytics pipeline'}
+          Facebook · Instagram · {
+  data?.generated_at
+    ? `generated ${format(parseISO(data.generated_at), 'MMM d, yyyy')}`
+    : 'refreshes daily from analytics pipeline'
+}
           </p>
         </div>
         <div className="flex items-center gap-2">

@@ -203,12 +203,19 @@ function TopCustomersChart({ customers }: { customers: AnalyticsSummary['top_cus
 // SKU performance chart
 // ────────────────────────────────────────────────────────────────────────────
 function SKUPerformanceChart({ skus }: { skus: AnalyticsSummary['top_skus'] }) {
-  const data = skus.slice(0, 8).map((s) => ({
-    sku:      s.sku.length > 20 ? s.sku.slice(0, 19) + '…' : s.sku,
-    revenue:  s.total_revenue,
-    qty:      s.total_qty,
-    material: s.material_type,
-  }));
+  const data = (skus ?? []).slice(0, 8).map((s: any) => {
+    const skuName = s.sku ?? s.item_name ?? s.product_name ?? 'Unknown SKU';
+
+    return {
+      sku:
+        skuName.length > 20
+          ? skuName.slice(0, 19) + '…'
+          : skuName,
+      revenue: s.total_revenue ?? 0,
+      qty: s.total_qty ?? 0,
+      material: s.material_type ?? 'SS',
+    };
+  });
 
   return (
     <div className="glass-card p-5">
