@@ -322,12 +322,35 @@ resource "aws_dynamodb_table" "ops" {
   hash_key     = "PK"
   range_key    = "SK"
 
-  attribute { name = "PK";     type = "S" }
-  attribute { name = "SK";     type = "S" }
-  attribute { name = "GSI1PK"; type = "S" }
-  attribute { name = "GSI1SK"; type = "S" }
-  attribute { name = "GSI2PK"; type = "S" }
-  attribute { name = "GSI2SK"; type = "S" }
+attribute {
+  name = "PK"
+  type = "S"
+}
+
+attribute {
+  name = "SK"
+  type = "S"
+}
+
+attribute {
+  name = "GSI1PK"
+  type = "S"
+}
+
+attribute {
+  name = "GSI1SK"
+  type = "S"
+}
+
+attribute {
+  name = "GSI2PK"
+  type = "S"
+}
+
+attribute {
+  name = "GSI2SK"
+  type = "S"
+}
 
   global_secondary_index {
     name            = "GSI1"
