@@ -111,7 +111,7 @@ function Sidebar() {
       <aside
         className={`
           app-sidebar fixed top-0 left-0 h-full z-30 flex flex-col
-          bg-slate-950/92 border-r border-white/10 backdrop-blur-xl
+          bg-[rgba(2,6,23,0.92)] border-r border-white/10 backdrop-blur-xl
           transition-all duration-300 ease-in-out
           ${sidebarOpen ? 'w-sidebar' : 'w-sidebar-sm'}
           ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
@@ -119,7 +119,7 @@ function Sidebar() {
       >
         {/* Logo header */}
         <div className="flex items-center gap-3 px-4 h-header border-b border-white/10 shrink-0">
-          <div className="w-9 h-9 rounded-xl bg-[#00B98E]/15 border border-[#00B98E]/35 flex items-center justify-center shrink-0 shadow-[0_0_24px_rgba(0,185,142,0.25)]">
+          <div className="w-9 h-9 rounded-xl bg-[rgba(0,185,142,0.15)] border border-[rgba(0,185,142,0.35)] flex items-center justify-center shrink-0 shadow-[0_0_24px_rgba(0,185,142,0.25)]">
             <Sparkles size={17} className="text-[#00B98E]" />
           </div>
           {sidebarOpen && (
@@ -145,7 +145,7 @@ function Sidebar() {
                   w-full flex items-center gap-3 px-3 py-2.5 rounded-lg
                   transition-all duration-150 group relative
                   ${isActive
-                    ? 'bg-[#00B98E]/14 text-emerald-200 border border-[#00B98E]/35 shadow-[0_0_28px_rgba(0,185,142,0.12)]'
+                    ? 'bg-[rgba(0,185,142,0.14)] text-emerald-200 border border-[rgba(0,185,142,0.35)] shadow-[0_0_28px_rgba(0,185,142,0.12)]'
                     : 'text-slate-400 hover:text-slate-200 hover:bg-white/10'
                   }
                 `}
@@ -207,7 +207,7 @@ function Header() {
     <header
       className={`
         app-header fixed top-0 right-0 z-10
-        bg-slate-950/88 backdrop-blur-xl border-b border-white/10
+        bg-[rgba(2,6,23,0.88)] backdrop-blur-xl border-b border-white/10
         flex items-center gap-4 px-4 md:px-6
         transition-all duration-300
         ${sidebarOpen ? 'left-sidebar' : 'left-sidebar-sm'}
