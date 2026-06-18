@@ -12,6 +12,7 @@ import {
 import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
 import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
 import { GoogleGenAI, Type, type Content, type FunctionDeclaration } from '@google/genai';
+import { createClient } from '@supabase/supabase-js';
 import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda';
 import { randomUUID } from 'crypto';
 
@@ -26,8 +27,22 @@ const GOOGLE_CLIENT_SECRET_PARAM = process.env.GOOGLE_CLIENT_SECRET_PARAM!;
 const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN   ?? '*';
 const GEMINI_MODEL        = 'gemini-2.5-flash-lite';
 const ANALYTICS_BUCKET    = process.env.ANALYTICS_BUCKET ?? 'stellar-analytics-reports-471112840461';
+const SUPABASE_URL        = process.env.SUPABASE_URL;
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 const s3Analytics = new S3Client({ region: REGION });
+let supabaseClient: ReturnType<typeof createClient> | null = null;
+
+function getSupabaseClient(): ReturnType<typeof createClient> {
+  if (supabaseClient) return supabaseClient;
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    throw new Error('Supabase environment variables are missing. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY on agent-router.');
+  }
+  supabaseClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+    auth: { persistSession: false },
+  });
+  return supabaseClient;
+}
 
 // Message TTL: 30 days
 const MESSAGE_TTL_SECONDS = 30 * 24 * 60 * 60;
@@ -70,10 +85,15 @@ interface ChatMessageRecord {
 
 interface BusinessContext {
   recent_sales_summary:   string;
+  purchase_summary:       string;
+  profit_summary:         string;
+  gst_summary:            string;
   top_skus:               string;
   top_customers:          string;
+  top_suppliers:          string;
   monthly_revenue:        string;
   material_split:         string;
+  item_margin:            string;
   total_records_ingested: number;
 }
 
@@ -100,18 +120,46 @@ interface ChatResponse {
 interface AnalyticsSummary {
   period:            string;
   total_revenue:     number;
+  total_purchase:    number;
+  gross_profit:      number;
+  gross_margin_pct:  number;
   total_invoices:    number;
   avg_invoice_value: number;
+  customer_count:    number;
+  supplier_count:    number;
   top_customers:     TopCustomer[];
+  top_suppliers:     TopSupplier[];
   top_skus:          TopSKU[];
   revenue_by_month:  MonthlyRevenue[];
-  material_split:    { SS: number; MS: number };
+  business_by_month: MonthlyBusiness[];
+  gst_by_month:      MonthlyGST[];
+  item_margin:       ItemMargin[];
+  material_split:    { SS: number; MS: number; SERVICE?: number; OTHER?: number };
   growth_rate:       number;
 }
 
 interface TopCustomer  { customer_name: string; total_revenue: number; invoice_count: number; }
+interface TopSupplier  { supplier_name: string; total_purchase: number; invoice_count: number; }
 interface TopSKU       { sku: string; total_revenue: number; total_qty: number; material_type: string; }
 interface MonthlyRevenue { month: string; revenue: number; invoices: number; }
+interface MonthlyBusiness {
+  month: string;
+  sales: number;
+  purchases: number;
+  gross_profit: number;
+  gross_margin_pct: number;
+  sales_invoices: number;
+  purchase_invoices: number;
+}
+interface MonthlyGST { month: string; output_gst: number; input_gst: number; net_gst: number; }
+interface ItemMargin {
+  item_name: string;
+  sales_qty: number;
+  purchase_qty: number;
+  sales_amount: number;
+  purchase_amount: number;
+  gross_profit: number;
+}
 
 // ────────────────────────────────────────────────────────────────────────────
 // Shared Gemini client (lazy, cached across warm invocations)
@@ -541,105 +589,105 @@ async function persistMessage(msg: Omit<ChatMessageRecord, 'PK' | 'SK' | 'ttl'>)
 
 // ────────────────────────────────────────────────────────────────────────────
 // Business context retrieval
-// Pulls real data from DynamoDB and formats it into a grounding context block
+// Pulls real business data from Supabase and formats it into a grounding block.
 // ────────────────────────────────────────────────────────────────────────────
 async function fetchBusinessContext(): Promise<{ ctx: BusinessContext; meta: { sales_records: number; recent_invoices: number; analytics_snap: boolean } }> {
-  // Scan the last 3 months of analytics snapshots
-  const analyticsResult = await ddb.send(
-    new ScanCommand({
-      TableName:        DYNAMODB_TABLE,
-      FilterExpression: 'begins_with(PK, :prefix) AND begins_with(SK, :sk)',
-      ExpressionAttributeValues: {
-        ':prefix': 'ANALYTICS#',
-        ':sk':     'SNAP#',
-      },
-      Limit: 12,
-    }),
+  const supabase = getSupabaseClient();
+  const [
+    summaryResult,
+    customersResult,
+    skusResult,
+    suppliersResult,
+    businessResult,
+    gstResult,
+    materialResult,
+    marginResult,
+  ] = await Promise.all([
+    supabase.from('analytics_summary').select('*').single(),
+    supabase.from('top_customers').select('*').limit(5),
+    supabase.from('top_skus').select('*').limit(5),
+    supabase.from('top_suppliers').select('*').limit(5),
+    supabase.from('monthly_business').select('*').order('month', { ascending: false }).limit(6),
+    supabase.from('monthly_gst').select('*').order('month', { ascending: false }).limit(6),
+    supabase.from('material_split').select('*'),
+    supabase.from('item_margin').select('*').limit(5),
+  ]);
+
+  const firstError = [
+    summaryResult.error,
+    customersResult.error,
+    skusResult.error,
+    suppliersResult.error,
+    businessResult.error,
+    gstResult.error,
+    materialResult.error,
+    marginResult.error,
+  ].find(Boolean);
+
+  if (firstError) {
+    throw new Error(`Supabase business context query failed: ${firstError.message}`);
+  }
+
+  const summary = summaryResult.data as {
+    total_revenue?: number | string;
+    total_purchase?: number | string;
+    gross_profit?: number | string;
+    customer_count?: number;
+    supplier_count?: number;
+    total_invoices?: number;
+    avg_invoice_value?: number | string;
+  } | null;
+
+  const totalRevenue = Number(summary?.total_revenue ?? 0);
+  const totalPurchase = Number(summary?.total_purchase ?? 0);
+  const grossProfit = Number(summary?.gross_profit ?? 0);
+  const grossMargin = totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0;
+  const totalInvoices = Number(summary?.total_invoices ?? 0);
+  const avgInvoice = Number(summary?.avg_invoice_value ?? 0);
+
+  const topCustomers = (customersResult.data ?? [])
+    .map((row) => `${row.customer_name} (₹${Number(row.total_revenue ?? 0).toFixed(0)}, ${Number(row.invoice_count ?? 0)} invoices)`);
+
+  const topSKUs = (skusResult.data ?? [])
+    .map((row) => `${row.sku} [${row.material_type ?? 'OTHER'}] - ₹${Number(row.total_revenue ?? 0).toFixed(0)}, ${Number(row.total_qty ?? 0).toFixed(2)} units`);
+
+  const topSuppliers = (suppliersResult.data ?? [])
+    .map((row) => `${row.supplier_name} (₹${Number(row.total_purchase ?? 0).toFixed(0)}, ${Number(row.invoice_count ?? 0)} invoices)`);
+
+  const businessRows = [...(businessResult.data ?? [])]
+    .sort((a, b) => String(a.month).localeCompare(String(b.month)));
+
+  const monthlyLines = businessRows.map((row) =>
+    `${row.month}: sales ₹${Number(row.sales ?? 0).toFixed(0)}, purchases ₹${Number(row.purchases ?? 0).toFixed(0)}, GP ₹${Number(row.gross_profit ?? 0).toFixed(0)} (${Number(row.gross_margin_pct ?? 0).toFixed(1)}%)`,
   );
 
-  const snapshots = (analyticsResult.Items ?? []) as Array<{
-    month:          string;
-    invoice_count:  number;
-    total_revenue:  number;
-  }>;
+  const latestGst = [...(gstResult.data ?? [])]
+    .sort((a, b) => String(a.month).localeCompare(String(b.month)))
+    .at(-1);
 
-  // Scan recent sales records (last 500 for context, in production use GSI with date range)
-  const salesResult = await ddb.send(
-    new ScanCommand({
-      TableName:        DYNAMODB_TABLE,
-      FilterExpression: 'begins_with(PK, :prefix) AND entityType = :et',
-      ExpressionAttributeValues: {
-        ':prefix': 'SALE#',
-        ':et':     'SALE',
-      },
-      Limit: 500,
-      ProjectionExpression:
-        'invoice_id, customer_name, product_sku, quantity, unit_price, total_amount, material_type, #dt',
-      ExpressionAttributeNames: { '#dt': 'date' },
-    }),
-  );
+  const materialLines = (materialResult.data ?? [])
+    .map((row) => `${row.material_type}: ₹${Number(row.total_revenue ?? 0).toFixed(0)}`);
 
-  const salesItems = salesResult.Items ?? [] as Array<{
-    invoice_id:    string;
-    customer_name: string;
-    product_sku:   string;
-    quantity:      number;
-    unit_price:    number;
-    total_amount:  number;
-    material_type: string;
-    date:          string;
-  }>;
+  const marginLines = (marginResult.data ?? [])
+    .map((row) => `${row.item_name}: sales ₹${Number(row.sales_amount ?? 0).toFixed(0)}, purchases ₹${Number(row.purchase_amount ?? 0).toFixed(0)}, GP ₹${Number(row.gross_profit ?? 0).toFixed(0)}`);
 
-  // Aggregate context
-  const totalRevenue  = salesItems.reduce((s, r) => s + (r.total_amount ?? 0), 0);
-  const avgInvoice    = salesItems.length > 0 ? totalRevenue / salesItems.length : 0;
-
-  // Top 5 customers by revenue
-  const customerMap = new Map<string, { revenue: number; count: number }>();
-  for (const r of salesItems) {
-    const existing = customerMap.get(r.customer_name) ?? { revenue: 0, count: 0 };
-    customerMap.set(r.customer_name, {
-      revenue: existing.revenue + (r.total_amount ?? 0),
-      count:   existing.count + 1,
-    });
-  }
-  const topCustomers = [...customerMap.entries()]
-    .sort((a, b) => b[1].revenue - a[1].revenue)
-    .slice(0, 5)
-    .map(([name, d]) => `${name} (₹${d.revenue.toFixed(0)}, ${d.count} invoices)`);
-
-  // Top 5 SKUs by revenue
-  const skuMap = new Map<string, { revenue: number; qty: number; material: string }>();
-  for (const r of salesItems) {
-    const existing = skuMap.get(r.product_sku) ?? { revenue: 0, qty: 0, material: r.material_type };
-    skuMap.set(r.product_sku, {
-      revenue:  existing.revenue + (r.total_amount ?? 0),
-      qty:      existing.qty + (r.quantity ?? 0),
-      material: r.material_type,
-    });
-  }
-  const topSKUs = [...skuMap.entries()]
-    .sort((a, b) => b[1].revenue - a[1].revenue)
-    .slice(0, 5)
-    .map(([sku, d]) => `${sku} [${d.material}] — ₹${d.revenue.toFixed(0)}, ${d.qty} units`);
-
-  // Material split
-  const ssRevenue = salesItems.filter((r) => r.material_type === 'SS').reduce((s, r) => s + (r.total_amount ?? 0), 0);
-  const msRevenue = salesItems.filter((r) => r.material_type === 'MS').reduce((s, r) => s + (r.total_amount ?? 0), 0);
-
-  // Monthly revenue from snapshots
-  const monthlyLines = snapshots
-    .sort((a, b) => (a.month ?? '').localeCompare(b.month ?? ''))
-    .slice(-6)
-    .map((s) => `${s.month}: ₹${(s.total_revenue ?? 0).toFixed(0)} (${s.invoice_count ?? 0} invoices)`);
-
-  const hasSnap = snapshots.length > 0;
+  const hasSnap = businessRows.length > 0;
 
   return {
     ctx: {
-      recent_sales_summary:   salesItems.length > 0
-        ? `${salesItems.length} sale records analysed. Total revenue: ₹${totalRevenue.toFixed(2)}. Average invoice value: ₹${avgInvoice.toFixed(2)}.`
+      recent_sales_summary:   totalInvoices > 0
+        ? `${totalInvoices} sales invoices analysed from Supabase. Total revenue: ₹${totalRevenue.toFixed(2)}. Average invoice value: ₹${avgInvoice.toFixed(2)}. Active customers: ${Number(summary?.customer_count ?? 0)}.`
         : 'No sales records have been ingested yet. Ask the user to upload a sales CSV via the Data Ingest section.',
+
+      purchase_summary:       totalPurchase > 0
+        ? `Total purchases: ₹${totalPurchase.toFixed(2)} from ${Number(summary?.supplier_count ?? 0)} suppliers.`
+        : 'No purchase records have been ingested yet.',
+
+      profit_summary:         `Gross profit: ₹${grossProfit.toFixed(2)}. Gross margin: ${grossMargin.toFixed(2)}%.`,
+
+      gst_summary:            latestGst
+        ? `Latest GST month ${latestGst.month}: output GST ₹${Number(latestGst.output_gst ?? 0).toFixed(2)}, input GST ₹${Number(latestGst.input_gst ?? 0).toFixed(2)}, net GST ₹${Number(latestGst.net_gst ?? 0).toFixed(2)}.`
+        : 'No GST line-item data available yet.',
 
       top_skus:               topSKUs.length > 0
         ? topSKUs.join('\n')
@@ -649,18 +697,51 @@ async function fetchBusinessContext(): Promise<{ ctx: BusinessContext; meta: { s
         ? topCustomers.join('\n')
         : 'No customer data available yet.',
 
+      top_suppliers:          topSuppliers.length > 0
+        ? topSuppliers.join('\n')
+        : 'No supplier data available yet.',
+
       monthly_revenue:        monthlyLines.length > 0
         ? monthlyLines.join('\n')
-        : 'No monthly analytics snapshots available yet.',
+        : 'No monthly Supabase analytics available yet.',
 
-      material_split:         `Stainless Steel (SS): ₹${ssRevenue.toFixed(0)} | Mild Steel (MS): ₹${msRevenue.toFixed(0)}`,
+      material_split:         materialLines.length > 0
+        ? materialLines.join(' | ')
+        : 'No material split available yet.',
 
-      total_records_ingested: salesItems.length,
+      item_margin:            marginLines.length > 0
+        ? marginLines.join('\n')
+        : 'No item margin data available yet.',
+
+      total_records_ingested: totalInvoices,
     },
     meta: {
-      sales_records:   salesItems.length,
-      recent_invoices: Math.min(salesItems.length, 20),
+      sales_records:   totalInvoices,
+      recent_invoices: Math.min(totalInvoices, 20),
       analytics_snap:  hasSnap,
+    },
+  };
+}
+
+function emptyBusinessContext(reason: string): { ctx: BusinessContext; meta: { sales_records: number; recent_invoices: number; analytics_snap: boolean } } {
+  return {
+    ctx: {
+      recent_sales_summary: `Supabase business context is unavailable: ${reason}`,
+      purchase_summary: 'Purchase data unavailable.',
+      profit_summary: 'Profit data unavailable.',
+      gst_summary: 'GST data unavailable.',
+      top_skus: 'SKU data unavailable.',
+      top_customers: 'Customer data unavailable.',
+      top_suppliers: 'Supplier data unavailable.',
+      monthly_revenue: 'Monthly revenue unavailable.',
+      material_split: 'Material split unavailable.',
+      item_margin: 'Item margin unavailable.',
+      total_records_ingested: 0,
+    },
+    meta: {
+      sales_records: 0,
+      recent_invoices: 0,
+      analytics_snap: false,
     },
   };
 }
@@ -669,7 +750,7 @@ async function fetchBusinessContext(): Promise<{ ctx: BusinessContext; meta: { s
 // Agent system prompts
 // ────────────────────────────────────────────────────────────────────────────
 function buildSystemPrompt(agent: AgentProfile, ctx: BusinessContext): string {
-  const liveDataSource = ctx.total_records_ingested > 0 ? 'live DynamoDB records' : 'FY 2025–26 uploaded business data (Sales, Purchase, Item registers)';
+  const liveDataSource = ctx.total_records_ingested > 0 ? 'live Supabase records' : 'FY 2025-26 uploaded business data (Sales, Purchase, Item registers)';
 
   const BASE = `
 You are ${agent.name}, an expert AI agent inside the operations control center of Stellar Global Supplies (stellarglobalsupplies.com), a B2B supplier of Stainless Steel (SS) and Mild Steel (MS) products, Survey No. 169, Talawade, Pune — Maharashtra, India. Contact: 9637655556.
@@ -682,43 +763,39 @@ STELLAR GLOBAL SUPPLIES — FY 2025–26 REAL BUSINESS DATA
 
 HEADLINE KPIs:
 ${ctx.recent_sales_summary}
-• Gross Profit: ₹5,49,823 | Gross Margin: 18.88% (target: 20%+)
-• GST Collected: ₹4,44,157 | GST Paid: ₹3,60,286 | Net liability: ₹83,871
-• 50 invoices to 13 customers | 67 POs from 31 suppliers | Avg invoice: ₹58,234
+${ctx.purchase_summary}
+${ctx.profit_summary}
+${ctx.gst_summary}
 
-TOP CUSTOMERS (by revenue, FY 2025–26):
+TOP CUSTOMERS (by revenue):
 ${ctx.top_customers}
-⚠ RISK: Baoxhin India = 43.7% of total revenue — critical concentration risk
 
 TOP PRODUCT SKUs:
 ${ctx.top_skus}
-• Best margin product: Tools Trolley 5-Drawer = 29.1% GM
-• Worst margin (top seller): SS 202 Golden Mirror Finish Sheet = 5.8% GM despite being #1 revenue SKU
+
+ITEM MARGIN SIGNALS:
+${ctx.item_margin}
 
 MONTHLY P&L TREND:
 ${ctx.monthly_revenue}
-• Peak: November 2025 = ₹9,91,806 (Baoxhin bulk orders)
-• Loss months: May 2025 (-₹30.4K GP), September 2025 (-₹87K GP)
 
 MATERIAL SPLIT:
 ${ctx.material_split}
-• Product categories: SS 29.7% | Equipment 20.9% | GI Sheets 17.7% | Tools 15.1%
 
 TOP SUPPLIERS:
-• Reinox Overseas: ₹4,99,315 (21.1% of purchases — single PO, concentration risk)
-• Shrijee Sales Corp.: ₹3,76,553 | Gleams Industries: ₹3,38,747
+${ctx.top_suppliers}
 
 KEY RISKS (data-driven):
-1. Customer concentration: Baoxhin India = 43.7% revenue from 8 invoices
-2. SS 202 Mirror Sheet: ₹4.4L revenue but only 5.8% margin — renegotiate Reinox pricing
-3. Supplier concentration: Reinox Overseas = 21.1% spend from single PO
-4. Negative GP months: May 2025 and September 2025
+1. Watch customer concentration in the Top Customers section.
+2. Watch low or negative item-level gross profit in Item Margin Signals.
+3. Watch supplier concentration in the Top Suppliers section.
+4. Watch negative gross profit months in Monthly P&L Trend.
 
 KEY OPPORTUNITIES (data-driven):
-1. Tools Trolley 29.1% margin — scale this product line aggressively
-2. SPM Process Systems: 24 invoices, most loyal buyer — upsell higher-margin items
-3. Equipment category (Cranes, Compressors) shows strong unit margins
-4. Only 13 active customers — large acquisition headroom
+1. Scale items with strong positive gross profit in Item Margin Signals.
+2. Upsell repeat customers visible in Top Customers.
+3. Renegotiate items with weak spread between sales and purchases.
+4. Use the active customer count in Headline KPIs to size acquisition headroom.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -736,33 +813,34 @@ Response rules:
     'sales-analyst': `
 ANALYST FOCUS:
 • Price trend analysis using the monthly P&L data above
-• SKU velocity: Tools Trolley and Equipment growing; SS raw material margins thin
-• Baoxhin India dependency is the #1 forecasting risk — model scenarios with and without them
-• SPM Process Systems: 24 invoices = most reliable demand signal for forecasting
-• Recommend margin improvement levers: product mix shift toward Equipment & Tools`,
+• SKU velocity and margin analysis using Top Product SKUs and Item Margin Signals
+• Customer concentration analysis using Top Customers
+• Supplier concentration and purchase dependency using Top Suppliers
+• Recommend margin improvement levers from Supabase item margin data`,
 
     'sales-strategist': `
 STRATEGY FOCUS:
-• Customer diversification is the #1 priority — Baoxhin India = 43.7% of revenue
+• Customer diversification is the #1 priority when Top Customers show concentration
 • Target new enterprise accounts in manufacturing, construction, prefab segments
-• Upsell SPM Process Systems (24 invoices, ₹4.2L) to Equipment & Machinery category (higher margins)
-• Axis Prefab Homes single invoice = ₹1.31L — re-engage them; strong potential
-• Pricing: SS 202 Mirror Sheet at 5.8% margin needs cost renegotiation or price increase
+• Upsell repeat buyers shown in Top Customers to higher-margin items
+• Re-engage one-time high-value buyers when visible in customer data
+• Pricing recommendations must reference Item Margin Signals
 • When designing outreach, reference our actual product SKUs and delivery track record`,
 
     'business-analyst': `
 OPERATIONS FOCUS:
-• Gross margin is 18.88% — below 20% target; Tools Trolley at 29.1% is the benchmark
-• Purchasing concentration: Reinox (21.1%) and Shrijee (15.9%) = 37% of total spend from 2 suppliers
-• Invoice velocity: 50 sales invoices vs 67 purchase orders — track receivables days
-• Working capital: negative GP months (May, Sep) indicate inventory/timing mismatches
+• Gross margin and purchase totals come from Headline KPIs
+• Purchasing concentration comes from Top Suppliers
+• Invoice velocity comes from sales invoice count and purchase summary
+• Working capital signals come from negative GP months in Monthly P&L Trend
 • EBITDA analysis: current data covers GM only; request overhead cost data for full picture`,
 
     'cloud-engineer': `
 CLOUD FOCUS:
-• This ops center runs on: API Gateway (HTTP v2) → Lambda (Node 22) → DynamoDB → Gemini AI
+• This ops center runs on: API Gateway (HTTP v2) → Lambda (Node 22) → Supabase business data → Gemini AI
 • S3 hosts frontend (CloudFront OAC) and data uploads (raw-ingest/); all private buckets
-• DynamoDB single-table design with GSI1/GSI2 for customer and SKU queries
+• DynamoDB remains for agent profiles, chat history, and Google OAuth tokens
+• Supabase stores ingested sales, purchases, item rows, customers, suppliers, and analytics views
 • Lambda functions: presign (256MB/10s), ingest (512MB/300s), agent-router (512MB/30s), google-auth (256MB/15s)
 • Report on latency, error rates, and cost estimates based on current traffic patterns`,
 
@@ -807,10 +885,10 @@ When recommending ad budgets, note that the high-intent audience is small (83/mo
 
     'executive-assistant': `
 EXECUTIVE SUPPORT FOCUS:
-• Schedule monthly P&L reviews — data shows strong Nov/Dec, weak Feb periods
-• Key meetings needed: Baoxhin India account review (43.7% dependency — strategic risk)
-• Follow-up required: Axis Prefab Homes (₹1.31L single invoice — re-engagement opportunity)
-• Supplier review: Reinox Overseas renegotiation meeting (21.1% of purchases, low SS margins)
+• Schedule monthly P&L reviews using the Supabase Monthly P&L Trend
+• Key meetings should be based on Top Customers and Top Suppliers
+• Follow-up priorities should reference customer revenue and invoice count
+• Supplier reviews should use purchase concentration and item margin signals
 • Draft communications in professional B2B tone appropriate for Pune manufacturing sector
 • All calendar events default to IST (Asia/Kolkata) timezone`,
   };
@@ -839,130 +917,145 @@ async function handleAnalyticsSummary(
   event: APIGatewayProxyEventV2,
 ): Promise<APIGatewayProxyResultV2> {
   try {
+    const supabase = getSupabaseClient();
     const monthsStr = event.queryStringParameters?.months ?? '6';
     const months    = Math.min(Math.max(parseInt(monthsStr, 10) || 6, 1), 24);
 
-    // Fetch all analytics snapshots
-    const snapResult = await ddb.send(
-      new ScanCommand({
-        TableName:        DYNAMODB_TABLE,
-        FilterExpression: 'begins_with(PK, :prefix) AND begins_with(SK, :sk) AND entityType = :et',
-        ExpressionAttributeValues: {
-          ':prefix': 'ANALYTICS#',
-          ':sk':     'SNAP#',
-          ':et':     'ANALYTICS',
-        },
-        Limit: 100,
-      }),
-    );
+    const [
+      summaryResult,
+      customersResult,
+      skusResult,
+      suppliersResult,
+      revenueResult,
+      businessResult,
+      gstResult,
+      materialResult,
+      marginResult,
+    ] = await Promise.all([
+      supabase.from('analytics_summary').select('*').single(),
+      supabase.from('top_customers').select('*').limit(10),
+      supabase.from('top_skus').select('*').limit(10),
+      supabase.from('top_suppliers').select('*').limit(10),
+      supabase.from('monthly_revenue').select('*').order('month', { ascending: false }).limit(months),
+      supabase.from('monthly_business').select('*').order('month', { ascending: false }).limit(months),
+      supabase.from('monthly_gst').select('*').order('month', { ascending: false }).limit(months),
+      supabase.from('material_split').select('*'),
+      supabase.from('item_margin').select('*').limit(10),
+    ]);
 
-    const snaps = (snapResult.Items ?? []) as Array<{
-      month:         string;
-      invoice_count: number;
-      total_revenue: number;
-    }>;
+    const firstError = [
+      summaryResult.error,
+      customersResult.error,
+      skusResult.error,
+      suppliersResult.error,
+      revenueResult.error,
+      businessResult.error,
+      gstResult.error,
+      materialResult.error,
+      marginResult.error,
+    ].find(Boolean);
 
-    // Sort and take last N months
-    const sorted = snaps
-      .filter((s) => s.month)
-      .sort((a, b) => a.month.localeCompare(b.month))
-      .slice(-months);
-
-    // Also scan sales for customer/SKU data
-    const salesResult = await ddb.send(
-      new ScanCommand({
-        TableName:        DYNAMODB_TABLE,
-        FilterExpression: 'begins_with(PK, :prefix) AND entityType = :et',
-        ExpressionAttributeValues: { ':prefix': 'SALE#', ':et': 'SALE' },
-        Limit: 2000,
-        ProjectionExpression:
-          'customer_name, product_sku, total_amount, quantity, material_type',
-      }),
-    );
-
-    const sales = salesResult.Items ?? [] as Array<{
-      customer_name: string;
-      product_sku:   string;
-      total_amount:  number;
-      quantity:      number;
-      material_type: string;
-    }>;
-
-    // Aggregate
-    const totalRevenue  = sales.reduce((s, r) => s + (r.total_amount ?? 0), 0);
-    const totalInvoices = sales.length;
-    const avgInvoice    = totalInvoices > 0 ? totalRevenue / totalInvoices : 0;
-
-    // Customer map
-    const customerMap = new Map<string, { revenue: number; count: number }>();
-    for (const r of sales) {
-      const e = customerMap.get(r.customer_name) ?? { revenue: 0, count: 0 };
-      customerMap.set(r.customer_name, {
-        revenue: e.revenue + (r.total_amount ?? 0),
-        count:   e.count + 1,
-      });
+    if (firstError) {
+      throw new Error(`Supabase analytics query failed: ${firstError.message}`);
     }
-    const topCustomers: TopCustomer[] = [...customerMap.entries()]
-      .sort((a, b) => b[1].revenue - a[1].revenue)
-      .slice(0, 10)
-      .map(([name, d]) => ({
-        customer_name: name,
-        total_revenue: d.revenue,
-        invoice_count: d.count,
-      }));
 
-    // SKU map
-    const skuMap = new Map<string, { revenue: number; qty: number; material: string }>();
-    for (const r of sales) {
-      const e = skuMap.get(r.product_sku) ?? { revenue: 0, qty: 0, material: r.material_type };
-      skuMap.set(r.product_sku, {
-        revenue:  e.revenue + (r.total_amount ?? 0),
-        qty:      e.qty + (r.quantity ?? 0),
-        material: r.material_type,
-      });
-    }
-    const topSKUs: TopSKU[] = [...skuMap.entries()]
-      .sort((a, b) => b[1].revenue - a[1].revenue)
-      .slice(0, 10)
-      .map(([sku, d]) => ({
-        sku,
-        total_revenue: d.revenue,
-        total_qty:     d.qty,
-        material_type: d.material,
-      }));
+    const byMonthAsc = <T extends { month: string }>(rows: T[] | null) =>
+      [...(rows ?? [])].sort((a, b) => a.month.localeCompare(b.month));
 
-    // Revenue by month from snapshots
-    const revenueByMonth: MonthlyRevenue[] = sorted.map((s) => ({
-      month:    s.month,
-      revenue:  s.total_revenue ?? 0,
-      invoices: s.invoice_count ?? 0,
+    const revenueByMonth: MonthlyRevenue[] = byMonthAsc(revenueResult.data).map((row) => ({
+      month: row.month,
+      revenue: Number(row.revenue ?? 0),
+      invoices: Number(row.invoices ?? 0),
     }));
 
-    // Growth rate (last month vs previous month)
-    let growthRate = 0;
-    if (sorted.length >= 2) {
-      const last = sorted[sorted.length - 1].total_revenue ?? 0;
-      const prev = sorted[sorted.length - 2].total_revenue ?? 0;
-      growthRate = prev > 0 ? ((last - prev) / prev) * 100 : 0;
-    }
+    const businessByMonth: MonthlyBusiness[] = byMonthAsc(businessResult.data).map((row) => ({
+      month: row.month,
+      sales: Number(row.sales ?? 0),
+      purchases: Number(row.purchases ?? 0),
+      gross_profit: Number(row.gross_profit ?? 0),
+      gross_margin_pct: Number(row.gross_margin_pct ?? 0),
+      sales_invoices: Number(row.sales_invoices ?? 0),
+      purchase_invoices: Number(row.purchase_invoices ?? 0),
+    }));
 
-    // Material split
-    const ssRevenue = sales.filter((r) => r.material_type === 'SS').reduce((s, r) => s + (r.total_amount ?? 0), 0);
-    const msRevenue = sales.filter((r) => r.material_type === 'MS').reduce((s, r) => s + (r.total_amount ?? 0), 0);
+    const gstByMonth: MonthlyGST[] = byMonthAsc(gstResult.data).map((row) => ({
+      month: row.month,
+      output_gst: Number(row.output_gst ?? 0),
+      input_gst: Number(row.input_gst ?? 0),
+      net_gst: Number(row.net_gst ?? 0),
+    }));
 
-    const period = sorted.length > 0
-      ? `${sorted[0].month} → ${sorted[sorted.length - 1].month}`
+    const totalRevenue = Number(summaryResult.data?.total_revenue ?? 0);
+    const totalPurchase = Number(summaryResult.data?.total_purchase ?? 0);
+    const grossProfit = Number(summaryResult.data?.gross_profit ?? 0);
+    const grossMarginPct = totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0;
+
+    const topCustomers: TopCustomer[] = (customersResult.data ?? []).map((row) => ({
+      customer_name: row.customer_name,
+      total_revenue: Number(row.total_revenue ?? 0),
+      invoice_count: Number(row.invoice_count ?? 0),
+    }));
+
+    const topSKUs: TopSKU[] = (skusResult.data ?? []).map((row) => ({
+      sku: row.sku,
+      total_revenue: Number(row.total_revenue ?? 0),
+      total_qty: Number(row.total_qty ?? 0),
+      material_type: row.material_type ?? 'OTHER',
+    }));
+
+    const topSuppliers: TopSupplier[] = (suppliersResult.data ?? []).map((row) => ({
+      supplier_name: row.supplier_name,
+      total_purchase: Number(row.total_purchase ?? 0),
+      invoice_count: Number(row.invoice_count ?? 0),
+    }));
+
+    const itemMargin: ItemMargin[] = (marginResult.data ?? []).map((row) => ({
+      item_name: row.item_name,
+      sales_qty: Number(row.sales_qty ?? 0),
+      purchase_qty: Number(row.purchase_qty ?? 0),
+      sales_amount: Number(row.sales_amount ?? 0),
+      purchase_amount: Number(row.purchase_amount ?? 0),
+      gross_profit: Number(row.gross_profit ?? 0),
+    }));
+
+    const materialSplit = (materialResult.data ?? []).reduce(
+      (acc, row) => {
+        const key = String(row.material_type ?? 'OTHER') as keyof AnalyticsSummary['material_split'];
+        acc[key] = (acc[key] ?? 0) + Number(row.total_revenue ?? 0);
+        return acc;
+      },
+      { SS: 0, MS: 0, SERVICE: 0, OTHER: 0 } as AnalyticsSummary['material_split'],
+    );
+
+    const firstMonth = businessByMonth.at(0);
+    const lastMonth = businessByMonth.at(-1);
+    const growthRate =
+      firstMonth && lastMonth && firstMonth.sales > 0
+        ? ((lastMonth.sales - firstMonth.sales) / firstMonth.sales) * 100
+        : 0;
+
+    const period = revenueByMonth.length > 0
+      ? `${revenueByMonth[0].month} to ${revenueByMonth[revenueByMonth.length - 1].month}`
       : `Last ${months} months`;
 
     const summary: AnalyticsSummary = {
       period,
       total_revenue:     totalRevenue,
-      total_invoices:    totalInvoices,
-      avg_invoice_value: avgInvoice,
+      total_purchase:    totalPurchase,
+      gross_profit:      grossProfit,
+      gross_margin_pct:  grossMarginPct,
+      total_invoices:    Number(summaryResult.data?.total_invoices ?? 0),
+      avg_invoice_value: Number(summaryResult.data?.avg_invoice_value ?? 0),
+      customer_count:    Number(summaryResult.data?.customer_count ?? 0),
+      supplier_count:    Number(summaryResult.data?.supplier_count ?? 0),
       top_customers:     topCustomers,
+      top_suppliers:     topSuppliers,
       top_skus:          topSKUs,
       revenue_by_month:  revenueByMonth,
-      material_split:    { SS: ssRevenue, MS: msRevenue },
+      business_by_month: businessByMonth,
+      gst_by_month:      gstByMonth,
+      item_margin:       itemMargin,
+      material_split:    materialSplit,
       growth_rate:       growthRate,
     };
 
@@ -1052,7 +1145,15 @@ async function handleAgentChat(
   }
 
   // ── 2. Fetch live business context ──────────────────────────────────────
-  const { ctx, meta } = await fetchBusinessContext();
+  let businessContext: Awaited<ReturnType<typeof fetchBusinessContext>>;
+  try {
+    businessContext = await fetchBusinessContext();
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error('[agent-router] Supabase business context unavailable', err);
+    businessContext = emptyBusinessContext(message);
+  }
+  const { ctx, meta } = businessContext;
 
   // ── 3. Load session message history ─────────────────────────────────────
   const historyRecords = await getSessionMessages(sessionId);
@@ -1295,7 +1396,15 @@ export const handler = async (
   const chatMatch = rawPath.match(/^\/agents\/([^/]+)\/chat$/);
   if (method === 'POST' && chatMatch) {
     const agentId = decodeURIComponent(chatMatch[1]);
-    return handleAgentChat(agentId, event);
+    try {
+      return await handleAgentChat(agentId, event);
+    } catch (err) {
+      console.error('[agent-router] chat route error', err);
+      return respond(500, {
+        error: 'Agent chat failed.',
+        detail: err instanceof Error ? err.message : String(err),
+      });
+    }
   }
 
   // ── Route: GET /sessions/{sessionId} ────────────────────────────────────

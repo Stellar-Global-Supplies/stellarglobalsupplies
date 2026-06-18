@@ -679,6 +679,8 @@ resource "aws_lambda_function" "agent_router" {
       GOOGLE_CLIENT_ID_PARAM     = aws_ssm_parameter.google_oauth_client_id.name
       GOOGLE_CLIENT_SECRET_PARAM = aws_ssm_parameter.google_oauth_client_secret.name
       ANALYTICS_BUCKET           = var.analytics_bucket_name
+      SUPABASE_URL               = var.supabase_url
+      SUPABASE_SERVICE_ROLE_KEY  = var.supabase_service_role_key
       ALLOWED_ORIGIN             = "https://${local.fqdn}"
       ENVIRONMENT                = var.environment
     }

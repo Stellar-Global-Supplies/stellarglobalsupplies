@@ -80,6 +80,81 @@ const CHANNELS: Record<Channel, {
 
 const GEO_COLORS = ['#1677ff', '#10b981', '#f59e0b', '#8b5cf6', '#ef476f', '#64748b'];
 
+function emptyMetaData(period: AnalyticsPeriod): MetaAnalyticsData {
+  return {
+    period,
+    label: period === 'monthly' ? 'Last 30 Days' : 'Last 7 Days',
+    generated_at: new Date().toISOString(),
+    summary: {
+      total_requests: 0,
+      unique_ips: 0,
+      avg_daily: 0,
+      top_country: 'N/A',
+      mobile_pct: 0,
+      desktop_pct: 0,
+      bounce_rate: 0,
+      peak_hour: 'N/A',
+    },
+    traffic_over_time: [],
+    top_pages: [],
+    geo_distribution: [],
+    device_split: [],
+    peak_hours: Array.from({ length: 24 }, (_, hour) => ({ hour, requests: 0 })),
+    meta_insights: {
+      recommended_objective: 'Awareness',
+      top_locations: [],
+      best_placement: 'Feed + Right Column',
+      best_ad_time: 'N/A',
+      warm_audience_size: 0,
+      high_intent_visits: 0,
+    },
+  };
+}
+
+function normalizeMetaData(input: unknown, period: AnalyticsPeriod): MetaAnalyticsData {
+  const fallback = emptyMetaData(period);
+  const value = (input && typeof input === 'object') ? input as Partial<MetaAnalyticsData> : {};
+  const summary = value.summary ?? fallback.summary;
+  const insights = value.meta_insights ?? fallback.meta_insights;
+
+  return {
+    ...fallback,
+    ...value,
+    period: String(value.period ?? fallback.period),
+    label: String(value.label ?? fallback.label),
+    generated_at: String(value.generated_at ?? fallback.generated_at),
+    summary: {
+      ...fallback.summary,
+      ...summary,
+      total_requests: Number(summary.total_requests ?? 0),
+      unique_ips: Number(summary.unique_ips ?? 0),
+      avg_daily: Number(summary.avg_daily ?? 0),
+      top_country: String(summary.top_country ?? 'N/A'),
+      mobile_pct: Number(summary.mobile_pct ?? 0),
+      desktop_pct: Number(summary.desktop_pct ?? 0),
+      bounce_rate: Number(summary.bounce_rate ?? 0),
+      peak_hour: String(summary.peak_hour ?? 'N/A'),
+    },
+    traffic_over_time: Array.isArray(value.traffic_over_time) ? value.traffic_over_time : [],
+    top_pages: Array.isArray(value.top_pages) ? value.top_pages : [],
+    geo_distribution: Array.isArray(value.geo_distribution) ? value.geo_distribution : [],
+    device_split: Array.isArray(value.device_split) ? value.device_split : [],
+    peak_hours: Array.isArray(value.peak_hours) && value.peak_hours.length > 0
+      ? value.peak_hours
+      : fallback.peak_hours,
+    meta_insights: {
+      ...fallback.meta_insights,
+      ...insights,
+      recommended_objective: String(insights.recommended_objective ?? fallback.meta_insights.recommended_objective),
+      top_locations: Array.isArray(insights.top_locations) ? insights.top_locations : [],
+      best_placement: String(insights.best_placement ?? fallback.meta_insights.best_placement),
+      best_ad_time: String(insights.best_ad_time ?? fallback.meta_insights.best_ad_time),
+      warm_audience_size: Number(insights.warm_audience_size ?? 0),
+      high_intent_visits: Number(insights.high_intent_visits ?? 0),
+    },
+  };
+}
+
 function fmt(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
@@ -87,7 +162,7 @@ function fmt(n: number): string {
 }
 
 function money(n: number): string {
-  return `₹${Math.round(n).toLocaleString()}`;
+  return `Rs.${Math.round(n).toLocaleString()}`;
 }
 
 function pct(n: number): string {
@@ -157,12 +232,12 @@ function ChannelTabs({ value, onChange }: { value: Channel; onChange: (channel: 
 }
 
 function metricModel(data: MetaAnalyticsData, channel: Channel) {
-  const total = data.summary.total_requests;
-  const unique = data.summary.unique_ips;
-  const avg = data.summary.avg_daily;
-  const warm = data.meta_insights.warm_audience_size;
-  const intent = data.meta_insights.high_intent_visits;
-  const topPageVisits = data.top_pages[0]?.visits ?? 0;
+  const total = data.summary?.total_requests ?? 0;
+  const unique = data.summary?.unique_ips ?? 0;
+  const avg = data.summary?.avg_daily ?? 0;
+  const warm = data.meta_insights?.warm_audience_size ?? 0;
+  const intent = data.meta_insights?.high_intent_visits ?? 0;
+  const topPageVisits = data.top_pages?.[0]?.visits ?? 0;
   const clicks = Math.max(intent, Math.round(topPageVisits * 0.12));
   const spend = Math.round(clicks * 38);
   const impressions = channel === 'ads' ? Math.round(total * 1.8) : total;
@@ -172,8 +247,8 @@ function metricModel(data: MetaAnalyticsData, channel: Channel) {
 
   if (channel === 'facebook') {
     return {
-      heroTitle: 'Stellar Global Supplies — Facebook Intelligence',
-      heroSub: `${fmt(unique)} unique visitors · ${fmt(warm)} retargetable audience · ${data.summary.top_country} leads traffic`,
+      heroTitle: 'Stellar Global Supplies - Facebook Intelligence',
+      heroSub: `${fmt(unique)} unique visitors | ${fmt(warm)} retargetable audience | ${data.summary?.top_country ?? 'N/A'} leads traffic`,
       pills: [`Net fans +${Math.round(unique * 0.01)}`, `Reach ${fmt(reach)}`, `Engagements ${fmt(engagements)}`, `Video views ${fmt(Math.round(total * 0.06))}`],
       cards: [
         { label: 'Audience Pool', value: fmt(unique), sub: 'Unique visitors', Icon: Users, color: '#1877f2' },
@@ -190,8 +265,8 @@ function metricModel(data: MetaAnalyticsData, channel: Channel) {
 
   if (channel === 'instagram') {
     return {
-      heroTitle: '@stellarglobalsupplies — Instagram Insights',
-      heroSub: `${fmt(warm)} warm visitors · ${fmt(intent)} high-intent sessions · engagement ${pct(safeDiv(engagements, Math.max(reach, 1)) * 100)}`,
+      heroTitle: '@stellarglobalsupplies - Instagram Insights',
+      heroSub: `${fmt(warm)} warm visitors | ${fmt(intent)} high-intent sessions | engagement ${pct(safeDiv(engagements, Math.max(reach, 1)) * 100)}`,
       pills: [`Eng. ${pct(safeDiv(engagements, Math.max(reach, 1)) * 100)}`, `Reach ${fmt(reach)}`, `Profile views ${fmt(Math.round(warm * 0.18))}`, `Web clicks ${fmt(clicks)}`],
       cards: [
         { label: 'Followers Pool', value: fmt(warm), sub: 'Retargetable users', Icon: Instagram, color: '#e1306c' },
@@ -207,9 +282,9 @@ function metricModel(data: MetaAnalyticsData, channel: Channel) {
   }
 
   return {
-    heroTitle: 'Meta Ads Performance — Campaign Planner',
-    heroSub: `Across all modeled campaigns · best placement ${data.meta_insights.best_placement}`,
-    pills: [`CTR ${pct(ctr)}`, `CPC ${clicks ? money(spend / clicks) : '₹-'}`, `Freq ${pct(safeDiv(impressions, Math.max(reach, 1)))}`, `Best ${data.summary.top_country}`],
+    heroTitle: 'Meta Ads Performance - Campaign Planner',
+    heroSub: `Across all modeled campaigns | best placement ${data.meta_insights?.best_placement ?? 'N/A'}`,
+    pills: [`CTR ${pct(ctr)}`, `CPC ${clicks ? money(spend / clicks) : 'Rs.-'}`, `Freq ${pct(safeDiv(impressions, Math.max(reach, 1)))}`, `Best ${data.summary?.top_country ?? 'N/A'}`],
     cards: [
       { label: 'Impressions', value: fmt(impressions), sub: `Reach ${fmt(reach)}`, Icon: Eye, color: '#1677ff' },
       { label: 'Clicks', value: fmt(clicks), sub: 'Website intent clicks', Icon: MousePointerClick, color: '#10b981' },
@@ -225,7 +300,7 @@ function metricModel(data: MetaAnalyticsData, channel: Channel) {
 }
 
 function buildTrend(data: MetaAnalyticsData, channel: Channel) {
-  return data.traffic_over_time.map((day) => {
+  return (data.traffic_over_time ?? []).map((day) => {
     const reach = channel === 'instagram' ? Math.round(day.requests * 0.62) : day.requests;
     const impressions = channel === 'ads' ? Math.round(day.requests * 1.8) : Math.round(day.requests * 1.18);
     const engagement = Math.round(day.requests * (channel === 'instagram' ? 0.055 : 0.038));
@@ -439,8 +514,11 @@ function DeviceAndPlan({ data, channel }: { data: MetaAnalyticsData; channel: Ch
   const setSection = useNavStore((s) => s.setSection);
   const cfg = CHANNELS[channel];
   const devices = data.device_split.length > 0 ? data.device_split : [{ device: 'Desktop', pct: data.summary.desktop_pct }];
+  const topLocations = data.meta_insights.top_locations.length > 0
+    ? data.meta_insights.top_locations.slice(0, 2).join(' and ')
+    : 'your strongest available regions';
   const recommendations = [
-    `Run ${CHANNELS[channel].label} awareness ads in ${data.meta_insights.top_locations.slice(0, 2).join(' and ')}.`,
+    `Run ${CHANNELS[channel].label} awareness ads in ${topLocations}.`,
     `Use ${data.meta_insights.best_placement} placements during ${data.meta_insights.best_ad_time}.`,
     `Build a retargeting audience from ${fmt(data.meta_insights.warm_audience_size)} warm visitors.`,
   ];
@@ -506,11 +584,13 @@ export default function MetaMarketingDashboard() {
   const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
     queryKey: ['meta-analytics', period],
     queryFn: () => fetchMetaAnalytics(period),
+    select: (response) => normalizeMetaData(response, period),
     staleTime: 30 * 60 * 1000,
     retry: 2,
   });
 
-  const model = useMemo(() => data ? metricModel(data, channel) : null, [data, channel]);
+  const safeData = data ?? emptyMetaData(period);
+  const model = useMemo(() => metricModel(safeData, channel), [safeData, channel]);
   const cfg = CHANNELS[channel];
 
   return (
@@ -525,14 +605,14 @@ export default function MetaMarketingDashboard() {
               </span>
             </div>
             <p className="text-sm text-slate-500 mt-1">
-              {data?.label ?? (period === 'monthly' ? 'Last 30 Days' : 'Last 7 Days')} · {cfg.eyebrow}
+              {safeData.label} | {cfg.eyebrow}
             </p>
           </div>
 
           <div className="flex items-center gap-3 flex-wrap">
             <ChannelTabs value={channel} onChange={setChannel} />
             <span className="text-xs text-slate-400">
-              {data?.generated_at ? `Updated ${format(parseISO(data.generated_at), 'HH:mm')}` : 'Updates daily'}
+              {safeData.generated_at ? `Updated ${format(parseISO(safeData.generated_at), 'HH:mm')}` : 'Updates daily'}
             </span>
             <button
               onClick={() => refetch()}
@@ -560,23 +640,23 @@ export default function MetaMarketingDashboard() {
           <ErrorCard message={(error as Error)?.message ?? 'Unknown error'} onRetry={() => refetch()} />
         )}
 
-        {data && model && (
+        {!isLoading && !isError && (
           <div className="space-y-5">
-            <Hero data={data} channel={channel} />
+            <Hero data={safeData} channel={channel} />
             <CardGrid cards={model.cards} />
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-              <PrimaryTrend data={data} channel={channel} />
-              <DeviceAndPlan data={data} channel={channel} />
+              <PrimaryTrend data={safeData} channel={channel} />
+              <DeviceAndPlan data={safeData} channel={channel} />
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-              <GeoChart geo={data.geo_distribution} />
-              <PagesChart pages={data.top_pages} />
+              <GeoChart geo={safeData.geo_distribution} />
+              <PagesChart pages={safeData.top_pages} />
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-              <HourChart data={data} />
+              <HourChart data={safeData} />
               <Panel title="Audience Quality" subtitle="Signals available from the S3 Meta analytics JSON">
                 <div className="grid grid-cols-2 gap-3 mb-4">
                   <div className="rounded-lg bg-slate-50 border border-slate-200 p-4">
@@ -584,14 +664,14 @@ export default function MetaMarketingDashboard() {
                       <Users size={14} />
                       Warm Audience
                     </div>
-                    <p className="text-2xl font-black text-slate-950 mt-3">{fmt(data.meta_insights.warm_audience_size)}</p>
+                    <p className="text-2xl font-black text-slate-950 mt-3">{fmt(safeData.meta_insights.warm_audience_size)}</p>
                   </div>
                   <div className="rounded-lg bg-slate-50 border border-slate-200 p-4">
                     <div className="flex items-center gap-2 text-slate-500 text-xs font-semibold uppercase tracking-wide">
                       <Target size={14} />
                       High Intent
                     </div>
-                    <p className="text-2xl font-black text-slate-950 mt-3">{fmt(data.meta_insights.high_intent_visits)}</p>
+                    <p className="text-2xl font-black text-slate-950 mt-3">{fmt(safeData.meta_insights.high_intent_visits)}</p>
                   </div>
                 </div>
                 <div className="rounded-lg border border-slate-200 p-4 bg-white">
@@ -600,9 +680,9 @@ export default function MetaMarketingDashboard() {
                       <Globe2 size={17} />
                     </div>
                     <div>
-                      <p className="text-sm font-bold text-slate-950">Recommended Objective: {data.meta_insights.recommended_objective}</p>
+                      <p className="text-sm font-bold text-slate-950">Recommended Objective: {safeData.meta_insights.recommended_objective}</p>
                       <p className="text-xs text-slate-500 mt-1">
-                        Use {data.meta_insights.best_placement} placements and prioritize {data.meta_insights.top_locations.join(', ')} for the next campaign flight.
+                        Use {safeData.meta_insights.best_placement} placements and prioritize {safeData.meta_insights.top_locations.join(', ') || 'your strongest regions'} for the next campaign flight.
                       </p>
                     </div>
                     <ExternalLink size={14} className="text-slate-300 ml-auto shrink-0" />
