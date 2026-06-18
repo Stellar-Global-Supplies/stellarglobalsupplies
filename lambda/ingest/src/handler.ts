@@ -1,36 +1,26 @@
 /**
- * Stellar Global Supplies — Data Ingest Lambda
+ * Stellar Global Supplies - Supabase data ingest Lambda.
  *
- * Handles the EXACT file formats exported from the SGS accounting system:
- *   Sales_.csv / Purchase.csv — Summary registers (6-7 columns)
- *   Item_sales.csv / Items_Purchase.csv — Line-item registers (10 columns)
- *   Customers.csv / Suppliers.csv — Master files (skipped, reference only)
- *
- * SGS CSV format: row 0 = company header, subsequent rows without a digit
- * in col[0] are sub-headers. Data rows always have a digit in col[0] (SR.NO).
+ * The SGS accounting exports repeat report headers on every row and sometimes
+ * include embedded newlines in master records. This parser reads complete CSV
+ * records, finds the actual data columns, and upserts only to Supabase.
  */
 
 import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, BatchWriteCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import type { S3Event, S3Handler } from 'aws-lambda';
 import { Readable } from 'stream';
-import { createInterface } from 'readline';
+import { createHash } from 'crypto';
 import { createClient } from '@supabase/supabase-js';
 
+const REGION = process.env.AWS_REGION ?? 'ap-south-1';
+const BATCH_SIZE = Number(process.env.SUPABASE_BATCH_SIZE ?? 500);
+
+const s3 = new S3Client({ region: REGION });
 const supabase = createClient(
   process.env.SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  { auth: { persistSession: false } },
 );
-
-const REGION         = process.env.AWS_REGION    ?? 'ap-south-1';
-const DYNAMODB_TABLE = process.env.DYNAMODB_TABLE!;
-const BATCH_SIZE     = 25;
-
-const s3  = new S3Client({ region: REGION });
-const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({ region: REGION }), {
-  marshallOptions: { removeUndefinedValues: true },
-});
 
 type SGSFileType =
   | 'sales_register'
@@ -41,478 +31,388 @@ type SGSFileType =
   | 'suppliers'
   | 'json';
 
+type TableName =
+  | 'ingestion_files'
+  | 'customers'
+  | 'suppliers'
+  | 'sales'
+  | 'purchases'
+  | 'sales_items'
+  | 'purchase_items';
+
+interface ParsedRecord {
+  table: TableName;
+  row: Record<string, unknown>;
+}
+
 function detectFileType(key: string): SGSFileType {
   const k = key.toLowerCase();
-  if (k.includes('item_sales') || k.includes('item-sales'))  return 'item_sales';
-  if (k.includes('item') && (k.includes('purchase')||k.includes('purch'))) return 'item_purchase';
-  if (k.includes('sales_') || /\/sales\./.test(k)) return 'sales_register';
-  if (k.includes('purchase') || k.includes('purch')) return 'purchase_register';
-  if (k.includes('customer'))
-    return 'customers';
-  
-  if (k.includes('supplier'))
-    return 'suppliers';
   if (k.endsWith('.json')) return 'json';
+  if (k.includes('customer')) return 'customers';
+  if (k.includes('supplier')) return 'suppliers';
+  if (k.includes('item') && k.includes('sale')) return 'item_sales';
+  if (k.includes('item') && (k.includes('purchase') || k.includes('purch'))) return 'item_purchase';
+  if (k.includes('purchase') || k.includes('purch')) return 'purchase_register';
+  if (k.includes('sale')) return 'sales_register';
   return 'sales_register';
 }
 
-function split(line: string): string[] {
-  const out: string[] = [];
-  let cur = ''; let inQ = false;
-  for (let i = 0; i < line.length; i++) {
-    const c = line[i];
-    if (c === '"') { if (inQ && line[i+1]==='"') { cur+='"'; i++; } else { inQ=!inQ; } }
-    else if (c === ',' && !inQ) { out.push(cur.trim()); cur = ''; }
-    else { cur += c; }
+async function readBody(body: Readable): Promise<string> {
+  let raw = '';
+  for await (const chunk of body) {
+    raw += (chunk as Buffer).toString('utf8');
   }
-  out.push(cur.trim()); return out;
+  return raw.replace(/^\uFEFF/, '');
 }
 
-const cleanAmt = (s: string|undefined): number => { const n = parseFloat(String(s??'').replace(/,/g,'').replace(/\s/g,'')); return isNaN(n)?0:n; };
-function findDataRow(dataCols: string[]): string[] | null {
-  const idx = dataCols.findIndex(v =>
-    /^\d+$/.test(String(v).trim())
-  );
+function parseCsv(text: string): string[][] {
+  const records: string[][] = [];
+  let row: string[] = [];
+  let field = '';
+  let inQuotes = false;
 
-  if (idx === -1) return null;
+  for (let i = 0; i < text.length; i += 1) {
+    const char = text[i];
+    const next = text[i + 1];
 
-  return dataCols.slice(idx);
-}
-const slugify  = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,60);
+    if (char === '"') {
+      if (inQuotes && next === '"') {
+        field += '"';
+        i += 1;
+      } else {
+        inQuotes = !inQuotes;
+      }
+      continue;
+    }
 
-function parseDate(s: string | undefined): string {
-  if (!s) return '';
+    if (char === ',' && !inQuotes) {
+      row.push(field.trim());
+      field = '';
+      continue;
+    }
 
-  const t = s.trim();
+    if ((char === '\n' || char === '\r') && !inQuotes) {
+      if (char === '\r' && next === '\n') i += 1;
+      row.push(field.trim());
+      if (row.some((value) => value !== '')) records.push(row);
+      row = [];
+      field = '';
+      continue;
+    }
 
-  const dmy = t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-
-  if (dmy) {
-    const day = dmy[1].padStart(2, '0');
-    const month = dmy[2].padStart(2, '0');
-    const year = dmy[3];
-
-    return `${year}-${month}-${day}`;
+    field += char;
   }
 
-  if (/^\d{4}-\d{2}-\d{2}/.test(t)) {
-    return t.slice(0, 10);
-  }
-
-  return t;
+  row.push(field.trim());
+  if (row.some((value) => value !== '')) records.push(row);
+  return records;
 }
 
-function ym(isoDate: string): string { return isoDate.slice(0,7).replace('-',''); }
-function parseQuantity(qty: string | undefined) {
-  const raw = String(qty ?? '').trim();
+function cleanText(value: unknown): string {
+  return String(value ?? '')
+    .replace(/\r/g, '\n')
+    .split('\n')
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .join(' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
 
-  const num =
-    parseFloat(raw.replace(/[^\d.]/g, '')) || 0;
+function firstLine(value: unknown): string {
+  return String(value ?? '')
+    .replace(/\r/g, '\n')
+    .split('\n')
+    .map((part) => part.trim())
+    .find(Boolean) ?? '';
+}
 
-  const unit =
-    raw.replace(/[\d.\s]/g, '').trim();
+function cleanAmount(value: unknown): number {
+  const normalized = String(value ?? '').replace(/,/g, '').replace(/[^\d.-]/g, '');
+  const parsed = Number.parseFloat(normalized);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
 
+function parseDate(value: unknown): string | null {
+  const raw = String(value ?? '').trim();
+  const dmy = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (dmy) return `${dmy[3]}-${dmy[2].padStart(2, '0')}-${dmy[1].padStart(2, '0')}`;
+  if (/^\d{4}-\d{2}-\d{2}/.test(raw)) return raw.slice(0, 10);
+  return null;
+}
+
+function parseQuantity(value: unknown): { quantity: number; unit: string } {
+  const raw = cleanText(value);
+  const match = raw.match(/(-?[\d,.]+)\s*(.*)$/);
+  if (!match) return { quantity: 0, unit: '' };
   return {
-    quantity: num,
-    unit,
+    quantity: cleanAmount(match[1]),
+    unit: match[2].trim().toUpperCase(),
   };
 }
-function makeCustomerRow(
-  c: string[],
-  src: string
-): Record<string, unknown> | null {
 
-  for (const col of c) {
-    const value = String(col ?? '').trim();
-
-    if (!value) continue;
-
-    if (
-      value.includes('Customer Details') ||
-      value.includes('Tax Details') ||
-      value.includes('Contact Details') ||
-      value.includes('SR.NO')
-    ) {
-      continue;
-    }
-
-    if (value.length > 3) {
-      return {
-        customer_name: value,
-        source_file: src,
-      };
-    }
-  }
-
-  return null;
-}
-function detectMaterialType(
-  sku: string | undefined
-): string {
-
-  const s = String(sku ?? '').toUpperCase();
-
-  if (s.startsWith('SS'))
-    return 'SS';
-
-  if (s.startsWith('MS'))
-    return 'MS';
-
+function materialType(itemName: unknown): string {
+  const name = cleanText(itemName).toUpperCase();
+  if (name.startsWith('SS') || name.includes(' STAINLESS')) return 'SS';
+  if (name.startsWith('MS') || name.includes(' MILD STEEL')) return 'MS';
+  if (name.includes('FREIGHT') || name.includes('LOADING')) return 'SERVICE';
   return 'OTHER';
 }
-function makeSaleRow(c: string[], src: string): Record<string,unknown>|null {
-  // SR | INV_NO | DATE | PARTY | TYPE | AMOUNT
-  const inv = c[1]?.trim(); const d = parseDate(c[2]); const party = c[3]?.trim(); const amt = cleanAmt(c[5]);
-  if (!inv||!d||!party||amt===0) return null;
-  const m=ym(d); const slug=slugify(party); const dISO=`${d}T00:00:00Z`;
-  return { PK:`SALE#${m}`,SK:`INV#${inv}`,GSI1PK:`CUSTOMER#${slug}`,GSI1SK:`DATE#${dISO}`,GSI2PK:`TYPE#SALE`,GSI2SK:`DATE#${dISO}`,entityType:'SALE',invoice_id:inv,date:d,customer_name:party,total_amount:amt,source_key:src,ingested_at:new Date().toISOString() };
+
+function rowKey(parts: unknown[]): string {
+  return createHash('sha256')
+    .update(parts.map((part) => cleanText(part)).join('|'))
+    .digest('hex');
 }
 
-function makePurchRow(c: string[], src: string): Record<string,unknown>|null {
-  // SR | INV_ID | INV_NO | DATE | PARTY | TYPE | AMOUNT
-  const inv = c[2]?.trim(); const d = parseDate(c[3]); const party = c[4]?.trim(); const amt = cleanAmt(c[6]);
-  if (!inv||!d||!party||amt===0) return null;
-  const m=ym(d); const slug=slugify(party); const dISO=`${d}T00:00:00Z`;
-  return { PK:`PO#${m}`,SK:`PO#${inv}`,GSI1PK:`VENDOR#${slug}`,GSI1SK:`DATE#${dISO}`,GSI2PK:`TYPE#PURCHASE`,GSI2SK:`DATE#${dISO}`,entityType:'PURCHASE',invoice_no:inv,date:d,vendor_name:party,total_amount:amt,source_key:src,ingested_at:new Date().toISOString() };
+function firstDataIndex(record: string[]): number {
+  return record.findIndex((value) => /^\d+$/.test(cleanText(value)));
 }
 
-function makeItemSaleRow(c: string[], src: string): Record<string,unknown>|null {
-  // SR | INV_NO | DATE | CUSTOMER | ITEM | QTY | BASE | GST% | GST_AMT | TOTAL
-  const inv=c[1]?.trim(); const d=parseDate(c[2]); const cust=c[3]?.trim(); const item=c[4]?.trim();
-  const base=cleanAmt(c[6]); const gst=cleanAmt(c[8]); const total=cleanAmt(c[9]);
-  if (!inv||!d||!item||base===0) return null;
-  const m=ym(d); const skuSlug=slugify(item).toUpperCase().slice(0,40); const custSlug=slugify(cust??''); const dISO=`${d}T00:00:00Z`;
-  return { PK:`SALE#${m}`,SK:`ITEM#${inv}#${skuSlug}`,GSI1PK:`CUSTOMER#${custSlug}`,GSI1SK:`DATE#${dISO}`,GSI2PK:`SKU#${skuSlug}`,GSI2SK:`DATE#${dISO}`,entityType:'SALE_ITEM',invoice_no:inv,date:d,customer_name:cust,product_sku:item,quantity:c[5]?.trim(),base_amount:base,gst_amount:gst,total_amount:total,source_key:src,ingested_at:new Date().toISOString() };
+function parseMaster(record: string[], sourceFile: string, type: 'customers' | 'suppliers'): ParsedRecord | null {
+  const idx = firstDataIndex(record);
+  if (idx < 0) return null;
+
+  const name = firstLine(record[idx + 1]);
+  if (!name || /^customer details|supplier details$/i.test(name)) return null;
+
+  const gst = record.map(cleanText).find((value) => /\d{2}[A-Z]{5}\d{4}[A-Z][A-Z\d]Z[A-Z\d]/.test(value));
+  const table = type === 'customers' ? 'customers' : 'suppliers';
+  const nameColumn = type === 'customers' ? 'customer_name' : 'supplier_name';
+
+  return {
+    table,
+    row: {
+      [nameColumn]: name,
+      gstin: gst ?? null,
+      source_file: sourceFile,
+    },
+  };
 }
 
-function makeItemPurchRow(c: string[], src: string): Record<string,unknown>|null {
-  // SR | INV_NO | DATE | SUPPLIER | ITEM | QTY | BASE | GST% | GST_AMT | TOTAL
-  const inv=c[1]?.trim(); const d=parseDate(c[2]); const sup=c[3]?.trim(); const item=c[4]?.trim();
-  const base=cleanAmt(c[6]); const gst=cleanAmt(c[8]); const total=cleanAmt(c[9]);
-  if (!inv||!d||!item||base===0) return null;
-  const m=ym(d); const skuSlug=slugify(item).toUpperCase().slice(0,40); const supSlug=slugify(sup??''); const dISO=`${d}T00:00:00Z`;
-  return { PK:`PO#${m}`,SK:`ITEM#${inv}#${skuSlug}`,GSI1PK:`VENDOR#${supSlug}`,GSI1SK:`DATE#${dISO}`,GSI2PK:`SKU#${skuSlug}`,GSI2SK:`DATE#${dISO}`,entityType:'PURCHASE_ITEM',invoice_no:inv,date:d,vendor_name:sup,product_sku:item,quantity:c[5]?.trim(),base_amount:base,gst_amount:gst,total_amount:total,source_key:src,ingested_at:new Date().toISOString() };
-}
-function makeSupplierRow(
-  c: string[],
-  src: string
-): Record<string, unknown> | null {
+function parseSalesRegister(record: string[], sourceFile: string): ParsedRecord | null {
+  const idx = firstDataIndex(record);
+  if (idx < 0) return null;
 
-  for (const col of c) {
-    const value = String(col ?? '').trim();
+  const invoiceNo = cleanText(record[idx + 1]);
+  const invoiceDate = parseDate(record[idx + 2]);
+  const customerName = cleanText(record[idx + 3]);
+  const amount = cleanAmount(record[idx + 5]);
 
-    if (!value) continue;
+  if (!invoiceNo || !invoiceDate || !customerName || amount <= 0) return null;
 
-    if (
-      value.includes('Supplier Details') ||
-      value.includes('Tax Details') ||
-      value.includes('Contact Details') ||
-      value.includes('SR.NO')
-    ) {
-      continue;
-    }
-
-    if (value.length > 3) {
-      return {
-        vendor_name: value,
-        source_file: src,
-      };
-    }
-  }
-
-  return null;
-}
-async function* streamCSV(
-  body: Readable,
-  ft: SGSFileType,
-  src: string
-): AsyncGenerator<Record<string, unknown>> {
-
-  const rl = createInterface({
-    input: body,
-    crlfDelay: Infinity,
-  });
-
-  for await (const line of rl) {
-    const t = line.trim();
-    if (!t) continue;
-
-    const cols = split(t);
-
-let row: Record<string, unknown> | null = null;
-
-// Customer/Supplier files have a completely different format
-if (ft === 'customers') {
-  row = makeCustomerRow(cols, src);
-}
-else if (ft === 'suppliers') {
-  row = makeSupplierRow(cols, src);
-}
-else {
-  const dataCols = findDataRow(cols);
-
-  if (!dataCols) continue;
-
-  if (ft === 'sales_register') {
-    row = makeSaleRow(dataCols, src);
-  }
-  else if (ft === 'purchase_register') {
-    row = makePurchRow(dataCols, src);
-  }
-  else if (ft === 'item_sales') {
-    row = makeItemSaleRow(dataCols, src);
-  }
-  else if (ft === 'item_purchase') {
-    row = makeItemPurchRow(dataCols, src);
-  }
+  return {
+    table: 'sales',
+    row: {
+      invoice_no: invoiceNo,
+      invoice_date: invoiceDate,
+      customer_name: customerName,
+      invoice_type: cleanText(record[idx + 4]) || null,
+      total_amount: amount,
+      source_file: sourceFile,
+    },
+  };
 }
 
-if (row) {
-  yield row;
-}  }
+function parsePurchaseRegister(record: string[], sourceFile: string): ParsedRecord | null {
+  const idx = firstDataIndex(record);
+  if (idx < 0) return null;
+
+  const invoiceId = cleanText(record[idx + 1]);
+  const invoiceNo = cleanText(record[idx + 2]);
+  const invoiceDate = parseDate(record[idx + 3]);
+  const supplierName = cleanText(record[idx + 4]);
+  const amount = cleanAmount(record[idx + 6]);
+
+  if (!invoiceNo || !invoiceDate || !supplierName || amount <= 0) return null;
+
+  return {
+    table: 'purchases',
+    row: {
+      invoice_no: invoiceNo,
+      invoice_date: invoiceDate,
+      supplier_name: supplierName,
+      invoice_id: invoiceId || null,
+      invoice_type: cleanText(record[idx + 5]) || null,
+      total_amount: amount,
+      source_file: sourceFile,
+    },
+  };
 }
 
+function parseSalesItem(record: string[], sourceFile: string): ParsedRecord | null {
+  const idx = firstDataIndex(record);
+  if (idx < 0) return null;
 
-async function* streamJSON(body: Readable): AsyncGenerator<Record<string,unknown>> {
-  let raw = ''; for await (const c of body) raw += (c as Buffer).toString('utf-8');
-  const arr = JSON.parse(raw);
-  if (!Array.isArray(arr)) throw new Error('JSON must be array');
-  for (const r of arr) yield r as Record<string,unknown>;
-}
-async function flushSupabase(
-  items: Record<string, unknown>[],
-  ft: SGSFileType,
-): Promise<void> {
-  if (!items.length) return;
+  const invoiceNo = cleanText(record[idx + 1]);
+  const invoiceDate = parseDate(record[idx + 2]);
+  const customerName = cleanText(record[idx + 3]);
+  const itemName = cleanText(record[idx + 4]);
+  const quantity = parseQuantity(record[idx + 5]);
+  const baseAmount = cleanAmount(record[idx + 6]);
+  const gstRate = cleanAmount(record[idx + 7]);
+  const gstAmount = cleanAmount(record[idx + 8]);
+  const totalAmount = cleanAmount(record[idx + 9]);
 
-  switch (ft) {
-    case 'sales_register': {
-      const rows = items.map((i) => ({
-        invoice_no: i.invoice_id,
-        invoice_date: i.date,
-        customer_name: i.customer_name,
-        total_amount: i.total_amount,
-        source_file: i.source_key,
-      }));
+  if (!invoiceNo || !invoiceDate || !itemName || totalAmount <= 0) return null;
 
-      const { error } = await supabase
-        .from('sales')
-        .upsert(rows, { onConflict: 'invoice_no' });
-
-      if (error) throw error;
-      break;
-    }
-
-    case 'purchase_register': {
-      const rows = items.map((i) => ({
-        invoice_no: i.invoice_no,
-        invoice_date: i.date,
-        vendor_name: i.vendor_name,
-        total_amount: i.total_amount,
-        source_file: i.source_key,
-      }));
-
-      const { error } = await supabase
-        .from('purchases')
-        .upsert(rows, {
-          onConflict: 'invoice_no'
-        });
-
-      if (error) throw error;
-      break;
-    }
-
-    case 'item_sales': {
-      const rows = items.map((i) => {
-        const qty = parseQuantity(
-          String(i.quantity ?? '')
-        );
-    
-        const rowKey =
-          `${i.invoice_no}|${i.product_sku}|${i.total_amount}`;
-    
-        return {
-          row_key: rowKey,
-    
-          invoice_no: i.invoice_no,
-          invoice_date: i.date,
-          customer_name: i.customer_name,
-          product_sku: i.product_sku,
-    
-          quantity: qty.quantity,
-          unit: qty.unit,
-    
-          material_type: detectMaterialType(
-            String(i.product_sku ?? '')
-          ),
-    
-          base_amount: i.base_amount,
-          gst_amount: i.gst_amount,
-          total_amount: i.total_amount,
-        };
-      });
-    
-      const { error } = await supabase
-        .from('sales_items')
-        .upsert(rows, {
-          onConflict: 'row_key',
-        });
-    
-      if (error) throw error;
-      break;
-    }
-
-    case 'item_purchase': {
-      const rows = items.map((i) => {
-        const qty = parseQuantity(
-          String(i.quantity ?? '')
-        );
-    
-        const rowKey =
-          `${i.invoice_no}|${i.product_sku}|${i.total_amount}`;
-    
-        return {
-          row_key: rowKey,
-    
-          invoice_no: i.invoice_no,
-          invoice_date: i.date,
-          vendor_name: i.vendor_name,
-          product_sku: i.product_sku,
-    
-          quantity: qty.quantity,
-          unit: qty.unit,
-    
-          material_type: detectMaterialType(
-            String(i.product_sku ?? '')
-          ),
-    
-          base_amount: i.base_amount,
-          gst_amount: i.gst_amount,
-          total_amount: i.total_amount,
-        };
-      });
-    
-      const { error } = await supabase
-        .from('purchase_items')
-        .upsert(rows, {
-          onConflict: 'row_key',
-        });
-    
-      if (error) throw error;
-      break;
-    }
-
-    case 'customers': {
-      const rows = items.map((i) => ({
-        customer_name: i.customer_name,
-        source_file: i.source_file,
-      }));
-
-      const { error } = await supabase
-        .from('customers')
-        .upsert(rows, {
-          onConflict: 'customer_name',
-        });
-
-      if (error) throw error;
-      break;
-    }
-
-    case 'suppliers': {
-      const rows = items.map((i) => ({
-        vendor_name: i.vendor_name,
-        source_file: i.source_file,
-      }));
-    
-      const { error } = await supabase
-        .from('vendors')
-        .upsert(rows, {
-          onConflict: 'vendor_name',
-        });
-    
-      if (error) throw error;
-      break;
-      }
-    }
+  return {
+    table: 'sales_items',
+    row: {
+      row_key: rowKey([sourceFile, invoiceNo, invoiceDate, customerName, itemName, record[idx], totalAmount]),
+      invoice_no: invoiceNo,
+      invoice_date: invoiceDate,
+      customer_name: customerName,
+      item_name: itemName,
+      quantity: quantity.quantity,
+      unit: quantity.unit,
+      material_type: materialType(itemName),
+      base_amount: baseAmount,
+      gst_rate: gstRate,
+      gst_amount: gstAmount,
+      total_amount: totalAmount,
+      source_file: sourceFile,
+    },
+  };
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function flush(items: Record<string,unknown>[]): Promise<void> {
-  if (!items.length) return;
-  // Cast required: DynamoDB SDK's BatchWriteCommand has a complex union type
-  // that doesn't accept plain Record<string,unknown>; the doc client handles marshalling at runtime.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let rem: any[] = items.map(i => ({ PutRequest: { Item: i } })); let att = 0;
-  while (rem.length && att < 5) {
-    const res = await ddb.send(new BatchWriteCommand({ RequestItems: { [DYNAMODB_TABLE]: rem } }));
-    const unp = res.UnprocessedItems?.[DYNAMODB_TABLE];
-    if (!unp?.length) break;
-    rem = unp; att++;
-    await new Promise(r => setTimeout(r, Math.min(100*2**att,2000)));
+function parsePurchaseItem(record: string[], sourceFile: string): ParsedRecord | null {
+  const idx = firstDataIndex(record);
+  if (idx < 0) return null;
+
+  const invoiceNo = cleanText(record[idx + 1]);
+  const invoiceDate = parseDate(record[idx + 2]);
+  const supplierName = cleanText(record[idx + 3]);
+  const itemName = cleanText(record[idx + 4]);
+  const quantity = parseQuantity(record[idx + 5]);
+  const baseAmount = cleanAmount(record[idx + 6]);
+  const gstRate = cleanAmount(record[idx + 7]);
+  const gstAmount = cleanAmount(record[idx + 8]);
+  const totalAmount = cleanAmount(record[idx + 9]);
+
+  if (!invoiceNo || !invoiceDate || !itemName || totalAmount <= 0) return null;
+
+  return {
+    table: 'purchase_items',
+    row: {
+      row_key: rowKey([sourceFile, invoiceNo, invoiceDate, supplierName, itemName, record[idx], totalAmount]),
+      invoice_no: invoiceNo,
+      invoice_date: invoiceDate,
+      supplier_name: supplierName,
+      item_name: itemName,
+      quantity: quantity.quantity,
+      unit: quantity.unit,
+      material_type: materialType(itemName),
+      base_amount: baseAmount,
+      gst_rate: gstRate,
+      gst_amount: gstAmount,
+      total_amount: totalAmount,
+      source_file: sourceFile,
+    },
+  };
+}
+
+function parseRecord(record: string[], fileType: SGSFileType, sourceFile: string): ParsedRecord | null {
+  switch (fileType) {
+    case 'customers':
+      return parseMaster(record, sourceFile, 'customers');
+    case 'suppliers':
+      return parseMaster(record, sourceFile, 'suppliers');
+    case 'sales_register':
+      return parseSalesRegister(record, sourceFile);
+    case 'purchase_register':
+      return parsePurchaseRegister(record, sourceFile);
+    case 'item_sales':
+      return parseSalesItem(record, sourceFile);
+    case 'item_purchase':
+      return parsePurchaseItem(record, sourceFile);
+    case 'json':
+      return null;
   }
 }
 
-async function updateSnapshot(month: string, ic: number, rev: number): Promise<void> {
-  const yyyy=month.slice(0,4); const mm=month.slice(4,6);
-  await ddb.send(new UpdateCommand({
-    TableName: DYNAMODB_TABLE,
-    Key: { PK:`ANALYTICS#${month}`, SK:'SNAP#revenue' },
-    UpdateExpression: 'SET entityType=:et,#mo=:mo,GSI1PK=:g1pk,GSI1SK=:g1sk,invoice_count=if_not_exists(invoice_count,:z)+:ic,total_revenue=if_not_exists(total_revenue,:z)+:rev,updated_at=:now',
-    ExpressionAttributeNames: { '#mo':'month' },
-    ExpressionAttributeValues: { ':et':'ANALYTICS',':mo':`${yyyy}-${mm}`,':g1pk':'TYPE#revenue',':g1sk':`DATE#${yyyy}-${mm}-01T00:00:00Z`,':ic':ic,':rev':rev,':z':0,':now':new Date().toISOString() },
-  }));
+function conflictColumn(table: TableName): string {
+  switch (table) {
+    case 'customers':
+      return 'customer_name';
+    case 'suppliers':
+      return 'supplier_name';
+    case 'sales':
+    case 'purchases':
+      return 'invoice_no';
+    case 'sales_items':
+    case 'purchase_items':
+      return 'row_key';
+    case 'ingestion_files':
+      return 'source_file';
+  }
+}
+
+async function upsertRows(table: TableName, rows: Record<string, unknown>[]): Promise<void> {
+  for (let start = 0; start < rows.length; start += BATCH_SIZE) {
+    const batch = rows.slice(start, start + BATCH_SIZE);
+    const { error } = await supabase
+      .from(table)
+      .upsert(batch, { onConflict: conflictColumn(table) });
+
+    if (error) throw new Error(`${table}: ${error.message}`);
+  }
+}
+
+function groupByTable(records: ParsedRecord[]): Map<TableName, Record<string, unknown>[]> {
+  const grouped = new Map<TableName, Record<string, unknown>[]>();
+  for (const record of records) {
+    const rows = grouped.get(record.table) ?? [];
+    rows.push(record.row);
+    grouped.set(record.table, rows);
+  }
+  return grouped;
 }
 
 export const handler: S3Handler = async (event: S3Event) => {
   for (const rec of event.Records) {
     const bucket = rec.s3.bucket.name;
-    const key    = decodeURIComponent(rec.s3.object.key.replace(/\+/g,' '));
-    const ft     = detectFileType(key);
+    const key = decodeURIComponent(rec.s3.object.key.replace(/\+/g, ' '));
+    const fileType = detectFileType(key);
 
-    let body: Readable;
-    try {
-      const r = await s3.send(new GetObjectCommand({ Bucket:bucket, Key:key }));
-      if (!r.Body) { console.error('[ingest] Empty body', key); continue; }
-      body = r.Body as Readable;
-    } catch (e) { console.error('[ingest] S3 error', key, e); continue; }
+    const object = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+    if (!object.Body) throw new Error(`S3 object has no body: ${key}`);
 
-    const gen = ft==='json' ? streamJSON(body) : streamCSV(body, ft, key);
-    let buf: Record<string,unknown>[] = [];
-    let written = 0;
-    const mDeltas = new Map<string,{ic:number;rev:number}>();
+    const raw = await readBody(object.Body as Readable);
+    const records = parseCsv(raw)
+      .map((record) => parseRecord(record, fileType, key))
+      .filter((record): record is ParsedRecord => record !== null);
+
+    const startedAt = new Date().toISOString();
 
     try {
-      for await (const item of gen) {
-        buf.push(item);
-        if (ft==='sales_register'||ft==='purchase_register') {
-          const pk = String(item.PK??'');
-          const m  = pk.replace('SALE#','').replace('PO#','');
-          if (/^\d{6}$/.test(m)) {
-            const ex = mDeltas.get(m) ?? {ic:0,rev:0};
-            mDeltas.set(m,{ic:ex.ic+1,rev:ex.rev+(Number(item.total_amount)||0)});
-          }
-        }
-        if (buf.length >= BATCH_SIZE) {
-          await flushSupabase(buf, ft);
-        
-          written += buf.length;
-          buf = [];
-        }
+      const grouped = groupByTable(records);
+      for (const [table, rows] of grouped) {
+        await upsertRows(table, rows);
       }
-      if (buf.length) {
-        await flushSupabase(buf, ft);
-      
-        written += buf.length;
-      }
-    } catch (e) {
-      console.error('[ingest] processing error', e);
-      throw e;
-    }
 
-    for (const [m,d] of mDeltas) {
-      try { await updateSnapshot(m,d.ic,d.rev); } catch(e) { console.error('[ingest] snapshot err',m,e); }
-    }
+      await upsertRows('ingestion_files', [{
+        source_file: key,
+        bucket,
+        file_type: fileType,
+        row_count: records.length,
+        status: 'complete',
+        error_message: null,
+        ingested_at: startedAt,
+      }]);
 
-    console.info('[ingest] Done', { key, ft, written });
+      console.info('[ingest] complete', { key, fileType, rows: records.length });
+    } catch (error) {
+      await upsertRows('ingestion_files', [{
+        source_file: key,
+        bucket,
+        file_type: fileType,
+        row_count: records.length,
+        status: 'error',
+        error_message: error instanceof Error ? error.message : String(error),
+        ingested_at: startedAt,
+      }]);
+      throw error;
+    }
   }
 };

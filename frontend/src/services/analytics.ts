@@ -5,25 +5,109 @@ export async function fetchAnalyticsSummarySupabase(
   months = 6,
 ): Promise<AnalyticsSummary> {
 
-  const [{ data: summary }, { data: customers }, { data: revenue }] =
+  const [
+    { data: summary },
+    { data: customers },
+    { data: revenue },
+    { data: skus },
+    { data: materials },
+    { data: suppliers },
+    { data: business },
+    { data: gst },
+    { data: margin },
+  ] =
     await Promise.all([
       supabase.from('analytics_summary').select('*').single(),
       supabase.from('top_customers').select('*').limit(10),
-      supabase.from('monthly_revenue').select('*'),
+      supabase.from('monthly_revenue').select('*').order('month', { ascending: false }).limit(months),
+      supabase.from('top_skus').select('*').limit(10),
+      supabase.from('material_split').select('*'),
+      supabase.from('top_suppliers').select('*').limit(10),
+      supabase.from('monthly_business').select('*').order('month', { ascending: false }).limit(months),
+      supabase.from('monthly_gst').select('*').order('month', { ascending: false }).limit(months),
+      supabase.from('item_margin').select('*').limit(10),
     ]);
+
+  const byMonthAsc = <T extends { month: string }>(rows: T[] | null) =>
+    [...(rows ?? [])].sort((a, b) => a.month.localeCompare(b.month));
+
+  const businessByMonth = byMonthAsc(business).map((row) => ({
+    month: row.month,
+    sales: Number(row.sales ?? 0),
+    purchases: Number(row.purchases ?? 0),
+    gross_profit: Number(row.gross_profit ?? 0),
+    gross_margin_pct: Number(row.gross_margin_pct ?? 0),
+    sales_invoices: Number(row.sales_invoices ?? 0),
+    purchase_invoices: Number(row.purchase_invoices ?? 0),
+  }));
+
+  const totalPurchase = Number(summary?.total_purchase ?? 0);
+  const grossProfit = Number(summary?.gross_profit ?? 0);
+  const totalRevenue = Number(summary?.total_revenue ?? 0);
+  const grossMarginPct = totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0;
+  const materialSplit = (materials ?? []).reduce(
+    (acc, row) => {
+      const key = String(row.material_type ?? 'OTHER') as keyof typeof acc;
+      acc[key] = (acc[key] ?? 0) + Number(row.total_revenue ?? 0);
+      return acc;
+    },
+    { SS: 0, MS: 0, SERVICE: 0, OTHER: 0 },
+  );
+
+  const firstMonth = businessByMonth.at(0);
+  const lastMonth = businessByMonth.at(-1);
+  const growthRate =
+    firstMonth && lastMonth && firstMonth.sales > 0
+      ? ((lastMonth.sales - firstMonth.sales) / firstMonth.sales) * 100
+      : 0;
 
   return {
     period: `${months} months`,
-    total_revenue: Number(summary?.total_revenue ?? 0),
+    total_revenue: totalRevenue,
+    total_purchase: totalPurchase,
+    gross_profit: grossProfit,
+    gross_margin_pct: grossMarginPct,
     total_invoices: Number(summary?.total_invoices ?? 0),
     avg_invoice_value: Number(summary?.avg_invoice_value ?? 0),
-    top_customers: customers ?? [],
-    revenue_by_month: revenue ?? [],
-    top_skus: [],
-    material_split: {
-      SS: 0,
-      MS: 0,
-    },
-    growth_rate: 0,
+    customer_count: Number(summary?.customer_count ?? customers?.length ?? 0),
+    supplier_count: Number(summary?.supplier_count ?? suppliers?.length ?? 0),
+    top_customers: (customers ?? []).map((row) => ({
+      customer_name: row.customer_name,
+      total_revenue: Number(row.total_revenue ?? 0),
+      invoice_count: Number(row.invoice_count ?? 0),
+    })),
+    top_suppliers: (suppliers ?? []).map((row) => ({
+      supplier_name: row.supplier_name,
+      total_purchase: Number(row.total_purchase ?? 0),
+      invoice_count: Number(row.invoice_count ?? 0),
+    })),
+    revenue_by_month: byMonthAsc(revenue).map((row) => ({
+      month: row.month,
+      revenue: Number(row.revenue ?? 0),
+      invoices: Number(row.invoices ?? 0),
+    })),
+    business_by_month: businessByMonth,
+    gst_by_month: byMonthAsc(gst).map((row) => ({
+      month: row.month,
+      output_gst: Number(row.output_gst ?? 0),
+      input_gst: Number(row.input_gst ?? 0),
+      net_gst: Number(row.net_gst ?? 0),
+    })),
+    item_margin: (margin ?? []).map((row) => ({
+      item_name: row.item_name,
+      sales_qty: Number(row.sales_qty ?? 0),
+      purchase_qty: Number(row.purchase_qty ?? 0),
+      sales_amount: Number(row.sales_amount ?? 0),
+      purchase_amount: Number(row.purchase_amount ?? 0),
+      gross_profit: Number(row.gross_profit ?? 0),
+    })),
+    top_skus: (skus ?? []).map((row) => ({
+      sku: row.sku,
+      total_revenue: Number(row.total_revenue ?? 0),
+      total_qty: Number(row.total_qty ?? 0),
+      material_type: row.material_type ?? 'OTHER',
+    })),
+    material_split: materialSplit,
+    growth_rate: growthRate,
   };
 }

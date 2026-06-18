@@ -188,14 +188,14 @@ function SchemaReference() {
   return (
     <div className="glass-card p-4">
       <div className="flex items-center gap-2 mb-3">
-        <Info size={14} className="text-indigo-400" />
-        <h3 className="text-sm font-semibold text-slate-200">Expected CSV Schema</h3>
+        <Info size={14} className="text-emerald-400" />
+        <h3 className="text-sm font-semibold text-slate-200">Supported SGS Exports</h3>
       </div>
       <div className="overflow-x-auto scrollbar-hide">
         <table className="w-full text-xs">
           <thead>
             <tr className="border-b border-slate-700">
-              {['Column', 'Type', 'Example'].map((h) => (
+              {['File', 'Loaded Into', 'Key Fields'].map((h) => (
                 <th key={h} className="text-left text-2xs text-slate-500 uppercase tracking-wide pb-2 pr-4">
                   {h}
                 </th>
@@ -204,26 +204,24 @@ function SchemaReference() {
           </thead>
           <tbody className="divide-y divide-slate-800/60">
             {[
-              { col: 'Invoice_ID',    type: 'String',  ex: 'INV-20250115-001'   },
-              { col: 'Date',         type: 'Date',    ex: '2025-01-15'          },
-              { col: 'Customer_Name',type: 'String',  ex: 'Acme Steel Corp'     },
-              { col: 'Product_SKU',  type: 'String',  ex: 'SS-304-2MM-SHEET'   },
-              { col: 'Quantity',     type: 'Number',  ex: '500'                 },
-              { col: 'Unit_Price',   type: 'Decimal', ex: '145.50'              },
-              { col: 'Total_Amount', type: 'Decimal', ex: '72750.00'            },
-              { col: 'Material_Type',type: 'SS | MS', ex: 'SS'                  },
-            ].map(({ col, type, ex }) => (
-              <tr key={col}>
-                <td className="py-1.5 pr-4 font-mono text-indigo-300">{col}</td>
-                <td className="py-1.5 pr-4 text-slate-400">{type}</td>
-                <td className="py-1.5 text-slate-500 font-mono">{ex}</td>
+              { file: 'Sales.csv',              table: 'sales',          fields: 'Invoice, date, customer, amount' },
+              { file: 'Purchase.csv',           table: 'purchases',      fields: 'Invoice, date, supplier, amount' },
+              { file: 'Item wise sales.csv',    table: 'sales_items',    fields: 'Item, quantity, GST, total' },
+              { file: 'Item wise purchase.csv', table: 'purchase_items', fields: 'Item, quantity, GST, total' },
+              { file: 'Customers.csv',          table: 'customers',      fields: 'Customer name, GSTIN when present' },
+              { file: 'Suppliers.csv',          table: 'suppliers',      fields: 'Supplier name, GSTIN when present' },
+            ].map(({ file, table, fields }) => (
+              <tr key={file}>
+                <td className="py-1.5 pr-4 font-mono text-emerald-300">{file}</td>
+                <td className="py-1.5 pr-4 text-slate-400">{table}</td>
+                <td className="py-1.5 text-slate-500">{fields}</td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
       <p className="text-2xs text-slate-600 mt-3">
-        First row must be the header row. UTF-8 encoding required. Max {MAX_FILE_SIZE_MB} MB per file.
+        Upload the raw accounting exports as-is. The parser handles repeated report headers, quoted amounts, and multiline customer/supplier details. Max {MAX_FILE_SIZE_MB} MB per file.
       </p>
     </div>
   );

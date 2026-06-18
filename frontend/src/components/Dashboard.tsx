@@ -10,6 +10,8 @@ import {
   Layers,
   AlertCircle,
   RefreshCw,
+  Factory,
+  ReceiptText,
 } from 'lucide-react';
 import {
   AreaChart,
@@ -185,11 +187,13 @@ function RevenueChart({ data }: { data: AnalyticsSummary['revenue_by_month'] }) 
 // Material split donut
 // ────────────────────────────────────────────────────────────────────────────
 function MaterialDonut({ split }: { split: AnalyticsSummary['material_split'] }) {
-  const total = split.SS + split.MS;
+  const total = split.SS + split.MS + (split.SERVICE ?? 0) + (split.OTHER ?? 0);
   const data = [
-    { name: 'Stainless Steel (SS)', value: split.SS, color: '#6366f1' },
-    { name: 'Mild Steel (MS)',      value: split.MS, color: '#06b6d4' },
-  ];
+    { name: 'Stainless Steel (SS)', value: split.SS, color: '#10b981' },
+    { name: 'Mild Steel (MS)',      value: split.MS, color: '#f59e0b' },
+    { name: 'Service',              value: split.SERVICE ?? 0, color: '#38bdf8' },
+    { name: 'Other',                value: split.OTHER ?? 0, color: '#94a3b8' },
+  ].filter((entry) => entry.value > 0);
 
   return (
     <div className="glass-card p-5">
@@ -254,6 +258,78 @@ function MaterialDonut({ split }: { split: AnalyticsSummary['material_split'] })
   );
 }
 
+function BusinessTrendChart({ data }: { data: AnalyticsSummary['business_by_month'] }) {
+  const chartData = data.map((d) => ({
+    month: format(parseISO(`${d.month}-01`), 'MMM yy'),
+    sales: d.sales,
+    purchases: d.purchases,
+    grossProfit: d.gross_profit,
+  }));
+
+  return (
+    <div className="glass-card p-5">
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h3 className="text-sm font-semibold text-slate-200">Sales, Purchases & Profit</h3>
+          <p className="text-2xs text-slate-500 mt-0.5">Monthly business movement</p>
+        </div>
+        <Factory size={16} className="text-slate-500" />
+      </div>
+      <ResponsiveContainer width="100%" height={240}>
+        <AreaChart data={chartData} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+          <XAxis dataKey="month" tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} />
+          <YAxis tickFormatter={(v: number) => fmt(v)} tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} width={56} />
+          <Tooltip
+            contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px', fontSize: '12px' }}
+            labelStyle={{ color: '#94a3b8' }}
+            formatter={(v: number, name: string) => [fmt(v), name]}
+          />
+          <Area type="monotone" dataKey="sales" name="Sales" stroke="#10b981" fill="#10b98122" strokeWidth={2} />
+          <Area type="monotone" dataKey="purchases" name="Purchases" stroke="#f59e0b" fill="#f59e0b1f" strokeWidth={2} />
+          <Area type="monotone" dataKey="grossProfit" name="Gross Profit" stroke="#38bdf8" fill="#38bdf820" strokeWidth={2} />
+        </AreaChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+function GSTChart({ data }: { data: AnalyticsSummary['gst_by_month'] }) {
+  const chartData = data.map((d) => ({
+    month: format(parseISO(`${d.month}-01`), 'MMM yy'),
+    output: d.output_gst,
+    input: d.input_gst,
+    net: d.net_gst,
+  }));
+
+  return (
+    <div className="glass-card p-5">
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h3 className="text-sm font-semibold text-slate-200">GST Movement</h3>
+          <p className="text-2xs text-slate-500 mt-0.5">Output, input, and net GST</p>
+        </div>
+        <ReceiptText size={16} className="text-slate-500" />
+      </div>
+      <ResponsiveContainer width="100%" height={240}>
+        <AreaChart data={chartData} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+          <XAxis dataKey="month" tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} />
+          <YAxis tickFormatter={(v: number) => fmt(v)} tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} width={56} />
+          <Tooltip
+            contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px', fontSize: '12px' }}
+            labelStyle={{ color: '#94a3b8' }}
+            formatter={(v: number, name: string) => [fmt(v), name]}
+          />
+          <Area type="monotone" dataKey="output" name="Output GST" stroke="#10b981" fill="#10b98122" strokeWidth={2} />
+          <Area type="monotone" dataKey="input" name="Input GST" stroke="#f59e0b" fill="#f59e0b1f" strokeWidth={2} />
+          <Area type="monotone" dataKey="net" name="Net GST" stroke="#38bdf8" fill="#38bdf820" strokeWidth={2} />
+        </AreaChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
 // ────────────────────────────────────────────────────────────────────────────
 // Top Customers table
 // ────────────────────────────────────────────────────────────────────────────
@@ -283,6 +359,40 @@ function TopCustomers({ customers }: { customers: AnalyticsSummary['top_customer
             </div>
             <span className="text-xs font-semibold text-emerald-400 tabular-nums shrink-0">
               {fmt(c.total_revenue)}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function TopSuppliers({ suppliers }: { suppliers: AnalyticsSummary['top_suppliers'] }) {
+  return (
+    <div className="glass-card p-5">
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h3 className="text-sm font-semibold text-slate-200">Top Suppliers</h3>
+          <p className="text-2xs text-slate-500 mt-0.5">By purchase value</p>
+        </div>
+        <Factory size={16} className="text-slate-500" />
+      </div>
+
+      <div className="space-y-2">
+        {suppliers.length === 0 && (
+          <p className="text-xs text-slate-500 py-4 text-center">No supplier data available yet.</p>
+        )}
+        {suppliers.slice(0, 5).map((supplier, i) => (
+          <div key={supplier.supplier_name} className="flex items-center gap-3 py-2 border-b border-slate-800 last:border-0">
+            <span className="text-2xs font-bold text-slate-500 w-5 text-right shrink-0">
+              #{i + 1}
+            </span>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-medium text-slate-200 truncate">{supplier.supplier_name}</p>
+              <p className="text-2xs text-slate-500">{supplier.invoice_count} purchase invoice{supplier.invoice_count !== 1 ? 's' : ''}</p>
+            </div>
+            <span className="text-xs font-semibold text-amber-300 tabular-nums shrink-0">
+              {fmt(supplier.total_purchase)}
             </span>
           </div>
         ))}
@@ -453,11 +563,20 @@ export default function Dashboard() {
   const summary: AnalyticsSummary = data ?? {
     period:            'No data',
     total_revenue:     0,
+    total_purchase:    0,
+    gross_profit:      0,
+    gross_margin_pct:  0,
     total_invoices:    0,
     avg_invoice_value: 0,
+    customer_count:    0,
+    supplier_count:    0,
     top_customers:     [],
+    top_suppliers:     [],
     top_skus:          [],
     revenue_by_month:  [],
+    business_by_month: [],
+    gst_by_month:      [],
+    item_margin:       [],
     material_split:    { SS: 0, MS: 0 },
     growth_rate:       0,
   };
@@ -491,26 +610,31 @@ export default function Dashboard() {
           color="#6366f1"
         />
         <KPICard
-          title="Total Invoices"
-          value={summary.total_invoices.toLocaleString()}
+          title="Total Purchase"
+          value={fmt(summary.total_purchase)}
           change={summary.growth_rate * 0.8}
-          icon={<FileText size={18} />}
-          color="#8b5cf6"
+          icon={<Factory size={18} />}
+          color="#f59e0b"
         />
         <KPICard
-          title="Avg Invoice Value"
-          value={fmt(summary.avg_invoice_value)}
+          title="Gross Profit"
+          value={fmt(summary.gross_profit)}
           change={summary.growth_rate * 0.5}
           icon={<TrendingUp size={18} />}
-          color="#06b6d4"
+          color="#38bdf8"
         />
         <KPICard
-          title="Active Customers"
-          value={summary.top_customers.length.toString()}
+          title="Gross Margin"
+          value={`${summary.gross_margin_pct.toFixed(1)}%`}
           change={2.1}
-          icon={<Users size={18} />}
+          icon={<FileText size={18} />}
           color="#10b981"
         />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <BusinessTrendChart data={summary.business_by_month} />
+        <GSTChart data={summary.gst_by_month} />
       </div>
 
       {/* Charts row */}
@@ -524,11 +648,13 @@ export default function Dashboard() {
       {/* Tables row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <TopCustomers customers={summary.top_customers} />
-        <TopSKUs      skus={summary.top_skus} />
+        <TopSuppliers suppliers={summary.top_suppliers} />
       </div>
 
-      {/* Quick actions */}
-      <QuickActions />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <TopSKUs      skus={summary.top_skus} />
+        <QuickActions />
+      </div>
     </div>
   );
 }

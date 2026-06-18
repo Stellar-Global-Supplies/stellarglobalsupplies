@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import {
   LayoutDashboard,
   Bot,
@@ -12,16 +12,20 @@ import {
   Wifi,
   WifiOff,
   ChevronRight,
+  LogOut,
 } from 'lucide-react';
+import type { Session } from '@supabase/supabase-js';
 import type { LucideIcon } from 'lucide-react';
 import { useNavStore, useNotificationStore } from '@/store';
 import type { NavSection } from '@/types';
+import { supabase } from '@/lib/supabase';
 import Dashboard from '@/components/Dashboard';
 import WebTrafficDashboard from '@/components/WebTrafficDashboard';
 import MetaMarketingDashboard from '@/components/MetaMarketingDashboard';
 import AgentPanel from '@/components/AgentPanel';
 import DataIngestion from '@/components/DataIngestion';
 import Analytics from '@/components/Analytics';
+import AuthPage from '@/components/AuthPage';
 
 // ────────────────────────────────────────────────────────────────────────────
 // Nav item config
@@ -236,6 +240,15 @@ function Header() {
           </span>
         )}
       </button>
+
+      <button
+        onClick={() => supabase.auth.signOut()}
+        className="p-2 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors"
+        aria-label="Sign out"
+        title="Sign out"
+      >
+        <LogOut size={18} />
+      </button>
     </header>
   );
 }
@@ -325,6 +338,35 @@ function MainContent() {
 // App root
 // ────────────────────────────────────────────────────────────────────────────
 export default function App() {
+  const [session, setSession] = useState<Session | null>(null);
+  const [authReady, setAuthReady] = useState(false);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session);
+      setAuthReady(true);
+    });
+
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      setSession(nextSession);
+      setAuthReady(true);
+    });
+
+    return () => listener.subscription.unsubscribe();
+  }, []);
+
+  if (!authReady) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center text-sm text-slate-400">
+        Loading secure workspace...
+      </div>
+    );
+  }
+
+  if (!session) {
+    return <AuthPage />;
+  }
+
   return (
     <div className="relative min-h-screen bg-slate-950">
       {/* Subtle background grid */}

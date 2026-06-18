@@ -277,11 +277,13 @@ function SKUPerformanceChart({ skus }: { skus: AnalyticsSummary['top_skus'] }) {
 // Material split detail
 // ────────────────────────────────────────────────────────────────────────────
 function MaterialSplitDetail({ split }: { split: AnalyticsSummary['material_split'] }) {
-  const total = split.SS + split.MS;
+  const total = split.SS + split.MS + (split.SERVICE ?? 0) + (split.OTHER ?? 0);
   const data = [
-    { name: 'SS', value: split.SS, color: '#6366f1', label: 'Stainless Steel' },
-    { name: 'MS', value: split.MS, color: '#06b6d4', label: 'Mild Steel'      },
-  ];
+    { name: 'SS', value: split.SS, color: '#10b981', label: 'Stainless Steel' },
+    { name: 'MS', value: split.MS, color: '#f59e0b', label: 'Mild Steel'      },
+    { name: 'SERVICE', value: split.SERVICE ?? 0, color: '#38bdf8', label: 'Service' },
+    { name: 'OTHER', value: split.OTHER ?? 0, color: '#94a3b8', label: 'Other' },
+  ].filter((entry) => entry.value > 0);
 
   return (
     <div className="glass-card p-5">
@@ -532,11 +534,20 @@ export default function Analytics() {
   const summary: AnalyticsSummary = data ?? {
     period:            `Last ${months} months`,
     total_revenue:     0,
+    total_purchase:    0,
+    gross_profit:      0,
+    gross_margin_pct:  0,
     total_invoices:    0,
     avg_invoice_value: 0,
+    customer_count:    0,
+    supplier_count:    0,
     top_customers:     [],
+    top_suppliers:     [],
     top_skus:          [],
     revenue_by_month:  [],
+    business_by_month: [],
+    gst_by_month:      [],
+    item_margin:       [],
     material_split:    { SS: 0, MS: 0 },
     growth_rate:       0,
   };

@@ -2,7 +2,7 @@
 // Domain types for the Stellar Global Ops Control Center
 // ────────────────────────────────────────────────────────────────────────────
 
-export type MaterialType = 'SS' | 'MS';
+export type MaterialType = 'SS' | 'MS' | 'SERVICE' | 'OTHER';
 
 export interface SaleRecord {
   invoice_id:   string;
@@ -139,11 +139,20 @@ export interface GoogleConnectionStatus {
 export interface AnalyticsSummary {
   period:            string;
   total_revenue:     number;
+  total_purchase:    number;
+  gross_profit:      number;
+  gross_margin_pct:  number;
   total_invoices:    number;
   avg_invoice_value: number;
+  customer_count:    number;
+  supplier_count:    number;
   top_customers:     TopCustomer[];
+  top_suppliers:     TopSupplier[];
   top_skus:          TopSKU[];
   revenue_by_month:  MonthlyRevenue[];
+  business_by_month: MonthlyBusiness[];
+  gst_by_month:      MonthlyGST[];
+  item_margin:       ItemMargin[];
   material_split:    MaterialSplit;
   growth_rate:       number;
 }
@@ -161,15 +170,49 @@ export interface TopSKU {
   material_type: MaterialType;
 }
 
+export interface TopSupplier {
+  supplier_name: string;
+  total_purchase: number;
+  invoice_count: number;
+}
+
 export interface MonthlyRevenue {
   month:   string;  // "2025-01"
   revenue: number;
   invoices: number;
 }
 
+export interface MonthlyBusiness {
+  month: string;
+  sales: number;
+  purchases: number;
+  gross_profit: number;
+  gross_margin_pct: number;
+  sales_invoices: number;
+  purchase_invoices: number;
+}
+
+export interface MonthlyGST {
+  month: string;
+  output_gst: number;
+  input_gst: number;
+  net_gst: number;
+}
+
+export interface ItemMargin {
+  item_name: string;
+  sales_qty: number;
+  purchase_qty: number;
+  sales_amount: number;
+  purchase_amount: number;
+  gross_profit: number;
+}
+
 export interface MaterialSplit {
   SS: number;
   MS: number;
+  SERVICE?: number;
+  OTHER?: number;
 }
 
 // ────────────────────────────────────────────────────────────────────────────
