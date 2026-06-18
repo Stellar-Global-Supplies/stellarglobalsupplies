@@ -175,7 +175,9 @@ export async function fetchWebAnalytics(period: AnalyticsPeriod = 'weekly'): Pro
 export async function fetchMetaAnalytics(period: AnalyticsPeriod = 'weekly'): Promise<MetaAnalyticsData> {
   try {
     const data = await request<MetaAnalyticsData>(`/analytics/meta?period=${period}`);
-    if (typeof data?.summary?.total_requests !== 'number') {
+    const hasLegacyShape = typeof data?.summary?.total_requests === 'number';
+    const hasNativeMetaShape = Boolean((data as any)?.instagram || (data as any)?.facebook || (data as any)?.ads);
+    if (!hasLegacyShape && !hasNativeMetaShape) {
       throw new Error('Meta analytics API returned an empty payload.');
     }
     return data;

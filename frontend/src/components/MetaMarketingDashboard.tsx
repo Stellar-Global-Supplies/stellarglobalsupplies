@@ -43,6 +43,45 @@ import type { AnalyticsPeriod, GeoEntry, MetaAnalyticsData, TopPage } from '@/ty
 import { useNavStore } from '@/store';
 
 type Channel = 'facebook' | 'instagram' | 'ads';
+type NativeMetricPoint = { date: string; value: number };
+type NativeMetaData = MetaAnalyticsData & {
+  instagram?: {
+    profile?: { name?: string; username?: string; followers?: number; following?: number; media_count?: number };
+    summary?: { total_impressions?: number; total_reach?: number; profile_views?: number; website_clicks?: number; avg_daily_reach?: number; engagement_rate?: number };
+    daily_reach?: NativeMetricPoint[];
+    daily_impressions?: NativeMetricPoint[];
+    daily_profile_views?: NativeMetricPoint[];
+    age_gender?: Record<string, number>;
+    city?: Record<string, number>;
+    online_hours?: Record<string, number>;
+  };
+  facebook?: {
+    profile?: { name?: string; fans?: number; followers?: number; talking_about?: number; category?: string };
+    summary?: { total_reach?: number; total_engagements?: number; total_page_views?: number; fans_added?: number; fans_removed?: number; video_views?: number };
+    daily_reach?: NativeMetricPoint[];
+    daily_engagements?: NativeMetricPoint[];
+    fan_net_daily?: NativeMetricPoint[];
+    fan_age_gender?: Record<string, number>;
+    fan_cities?: Record<string, number>;
+  };
+  ads?: {
+    summary?: { total_spend?: number; impressions?: number; clicks?: number; ctr?: number; cpc?: number; cpm?: number; reach?: number; frequency?: number; link_clicks?: number; landing_views?: number; leads?: number; post_engagement?: number; roas?: number };
+    daily_trend?: Array<{ date: string; spend?: number; clicks?: number; impressions?: number; reach?: number }>;
+    campaigns?: Array<{ name?: string; campaign_name?: string; impressions?: number; clicks?: number; spend?: number; ctr?: number }>;
+    age_gender?: Record<string, number>;
+    regions?: Record<string, number>;
+    placements?: Record<string, number>;
+  };
+  insights?: {
+    ctr_status?: string;
+    best_campaign?: string;
+    best_region?: string;
+    top_ig_post_type?: string;
+    ig_engagement_rate?: number;
+    fb_fan_growth?: number;
+    recommendation?: string;
+  };
+};
 
 const CHANNELS: Record<Channel, {
   label: string;
@@ -171,6 +210,43 @@ function pct(n: number): string {
 
 function safeDiv(a: number, b: number): number {
   return b > 0 ? a / b : 0;
+}
+
+function asNative(data: MetaAnalyticsData): NativeMetaData {
+  return data as NativeMetaData;
+}
+
+function nativeInsights(data: MetaAnalyticsData) {
+  const native = asNative(data);
+  return {
+    recommendation: native.insights?.recommendation ?? 'Use the strongest channel signals to plan the next campaign.',
+    bestRegion: native.insights?.best_region ?? data.meta_insights?.top_locations?.[0] ?? 'N/A',
+    bestCampaign: native.insights?.best_campaign ?? 'N/A',
+    bestPlacement: data.meta_insights?.best_placement ?? 'Feed + Right Column',
+    bestTime: data.meta_insights?.best_ad_time ?? 'N/A',
+  };
+}
+
+function mapValuesToGeo(values?: Record<string, number>): GeoEntry[] {
+  const total = Object.values(values ?? {}).reduce((sum, value) => sum + Number(value ?? 0), 0);
+  return Object.entries(values ?? {})
+    .sort((a, b) => Number(b[1] ?? 0) - Number(a[1] ?? 0))
+    .slice(0, 8)
+    .map(([country, requests]) => ({
+      country,
+      requests: Number(requests ?? 0),
+      pct: total > 0 ? Math.round((Number(requests ?? 0) / total) * 100) : 0,
+    }));
+}
+
+function mergeDaily(primary: NativeMetricPoint[] = [], secondary: NativeMetricPoint[] = []) {
+  const dates = Array.from(new Set([...primary.map((d) => d.date), ...secondary.map((d) => d.date)])).sort();
+  return dates.map((date) => ({
+    date,
+    label: format(parseISO(date), 'MMM d'),
+    volume: Number(primary.find((d) => d.date === date)?.value ?? 0),
+    trend: Number(secondary.find((d) => d.date === date)?.value ?? 0),
+  }));
 }
 
 function Skeleton({ className = '' }: { className?: string }) {
