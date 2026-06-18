@@ -54,6 +54,7 @@ type NativeMetaData = MetaAnalyticsData & {
     age_gender?: Record<string, number>;
     city?: Record<string, number>;
     online_hours?: Record<string, number>;
+    top_posts?: Array<{ id?: string; caption?: string; media_type?: string; impressions?: number; reach?: number; engagements?: number; likes?: number; comments?: number }>;
   };
   facebook?: {
     profile?: { name?: string; fans?: number; followers?: number; talking_about?: number; category?: string };
@@ -63,6 +64,7 @@ type NativeMetaData = MetaAnalyticsData & {
     fan_net_daily?: NativeMetricPoint[];
     fan_age_gender?: Record<string, number>;
     fan_cities?: Record<string, number>;
+    top_posts?: Array<{ id?: string; message?: string; impressions?: number; reach?: number; engagements?: number; likes?: number; comments?: number }>;
   };
   ads?: {
     summary?: { total_spend?: number; impressions?: number; clicks?: number; ctr?: number; cpc?: number; cpm?: number; reach?: number; frequency?: number; link_clicks?: number; landing_views?: number; leads?: number; post_engagement?: number; roas?: number };
@@ -118,6 +120,17 @@ const CHANNELS: Record<Channel, {
 };
 
 const GEO_COLORS = ['#1677ff', '#10b981', '#f59e0b', '#8b5cf6', '#ef476f', '#64748b'];
+const DARK_TOOLTIP = {
+  contentStyle: {
+    backgroundColor: 'rgba(15,23,42,0.96)',
+    border: '1px solid rgba(148,163,184,0.22)',
+    borderRadius: '14px',
+    boxShadow: '0 18px 50px rgba(0,0,0,0.35)',
+    fontSize: '12px',
+    color: '#e2e8f0',
+  },
+  labelStyle: { color: '#94a3b8' },
+};
 
 function emptyMetaData(period: AnalyticsPeriod): MetaAnalyticsData {
   return {
@@ -249,12 +262,63 @@ function mergeDaily(primary: NativeMetricPoint[] = [], secondary: NativeMetricPo
   }));
 }
 
+function channelGeo(data: MetaAnalyticsData, channel: Channel): GeoEntry[] {
+  const native = asNative(data);
+  if (native.facebook || native.instagram || native.ads) {
+    if (channel === 'instagram') return mapValuesToGeo(native.instagram?.city);
+    if (channel === 'facebook') return mapValuesToGeo(native.facebook?.fan_cities);
+    return mapValuesToGeo(native.ads?.regions);
+  }
+  return data.geo_distribution ?? [];
+}
+
+function channelPages(data: MetaAnalyticsData, channel: Channel): TopPage[] {
+  const native = asNative(data);
+  if (native.facebook || native.instagram || native.ads) {
+    if (channel === 'ads') {
+      return (native.ads?.campaigns ?? []).slice(0, 8).map((campaign, index) => ({
+        page: campaign.name ?? campaign.campaign_name ?? `Campaign ${index + 1}`,
+        visits: Number(campaign.clicks ?? campaign.impressions ?? campaign.spend ?? 0),
+        bounce_pct: 0,
+      }));
+    }
+    if (channel === 'instagram') {
+      return (native.instagram?.top_posts ?? []).slice(0, 8).map((post, index) => ({
+        page: post.caption || post.media_type || post.id || `Instagram post ${index + 1}`,
+        visits: Number(post.engagements ?? post.reach ?? post.impressions ?? post.likes ?? 0),
+        bounce_pct: 0,
+      }));
+    }
+    return (native.facebook?.top_posts ?? []).slice(0, 8).map((post, index) => ({
+      page: post.message || post.id || `Facebook post ${index + 1}`,
+      visits: Number(post.engagements ?? post.reach ?? post.impressions ?? post.likes ?? 0),
+      bounce_pct: 0,
+    }));
+  }
+  return data.top_pages ?? [];
+}
+
+function channelHours(data: MetaAnalyticsData, channel: Channel) {
+  const native = asNative(data);
+  if (channel === 'instagram' && native.instagram?.online_hours) {
+    return Object.entries(native.instagram.online_hours)
+      .map(([hour, requests]) => ({
+        hour: `${String(hour).padStart(2, '0')}:00`,
+        requests: Number(requests ?? 0),
+      }))
+      .sort((a, b) => a.hour.localeCompare(b.hour));
+  }
+  return data.peak_hours.map((hour) => ({
+    hour: `${String(hour.hour).padStart(2, '0')}:00`,
+    requests: hour.requests,
+  }));
+}
+
 function Skeleton({ className = '' }: { className?: string }) {
   return (
     <div
-      className={`rounded-lg bg-slate-800 ${className}`}
+      className={`agent-skeleton ${className}`}
       style={{
-        backgroundImage: 'linear-gradient(90deg,transparent 0%,rgba(255,255,255,0.05) 50%,transparent 100%)',
         backgroundSize: '200% 100%',
         animation: 'shimmer 2s linear infinite',
       }}
@@ -265,15 +329,15 @@ function Skeleton({ className = '' }: { className?: string }) {
 
 function PeriodToggle({ value, onChange }: { value: AnalyticsPeriod; onChange: (p: AnalyticsPeriod) => void }) {
   return (
-    <div className="inline-flex items-center gap-1 rounded-lg bg-slate-100 p-1 border border-slate-200">
+    <div className="inline-flex items-center gap-1 rounded-2xl bg-white/5 p-1 border border-white/10 backdrop-blur">
       {(['weekly', 'monthly'] as AnalyticsPeriod[]).map((period) => (
         <button
           key={period}
           onClick={() => onChange(period)}
-          className={`h-8 px-4 rounded-md text-xs font-semibold transition-colors ${
+          className={`h-9 px-4 rounded-xl text-xs font-semibold transition-colors ${
             value === period
-              ? 'bg-slate-950 text-white'
-              : 'text-slate-500 hover:text-slate-900'
+              ? 'bg-[rgba(0,185,142,0.18)] text-emerald-100 shadow-[0_0_24px_rgba(0,185,142,0.14)]'
+              : 'text-slate-400 hover:text-slate-100 hover:bg-white/10'
           }`}
         >
           {period === 'weekly' ? 'Weekly' : 'Monthly'}
@@ -285,7 +349,7 @@ function PeriodToggle({ value, onChange }: { value: AnalyticsPeriod; onChange: (
 
 function ChannelTabs({ value, onChange }: { value: Channel; onChange: (channel: Channel) => void }) {
   return (
-    <div className="inline-flex items-center gap-1 rounded-lg bg-white border border-slate-200 p-1 shadow-sm">
+    <div className="inline-flex items-center gap-1 rounded-2xl bg-white/5 border border-white/10 p-1 shadow-2xl backdrop-blur">
       {(Object.keys(CHANNELS) as Channel[]).map((channel) => {
         const cfg = CHANNELS[channel];
         const active = value === channel;
@@ -293,8 +357,8 @@ function ChannelTabs({ value, onChange }: { value: Channel; onChange: (channel: 
           <button
             key={channel}
             onClick={() => onChange(channel)}
-            className={`h-8 px-3 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-colors ${
-              active ? 'text-white' : 'text-slate-500 hover:text-slate-900'
+            className={`h-9 px-3 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors ${
+              active ? 'text-white shadow-[0_0_24px_rgba(255,255,255,0.08)]' : 'text-slate-400 hover:text-slate-100 hover:bg-white/10'
             }`}
             style={{ backgroundColor: active ? cfg.accent : 'transparent' }}
           >
@@ -308,6 +372,78 @@ function ChannelTabs({ value, onChange }: { value: Channel; onChange: (channel: 
 }
 
 function metricModel(data: MetaAnalyticsData, channel: Channel) {
+  const native = asNative(data);
+  const insights = nativeInsights(data);
+
+  if (native.facebook || native.instagram || native.ads) {
+    if (channel === 'facebook') {
+      const profile = native.facebook?.profile;
+      const summary = native.facebook?.summary;
+      const reach = Number(summary?.total_reach ?? 0);
+      const engagements = Number(summary?.total_engagements ?? 0);
+      const fansAdded = Number(summary?.fans_added ?? 0);
+      const fansRemoved = Number(summary?.fans_removed ?? 0);
+      const netFans = fansAdded - fansRemoved;
+
+      return {
+        heroTitle: `${profile?.name ?? 'Stellar Global Supplies'} - Facebook Intelligence`,
+        heroSub: `${fmt(profile?.fans ?? 0)} fans | ${fmt(profile?.followers ?? 0)} followers | ${fmt(profile?.talking_about ?? 0)} talking about this`,
+        pills: [`Net fans ${netFans >= 0 ? '+' : ''}${netFans}`, `Reach ${fmt(reach)}`, `Engagements ${fmt(engagements)}`, `Video views ${fmt(summary?.video_views ?? 0)}`],
+        cards: [
+          { label: 'Total Fans', value: fmt(profile?.fans ?? 0), sub: `Followers ${fmt(profile?.followers ?? 0)}`, Icon: Users, color: '#1877f2' },
+          { label: 'Page Reach', value: fmt(reach), sub: 'Unique reach', Icon: Eye, color: '#10b981' },
+          { label: 'Engagements', value: fmt(engagements), sub: 'Likes, shares, comments', Icon: Heart, color: '#8b5cf6' },
+          { label: 'Video Views', value: fmt(summary?.video_views ?? 0), sub: `Page views ${fmt(summary?.total_page_views ?? 0)}`, Icon: Activity, color: '#f59e0b' },
+        ],
+        primaryTitle: 'Daily Reach & Engagements',
+        primarySub: 'Page visibility and audience interaction over time',
+        volumeKey: 'volume',
+        trendKey: 'trend',
+      };
+    }
+
+    if (channel === 'instagram') {
+      const profile = native.instagram?.profile;
+      const summary = native.instagram?.summary;
+      const reach = Number(summary?.total_reach ?? 0);
+      const impressions = Number(summary?.total_impressions ?? 0);
+
+      return {
+        heroTitle: `@${profile?.username ?? 'stellarglobalsupplies'} - Instagram Insights`,
+        heroSub: `${fmt(profile?.followers ?? 0)} followers | ${fmt(profile?.media_count ?? 0)} posts | engagement ${pct(Number(summary?.engagement_rate ?? 0))}`,
+        pills: [`Eng. ${pct(Number(summary?.engagement_rate ?? 0))}`, `Reach ${fmt(reach)}`, `Profile views ${fmt(summary?.profile_views ?? 0)}`, `Web clicks ${fmt(summary?.website_clicks ?? 0)}`],
+        cards: [
+          { label: 'Followers', value: fmt(profile?.followers ?? 0), sub: `Following ${fmt(profile?.following ?? 0)}`, Icon: Instagram, color: '#e1306c' },
+          { label: 'Total Reach', value: fmt(reach), sub: `${fmt(summary?.avg_daily_reach ?? 0)} avg/day`, Icon: Eye, color: '#8b5cf6' },
+          { label: 'Impressions', value: fmt(impressions), sub: 'Total views', Icon: BarChart3, color: '#0ea5e9' },
+          { label: 'Website Clicks', value: fmt(summary?.website_clicks ?? 0), sub: `Profile views ${fmt(summary?.profile_views ?? 0)}`, Icon: MousePointerClick, color: '#10b981' },
+        ],
+        primaryTitle: 'Daily Reach & Impressions',
+        primarySub: 'Unique accounts reached vs total views per day',
+        volumeKey: 'volume',
+        trendKey: 'trend',
+      };
+    }
+
+    const summary = native.ads?.summary;
+    return {
+      heroTitle: 'Meta Ads Performance - Campaign Planner',
+      heroSub: `Across all campaigns | best campaign ${insights.bestCampaign}`,
+      pills: [`CTR ${pct(Number(summary?.ctr ?? 0))}`, `CPC ${money(Number(summary?.cpc ?? 0))}`, `Freq ${Number(summary?.frequency ?? 0).toFixed(2)}x`, `Best ${insights.bestRegion}`],
+      cards: [
+        { label: 'Impressions', value: fmt(summary?.impressions ?? 0), sub: `Reach ${fmt(summary?.reach ?? 0)}`, Icon: Eye, color: '#1677ff' },
+        { label: 'Clicks', value: fmt(summary?.clicks ?? 0), sub: `Link ${fmt(summary?.link_clicks ?? 0)}`, Icon: MousePointerClick, color: '#10b981' },
+        { label: 'Total Spend', value: money(Number(summary?.total_spend ?? 0)), sub: `CPM ${money(Number(summary?.cpm ?? 0))}`, Icon: Megaphone, color: '#f59e0b' },
+        { label: 'CTR', value: pct(Number(summary?.ctr ?? 0)), sub: String(native.insights?.ctr_status ?? 'status'), Icon: TrendingUp, color: '#8b5cf6' },
+        { label: 'Leads', value: fmt(summary?.leads ?? 0), sub: `Landing ${fmt(summary?.landing_views ?? 0)}`, Icon: Target, color: '#ef476f' },
+      ],
+      primaryTitle: 'Daily Spend & Clicks Trend',
+      primarySub: 'Budget pacing and click volume over the selected period',
+      volumeKey: 'volume',
+      trendKey: 'trend',
+    };
+  }
+
   const total = data.summary?.total_requests ?? 0;
   const unique = data.summary?.unique_ips ?? 0;
   const avg = data.summary?.avg_daily ?? 0;
@@ -376,6 +512,23 @@ function metricModel(data: MetaAnalyticsData, channel: Channel) {
 }
 
 function buildTrend(data: MetaAnalyticsData, channel: Channel) {
+  const native = asNative(data);
+  if (native.facebook || native.instagram || native.ads) {
+    if (channel === 'facebook') {
+      return mergeDaily(native.facebook?.daily_reach, native.facebook?.daily_engagements);
+    }
+    if (channel === 'instagram') {
+      return mergeDaily(native.instagram?.daily_impressions, native.instagram?.daily_reach);
+    }
+    const adTrend = native.ads?.daily_trend ?? [];
+    return adTrend.map((day) => ({
+      date: day.date,
+      label: format(parseISO(day.date), 'MMM d'),
+      volume: Number(day.spend ?? 0),
+      trend: Number(day.clicks ?? 0),
+    }));
+  }
+
   return (data.traffic_over_time ?? []).map((day) => {
     const reach = channel === 'instagram' ? Math.round(day.requests * 0.62) : day.requests;
     const impressions = channel === 'ads' ? Math.round(day.requests * 1.8) : Math.round(day.requests * 1.18);
@@ -398,17 +551,17 @@ function CardGrid({ cards }: { cards: ReturnType<typeof metricModel>['cards'] })
   return (
     <div className={`grid gap-4 ${cards.length === 5 ? 'grid-cols-1 sm:grid-cols-2 xl:grid-cols-5' : 'grid-cols-1 sm:grid-cols-2 xl:grid-cols-4'}`}>
       {cards.map((card) => (
-        <div key={card.label} className="relative overflow-hidden rounded-lg bg-white border border-slate-200 shadow-sm p-5 min-h-[112px]">
+        <div key={card.label} className="agent-card relative overflow-hidden p-5 min-h-[124px] hover:-translate-y-0.5 hover:border-white/20">
           <div className="absolute left-0 top-0 h-full w-1" style={{ backgroundColor: card.color }} />
           <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="text-2xs uppercase tracking-wide text-slate-500 font-semibold">{card.label}</p>
-              <p className="text-2xl font-black text-slate-950 mt-3 tabular-nums">{card.value}</p>
-              <span className="inline-flex mt-2 rounded-full bg-slate-100 px-2 py-1 text-2xs font-semibold text-slate-500">
+              <p className="text-2xs uppercase tracking-wide text-slate-400 font-semibold">{card.label}</p>
+              <p className="text-2xl font-black text-slate-50 mt-3 tabular-nums">{card.value}</p>
+              <span className="agent-chip mt-2 border-white/10 bg-white/5 text-slate-400">
                 {card.sub}
               </span>
             </div>
-            <div className="h-9 w-9 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${card.color}16`, color: card.color }}>
+            <div className="h-10 w-10 rounded-2xl flex items-center justify-center border border-white/10" style={{ backgroundColor: `${card.color}18`, color: card.color }}>
               <card.Icon size={18} />
             </div>
           </div>
@@ -422,8 +575,9 @@ function Hero({ data, channel }: { data: MetaAnalyticsData; channel: Channel }) 
   const cfg = CHANNELS[channel];
   const model = metricModel(data, channel);
   return (
-    <section className="rounded-xl p-6 text-white shadow-sm" style={{ background: cfg.hero }}>
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5">
+    <section className="relative overflow-hidden rounded-[1.75rem] p-6 text-white shadow-2xl border border-white/10" style={{ background: cfg.hero }}>
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_0%,rgba(255,255,255,0.16),transparent_28%),linear-gradient(90deg,rgba(255,255,255,0.05),transparent)]" aria-hidden="true" />
+      <div className="relative flex flex-col lg:flex-row lg:items-center justify-between gap-5">
         <div className="flex items-center gap-4">
           <div className="h-12 w-12 rounded-xl bg-white/10 border border-white/10 flex items-center justify-center" style={{ color: cfg.accent }}>
             <cfg.Icon size={25} />
@@ -445,17 +599,7 @@ function Hero({ data, channel }: { data: MetaAnalyticsData; channel: Channel }) 
   );
 }
 
-const tooltipStyle = {
-  contentStyle: {
-    backgroundColor: '#ffffff',
-    border: '1px solid #e2e8f0',
-    borderRadius: '8px',
-    boxShadow: '0 12px 32px rgba(15,23,42,0.12)',
-    fontSize: '12px',
-    color: '#0f172a',
-  },
-  labelStyle: { color: '#64748b' },
-};
+const tooltipStyle = DARK_TOOLTIP;
 
 function PrimaryTrend({ data, channel }: { data: MetaAnalyticsData; channel: Channel }) {
   const cfg = CHANNELS[channel];
@@ -465,7 +609,7 @@ function PrimaryTrend({ data, channel }: { data: MetaAnalyticsData; channel: Cha
     <Panel title={model.primaryTitle} subtitle={model.primarySub} className="lg:col-span-2">
       <ResponsiveContainer width="100%" height={290}>
         <ComposedChart data={trend} margin={{ top: 8, right: 18, bottom: 4, left: 0 }}>
-          <CartesianGrid stroke="#eef2f7" vertical={false} />
+          <CartesianGrid stroke="rgba(148,163,184,0.14)" vertical={false} />
           <XAxis dataKey="label" tick={{ fill: '#94a3b8', fontSize: 11 }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
           <YAxis tickFormatter={(v: number) => channel === 'ads' && model.volumeKey === 'spend' ? money(v) : fmt(v)} tick={{ fill: '#94a3b8', fontSize: 11 }} axisLine={false} tickLine={false} width={58} />
           <Tooltip
@@ -475,7 +619,7 @@ function PrimaryTrend({ data, channel }: { data: MetaAnalyticsData; channel: Cha
               name === model.volumeKey ? 'Volume' : 'Trend',
             ]}
           />
-          <Legend verticalAlign="top" height={32} formatter={(value) => <span className="text-xs text-slate-500">{value === model.volumeKey ? 'Volume' : 'Trend'}</span>} />
+          <Legend verticalAlign="top" height={32} formatter={(value) => <span className="text-xs text-slate-400">{value === model.volumeKey ? 'Volume' : 'Trend'}</span>} />
           <Bar dataKey={model.volumeKey} fill={`${cfg.accent}2a`} radius={[4, 4, 0, 0]} maxBarSize={22} />
           <Line type="monotone" dataKey={model.trendKey} stroke={cfg.accent} strokeWidth={3} dot={false} />
         </ComposedChart>
@@ -496,10 +640,10 @@ function Panel({
   className?: string;
 }) {
   return (
-    <section className={`rounded-lg bg-white border border-slate-200 shadow-sm p-5 ${className}`}>
+    <section className={`agent-card p-5 ${className}`}>
       <div className="mb-4">
-        <h3 className="text-sm font-bold text-slate-950">{title}</h3>
-        {subtitle && <p className="text-xs text-slate-500 mt-1">{subtitle}</p>}
+        <h3 className="text-sm font-bold text-slate-100">{title}</h3>
+        {subtitle && <p className="text-xs text-slate-400 mt-1">{subtitle}</p>}
       </div>
       {children}
     </section>
@@ -525,11 +669,11 @@ function GeoChart({ geo }: { geo: GeoEntry[] }) {
               <div className="flex items-center justify-between text-xs mb-1">
                 <span className="flex items-center gap-2 min-w-0">
                   <span className="h-2.5 w-2.5 rounded-sm shrink-0" style={{ backgroundColor: GEO_COLORS[index % GEO_COLORS.length] }} />
-                  <span className="text-slate-700 truncate">{entry.country}</span>
+                  <span className="text-slate-300 truncate">{entry.country}</span>
                 </span>
-                <span className="font-semibold text-slate-500">{entry.pct}%</span>
+                <span className="font-semibold text-slate-400">{entry.pct}%</span>
               </div>
-              <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
+              <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
                 <div className="h-full rounded-full" style={{ width: `${entry.pct}%`, backgroundColor: GEO_COLORS[index % GEO_COLORS.length] }} />
               </div>
             </div>
@@ -549,7 +693,7 @@ function PagesChart({ pages }: { pages: TopPage[] }) {
     <Panel title="High-Intent Pages" subtitle="Pages driving remarketing audiences">
       <ResponsiveContainer width="100%" height={240}>
         <BarChart data={rows} layout="vertical" margin={{ top: 0, right: 12, bottom: 0, left: 4 }}>
-          <CartesianGrid stroke="#eef2f7" horizontal={false} />
+          <CartesianGrid stroke="rgba(148,163,184,0.14)" horizontal={false} />
           <XAxis type="number" tickFormatter={fmt} tick={{ fill: '#94a3b8', fontSize: 11 }} axisLine={false} tickLine={false} />
           <YAxis type="category" dataKey="page" tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} width={126} />
           <Tooltip {...tooltipStyle} formatter={(value: number) => [fmt(value), 'Visits']} />
@@ -560,13 +704,11 @@ function PagesChart({ pages }: { pages: TopPage[] }) {
   );
 }
 
-function HourChart({ data }: { data: MetaAnalyticsData }) {
-  const rows = data.peak_hours.map((hour) => ({
-    hour: `${String(hour.hour).padStart(2, '0')}:00`,
-    requests: hour.requests,
-  }));
+function HourChart({ data, channel }: { data: MetaAnalyticsData; channel: Channel }) {
+  const rows = channelHours(data, channel);
+  const insights = nativeInsights(data);
   return (
-    <Panel title="Best Time To Advertise" subtitle={`${data.meta_insights.best_ad_time} from daily analytics`}>
+    <Panel title="Best Time To Advertise" subtitle={`${insights.bestTime} from daily analytics`}>
       <ResponsiveContainer width="100%" height={220}>
         <AreaChart data={rows} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
           <defs>
@@ -575,7 +717,7 @@ function HourChart({ data }: { data: MetaAnalyticsData }) {
               <stop offset="95%" stopColor="#10b981" stopOpacity={0.02} />
             </linearGradient>
           </defs>
-          <CartesianGrid stroke="#eef2f7" vertical={false} />
+          <CartesianGrid stroke="rgba(148,163,184,0.14)" vertical={false} />
           <XAxis dataKey="hour" tick={{ fill: '#94a3b8', fontSize: 10 }} axisLine={false} tickLine={false} interval={2} />
           <YAxis tickFormatter={fmt} tick={{ fill: '#94a3b8', fontSize: 11 }} axisLine={false} tickLine={false} width={50} />
           <Tooltip {...tooltipStyle} formatter={(value: number) => [fmt(value), 'Requests']} />
@@ -589,29 +731,35 @@ function HourChart({ data }: { data: MetaAnalyticsData }) {
 function DeviceAndPlan({ data, channel }: { data: MetaAnalyticsData; channel: Channel }) {
   const setSection = useNavStore((s) => s.setSection);
   const cfg = CHANNELS[channel];
+  const insights = nativeInsights(data);
+  const locations = channelGeo(data, channel).map((entry) => entry.country);
   const devices = data.device_split.length > 0 ? data.device_split : [{ device: 'Desktop', pct: data.summary.desktop_pct }];
-  const topLocations = data.meta_insights.top_locations.length > 0
+  const topLocations = locations.length > 0
+    ? locations.slice(0, 2).join(' and ')
+    : data.meta_insights.top_locations.length > 0
     ? data.meta_insights.top_locations.slice(0, 2).join(' and ')
+    : insights.bestRegion !== 'N/A'
+    ? insights.bestRegion
     : 'your strongest available regions';
   const recommendations = [
     `Run ${CHANNELS[channel].label} awareness ads in ${topLocations}.`,
-    `Use ${data.meta_insights.best_placement} placements during ${data.meta_insights.best_ad_time}.`,
-    `Build a retargeting audience from ${fmt(data.meta_insights.warm_audience_size)} warm visitors.`,
+    `Use ${insights.bestPlacement} placements during ${insights.bestTime}.`,
+    insights.recommendation,
   ];
   return (
     <Panel title="Media Plan" subtitle="Recommended next actions">
       <div className="space-y-4">
         <div className="grid grid-cols-2 gap-3">
           {devices.map((device) => (
-            <div key={device.device} className="rounded-lg bg-slate-50 border border-slate-200 p-3">
-              <p className="text-2xs uppercase tracking-wide text-slate-500 font-semibold">{device.device}</p>
-              <p className="text-xl font-black text-slate-950 mt-2">{device.pct}%</p>
+            <div key={device.device} className="rounded-2xl bg-white/5 border border-white/10 p-3">
+              <p className="text-2xs uppercase tracking-wide text-slate-400 font-semibold">{device.device}</p>
+              <p className="text-xl font-black text-slate-50 mt-2">{device.pct}%</p>
             </div>
           ))}
         </div>
         <div className="space-y-2">
           {recommendations.map((item) => (
-            <div key={item} className="flex items-start gap-2 text-xs text-slate-600">
+            <div key={item} className="flex items-start gap-2 text-xs text-slate-300">
               <span className="h-1.5 w-1.5 rounded-full mt-1.5 shrink-0" style={{ backgroundColor: cfg.accent }} />
               <span>{item}</span>
             </div>
@@ -623,11 +771,11 @@ function DeviceAndPlan({ data, channel }: { data: MetaAnalyticsData; channel: Ch
             window.dispatchEvent(new CustomEvent('prefill-agent', {
               detail: {
                 agentId: 'marketing-manager',
-                message: `Create a ${CHANNELS[channel].label} campaign plan for Stellar Global Supplies using ${data.label}, top locations ${data.meta_insights.top_locations.join(', ')}, ${fmt(data.meta_insights.warm_audience_size)} warm visitors, and best ad time ${data.meta_insights.best_ad_time}.`,
+                message: `Create a ${CHANNELS[channel].label} campaign plan for Stellar Global Supplies using ${data.label}, top locations ${locations.join(', ') || data.meta_insights.top_locations.join(', ') || topLocations}, ${fmt(data.meta_insights.warm_audience_size)} warm visitors, and best ad time ${insights.bestTime}.`,
               },
             }));
           }}
-          className="h-9 px-3 rounded-lg text-xs font-semibold text-white flex items-center gap-2"
+          className="h-10 px-3 rounded-xl text-xs font-semibold text-white flex items-center gap-2 shadow-lg hover:-translate-y-0.5"
           style={{ backgroundColor: cfg.accent }}
         >
           <Send size={14} />
@@ -640,13 +788,13 @@ function DeviceAndPlan({ data, channel }: { data: MetaAnalyticsData; channel: Ch
 
 function ErrorCard({ message, onRetry }: { message: string; onRetry: () => void }) {
   return (
-    <div className="rounded-lg bg-white border border-slate-200 p-6 flex items-center gap-4 shadow-sm">
+    <div className="agent-card p-6 flex items-center gap-4">
       <AlertCircle size={24} className="text-red-500 shrink-0" />
       <div>
-        <p className="text-sm font-bold text-slate-950">Could not load Meta analytics</p>
-        <p className="text-xs text-slate-500 mt-1">{message}</p>
+        <p className="text-sm font-bold text-slate-100">Could not load Meta analytics</p>
+        <p className="text-xs text-slate-400 mt-1">{message}</p>
       </div>
-      <button onClick={onRetry} className="ml-auto h-9 px-3 rounded-lg bg-slate-950 text-white text-xs font-semibold">
+      <button onClick={onRetry} className="agent-button-secondary ml-auto h-9 text-xs">
         Retry
       </button>
     </div>
@@ -668,32 +816,35 @@ export default function MetaMarketingDashboard() {
   const safeData = data ?? emptyMetaData(period);
   const model = useMemo(() => metricModel(safeData, channel), [safeData, channel]);
   const cfg = CHANNELS[channel];
+  const geoRows = useMemo(() => channelGeo(safeData, channel), [safeData, channel]);
+  const pageRows = useMemo(() => channelPages(safeData, channel), [safeData, channel]);
+  const insights = useMemo(() => nativeInsights(safeData), [safeData]);
 
   return (
     <div className="max-w-7xl">
-      <div className="rounded-xl bg-slate-50 text-slate-950 -m-4 md:-m-6 p-4 md:p-6 min-h-[calc(100vh-var(--header-height))]">
+      <div className="workspace-frame -m-1 md:m-0 min-h-[calc(100vh-var(--header-height)-2rem)]">
         <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 mb-5">
           <div>
             <div className="flex items-center gap-3 flex-wrap">
-              <h2 className="text-2xl font-black tracking-normal">Meta Intelligence</h2>
-              <span className="inline-flex items-center rounded-md px-2.5 py-1 text-xs font-semibold" style={{ color: cfg.accent, backgroundColor: cfg.soft }}>
+              <h2 className="text-2xl font-black tracking-normal text-slate-50">Meta Intelligence</h2>
+              <span className="agent-chip" style={{ color: cfg.accent, backgroundColor: `${cfg.accent}16`, borderColor: `${cfg.accent}44` }}>
                 {cfg.label}
               </span>
             </div>
-            <p className="text-sm text-slate-500 mt-1">
+            <p className="text-sm text-slate-400 mt-1">
               {safeData.label} | {cfg.eyebrow}
             </p>
           </div>
 
           <div className="flex items-center gap-3 flex-wrap">
             <ChannelTabs value={channel} onChange={setChannel} />
-            <span className="text-xs text-slate-400">
+            <span className="agent-chip text-slate-400">
               {safeData.generated_at ? `Updated ${format(parseISO(safeData.generated_at), 'HH:mm')}` : 'Updates daily'}
             </span>
             <button
               onClick={() => refetch()}
               disabled={isFetching}
-              className="h-9 w-9 rounded-lg border border-slate-200 bg-white text-slate-500 hover:text-slate-900 flex items-center justify-center shadow-sm disabled:opacity-50"
+              className="h-10 w-10 rounded-xl border border-white/10 bg-white/5 text-slate-400 hover:text-slate-100 hover:bg-white/10 flex items-center justify-center shadow-sm disabled:opacity-50"
               aria-label="Refresh Meta analytics"
             >
               <RefreshCw size={15} className={isFetching ? 'animate-spin' : ''} />
@@ -704,11 +855,11 @@ export default function MetaMarketingDashboard() {
 
         {isLoading && (
           <div className="space-y-4">
-            <Skeleton className="h-24 bg-white border border-slate-200" />
+            <Skeleton className="h-28" />
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-              {Array.from({ length: 4 }).map((_, index) => <Skeleton key={index} className="h-28 bg-white border border-slate-200" />)}
+              {Array.from({ length: 4 }).map((_, index) => <Skeleton key={index} className="h-28" />)}
             </div>
-            <Skeleton className="h-80 bg-white border border-slate-200" />
+            <Skeleton className="h-80" />
           </div>
         )}
 
@@ -727,41 +878,41 @@ export default function MetaMarketingDashboard() {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-              <GeoChart geo={safeData.geo_distribution} />
-              <PagesChart pages={safeData.top_pages} />
+              <GeoChart geo={geoRows} />
+              <PagesChart pages={pageRows} />
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-              <HourChart data={safeData} />
+              <HourChart data={safeData} channel={channel} />
               <Panel title="Audience Quality" subtitle="Signals available from the S3 Meta analytics JSON">
                 <div className="grid grid-cols-2 gap-3 mb-4">
-                  <div className="rounded-lg bg-slate-50 border border-slate-200 p-4">
-                    <div className="flex items-center gap-2 text-slate-500 text-xs font-semibold uppercase tracking-wide">
+                  <div className="rounded-2xl bg-white/5 border border-white/10 p-4">
+                    <div className="flex items-center gap-2 text-slate-400 text-xs font-semibold uppercase tracking-wide">
                       <Users size={14} />
                       Warm Audience
                     </div>
-                    <p className="text-2xl font-black text-slate-950 mt-3">{fmt(safeData.meta_insights.warm_audience_size)}</p>
+                    <p className="text-2xl font-black text-slate-50 mt-3">{fmt(safeData.meta_insights.warm_audience_size)}</p>
                   </div>
-                  <div className="rounded-lg bg-slate-50 border border-slate-200 p-4">
-                    <div className="flex items-center gap-2 text-slate-500 text-xs font-semibold uppercase tracking-wide">
+                  <div className="rounded-2xl bg-white/5 border border-white/10 p-4">
+                    <div className="flex items-center gap-2 text-slate-400 text-xs font-semibold uppercase tracking-wide">
                       <Target size={14} />
                       High Intent
                     </div>
-                    <p className="text-2xl font-black text-slate-950 mt-3">{fmt(safeData.meta_insights.high_intent_visits)}</p>
+                    <p className="text-2xl font-black text-slate-50 mt-3">{fmt(safeData.meta_insights.high_intent_visits)}</p>
                   </div>
                 </div>
-                <div className="rounded-lg border border-slate-200 p-4 bg-white">
+                <div className="rounded-2xl border border-white/10 p-4 bg-white/5">
                   <div className="flex items-start gap-3">
-                    <div className="h-9 w-9 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                    <div className="h-10 w-10 rounded-2xl bg-cyan-400/10 text-cyan-300 border border-cyan-300/20 flex items-center justify-center shrink-0">
                       <Globe2 size={17} />
                     </div>
                     <div>
-                      <p className="text-sm font-bold text-slate-950">Recommended Objective: {safeData.meta_insights.recommended_objective}</p>
-                      <p className="text-xs text-slate-500 mt-1">
-                        Use {safeData.meta_insights.best_placement} placements and prioritize {safeData.meta_insights.top_locations.join(', ') || 'your strongest regions'} for the next campaign flight.
+                      <p className="text-sm font-bold text-slate-100">Recommended Objective: {safeData.meta_insights.recommended_objective}</p>
+                      <p className="text-xs text-slate-400 mt-1">
+                        {insights.recommendation} Prioritize {geoRows.map((entry) => entry.country).join(', ') || safeData.meta_insights.top_locations.join(', ') || insights.bestRegion || 'your strongest regions'} for the next campaign flight.
                       </p>
                     </div>
-                    <ExternalLink size={14} className="text-slate-300 ml-auto shrink-0" />
+                    <ExternalLink size={14} className="text-slate-500 ml-auto shrink-0" />
                   </div>
                 </div>
               </Panel>

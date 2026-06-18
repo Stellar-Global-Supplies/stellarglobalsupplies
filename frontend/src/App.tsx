@@ -49,10 +49,10 @@ function NotificationToasts() {
   if (notifications.length === 0) return null;
 
   const colorMap = {
-    success: 'border-emerald-500/50 bg-emerald-950/80',
-    error:   'border-red-500/50 bg-red-950/80',
-    warning: 'border-amber-500/50 bg-amber-950/80',
-    info:    'border-indigo-500/50 bg-indigo-950/80',
+    success: 'border-emerald-400/40 bg-emerald-950/70',
+    error:   'border-red-400/40 bg-red-950/70',
+    warning: 'border-amber-400/40 bg-amber-950/70',
+    info:    'border-cyan-400/40 bg-cyan-950/70',
   };
 
   const iconMap = {
@@ -69,7 +69,7 @@ function NotificationToasts() {
           key={n.id}
           className={`
             pointer-events-auto flex items-start gap-3 p-4 rounded-xl border
-            backdrop-blur-md shadow-2xl animate-slide-up
+            backdrop-blur-xl shadow-2xl animate-slide-up rounded-2xl
             ${colorMap[n.type]}
           `}
         >
@@ -216,7 +216,7 @@ function Header() {
     >
       <button
         onClick={toggleSidebar}
-        className="p-2 rounded-lg text-slate-300 hover:text-[#00B98E] hover:bg-[#00B98E]/10 transition-colors"
+        className="p-2 rounded-xl text-slate-300 hover:text-[#00B98E] hover:bg-[rgba(0,185,142,0.10)] transition-colors"
         aria-label="Toggle sidebar"
       >
         <Menu size={18} />
@@ -231,7 +231,7 @@ function Header() {
 
       {/* Notifications bell */}
       <button
-        className="relative p-2 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors"
+        className="relative p-2 rounded-xl text-slate-400 hover:text-slate-200 hover:bg-white/10 transition-colors"
         aria-label={`${unread} notifications`}
       >
         <Bell size={18} />
@@ -244,7 +244,7 @@ function Header() {
 
       <button
         onClick={() => supabase.auth.signOut()}
-        className="p-2 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors"
+        className="p-2 rounded-xl text-slate-400 hover:text-slate-200 hover:bg-white/10 transition-colors"
         aria-label="Sign out"
         title="Sign out"
       >
@@ -329,7 +329,9 @@ function MainContent() {
       `}
     >
       <div className="p-4 md:p-6 animate-fade-in">
-        {content}
+        <div className="mx-auto w-full">
+          {content}
+        </div>
       </div>
       <button
         onClick={toggleSidebar}
@@ -365,8 +367,11 @@ export default function App() {
 
   if (!authReady) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center text-sm text-slate-400">
-        Loading secure workspace...
+      <div className="agentverse-shell min-h-screen flex items-center justify-center text-sm text-slate-400">
+        <div className="agent-card px-5 py-4 flex items-center gap-3">
+          <Sparkles size={16} className="text-[#00B98E] animate-pulse" />
+          Loading secure workspace...
+        </div>
       </div>
     );
   }
@@ -376,7 +381,7 @@ export default function App() {
   }
 
   return (
-    <div className="relative min-h-screen bg-slate-950">
+    <div className="relative min-h-screen bg-slate-950 text-slate-100">
       {/* Subtle background grid */}
       <div
         className="fixed inset-0 pointer-events-none opacity-30"

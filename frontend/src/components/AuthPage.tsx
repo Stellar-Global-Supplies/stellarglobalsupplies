@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
-import { LockKeyhole, Mail, Loader2, Building2, ArrowRight } from 'lucide-react';
+import { LockKeyhole, Mail, Loader2, Building2, ArrowRight, Sparkles, ShieldCheck, Bot } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
 export default function AuthPage() {
@@ -35,36 +35,39 @@ export default function AuthPage() {
   };
 
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-100 grid lg:grid-cols-[1.05fr_0.95fr]">
-      <section className="hidden lg:flex relative overflow-hidden p-10 flex-col justify-between border-r border-slate-800">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(16,185,129,0.20),transparent_28%),radial-gradient(circle_at_70%_35%,rgba(245,158,11,0.14),transparent_28%)]" />
+    <main className="agentverse-shell min-h-screen text-slate-100 grid lg:grid-cols-[1.05fr_0.95fr]">
+      <section className="hidden lg:flex relative overflow-hidden p-10 flex-col justify-between border-r border-white/10">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(0,185,142,0.20),transparent_30%),radial-gradient(circle_at_72%_34%,rgba(56,189,248,0.16),transparent_30%),radial-gradient(circle_at_42%_82%,rgba(167,139,250,0.14),transparent_26%)]" />
         <div className="relative">
           <div className="inline-flex items-center gap-3">
-            <div className="h-11 w-11 rounded-lg bg-emerald-500/15 border border-emerald-400/30 flex items-center justify-center text-emerald-300">
-              <Building2 size={22} />
+            <div className="h-12 w-12 rounded-2xl bg-[rgba(0,185,142,0.15)] border border-[rgba(0,185,142,0.34)] flex items-center justify-center text-[#00B98E] shadow-[0_0_34px_rgba(0,185,142,0.22)]">
+              <Sparkles size={22} />
             </div>
             <div>
-              <p className="text-lg font-bold">Stellar Global Supplies</p>
-              <p className="text-xs text-slate-400">Operations Intelligence</p>
+              <p className="text-lg font-bold">SGS AgentVerse</p>
+              <p className="text-xs text-slate-400">Operations Intelligence OS</p>
             </div>
           </div>
         </div>
 
         <div className="relative max-w-xl">
-          <p className="text-sm uppercase tracking-[0.22em] text-amber-300 mb-4">Secure control center</p>
-          <h1 className="text-5xl font-bold leading-tight tracking-normal">
-            Steel supply analytics with clean, auditable ingestion.
+          <p className="agent-chip mb-5 text-[#00B98E] border-[rgba(0,185,142,0.28)] bg-[rgba(0,185,142,0.08)]">
+            <Bot size={13} />
+            Secure AI workspace
+          </p>
+          <h1 className="text-5xl font-black leading-tight tracking-normal">
+            Command your supply, sales, and marketing agents from one premium cockpit.
           </h1>
           <p className="text-base text-slate-300 mt-5 max-w-lg">
-            Upload accounting exports, track sales, purchases, GST, margins, customers, suppliers, and item performance from one authenticated workspace.
+            Upload accounting exports, monitor Supabase-backed analytics, brief business agents, and track Meta performance from a secure authenticated workspace.
           </p>
         </div>
 
         <div className="relative grid grid-cols-3 gap-3 text-xs">
-          {['Sales register', 'Purchase register', 'Item ledgers'].map((item) => (
-            <div key={item} className="border border-slate-700 bg-slate-900/70 rounded-lg p-3">
-              <p className="font-semibold text-slate-200">{item}</p>
-              <p className="text-slate-500 mt-1">Supabase ready</p>
+          {['Supabase data', 'AI agents', 'Meta intelligence'].map((item) => (
+            <div key={item} className="agent-card p-4">
+              <p className="font-semibold text-slate-100">{item}</p>
+              <p className="text-slate-500 mt-1">Live workspace</p>
             </div>
           ))}
         </div>
@@ -73,7 +76,7 @@ export default function AuthPage() {
       <section className="flex items-center justify-center p-5">
         <div className="w-full max-w-md">
           <div className="lg:hidden flex items-center gap-3 mb-8">
-            <div className="h-10 w-10 rounded-lg bg-emerald-500/15 border border-emerald-400/30 flex items-center justify-center text-emerald-300">
+            <div className="h-10 w-10 rounded-xl bg-emerald-500/15 border border-emerald-400/30 flex items-center justify-center text-emerald-300">
               <Building2 size={20} />
             </div>
             <div>
@@ -82,9 +85,12 @@ export default function AuthPage() {
             </div>
           </div>
 
-          <div className="glass-card p-6 sm:p-7">
+          <div className="agent-card p-6 sm:p-7">
             <div className="mb-6">
-              <p className="text-2xs uppercase tracking-[0.18em] text-emerald-300">Supabase Auth</p>
+              <p className="agent-chip w-fit text-[#00B98E] border-[rgba(0,185,142,0.28)] bg-[rgba(0,185,142,0.08)]">
+                <ShieldCheck size={13} />
+                Supabase Auth
+              </p>
               <h2 className="text-2xl font-bold mt-2">
                 {mode === 'signin' ? 'Sign in' : 'Create account'}
               </h2>
@@ -96,7 +102,7 @@ export default function AuthPage() {
             <form onSubmit={submit} className="space-y-4">
               <label className="block">
                 <span className="text-xs font-medium text-slate-300">Email</span>
-                <span className="mt-1.5 flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2.5 focus-within:border-emerald-400">
+                <span className="mt-1.5 flex items-center gap-2 agent-input focus-within:border-emerald-400/60">
                   <Mail size={16} className="text-slate-500" />
                   <input
                     type="email"
@@ -111,7 +117,7 @@ export default function AuthPage() {
 
               <label className="block">
                 <span className="text-xs font-medium text-slate-300">Password</span>
-                <span className="mt-1.5 flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2.5 focus-within:border-emerald-400">
+                <span className="mt-1.5 flex items-center gap-2 agent-input focus-within:border-emerald-400/60">
                   <LockKeyhole size={16} className="text-slate-500" />
                   <input
                     type="password"
@@ -131,14 +137,14 @@ export default function AuthPage() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full h-11 rounded-lg bg-emerald-500 text-slate-950 font-semibold text-sm flex items-center justify-center gap-2 hover:bg-emerald-400 transition-colors disabled:opacity-70"
+                className="agent-button w-full h-11"
               >
                 {loading ? <Loader2 size={16} className="animate-spin" /> : <ArrowRight size={16} />}
                 {mode === 'signin' ? 'Sign in' : 'Create account'}
               </button>
             </form>
 
-            <div className="mt-5 pt-5 border-t border-slate-800 flex items-center justify-between gap-3">
+            <div className="mt-5 pt-5 border-t border-white/10 flex items-center justify-between gap-3">
               <p className="text-xs text-slate-500">
                 {mode === 'signin' ? 'Need an account?' : 'Already registered?'}
               </p>
@@ -148,7 +154,7 @@ export default function AuthPage() {
                   setError(null);
                   setMessage(null);
                 }}
-                className="text-xs font-semibold text-amber-300 hover:text-amber-200"
+                className="text-xs font-semibold text-cyan-300 hover:text-cyan-200"
               >
                 {mode === 'signin' ? 'Create one' : 'Sign in instead'}
               </button>
