@@ -1316,6 +1316,19 @@ async function readAnalyticsS3(s3Key: string): Promise<unknown> {
   return JSON.parse(Buffer.concat(chunks).toString('utf-8'));
 }
 
+async function readFirstAnalyticsS3(keys: string[]): Promise<unknown> {
+  let lastError: unknown;
+  for (const key of keys) {
+    try {
+      return await readAnalyticsS3(key);
+    } catch (err) {
+      lastError = err;
+      console.warn('[agent-router] analytics key read failed', { key, err });
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error('No analytics S3 key could be read.');
+}
+
 async function handleWebAnalytics(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyResultV2> {
   const period = event.queryStringParameters?.period ?? 'weekly';
   const key    = period === 'monthly' ? 'reports/monthly.json' : 'reports/weekly.json';
@@ -1331,13 +1344,15 @@ async function handleWebAnalytics(event: APIGatewayProxyEventV2): Promise<APIGat
 
 async function handleMetaAnalytics(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyResultV2> {
   const period = event.queryStringParameters?.period ?? 'weekly';
-  const key    = period === 'monthly' ? 'meta/monthly.json' : 'meta/weekly.json';
+  const keys   = period === 'monthly'
+    ? ['meta/monthly.json', 'meta_monthly.json', 'monthly.json']
+    : ['meta/weekly.json', 'meta_weekly.json', 'weekly.json'];
 
   try {
-    const data = await readAnalyticsS3(key);
+    const data = await readFirstAnalyticsS3(keys);
     return respond(200, data);
   } catch (err) {
-    console.error('[agent-router] metaAnalytics S3 read failed', { key, err });
+    console.error('[agent-router] metaAnalytics S3 read failed', { keys, err });
     return respond(503, { error: 'Meta analytics data temporarily unavailable.' });
   }
 }

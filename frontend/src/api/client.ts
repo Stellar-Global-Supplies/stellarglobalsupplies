@@ -173,5 +173,16 @@ export async function fetchWebAnalytics(period: AnalyticsPeriod = 'weekly'): Pro
 }
 
 export async function fetchMetaAnalytics(period: AnalyticsPeriod = 'weekly'): Promise<MetaAnalyticsData> {
-  return request<MetaAnalyticsData>(`/analytics/meta?period=${period}`);
+  try {
+    const data = await request<MetaAnalyticsData>(`/analytics/meta?period=${period}`);
+    if (typeof data?.summary?.total_requests !== 'number') {
+      throw new Error('Meta analytics API returned an empty payload.');
+    }
+    return data;
+  } catch (err) {
+    console.warn('[analytics] Falling back to bundled Meta analytics JSON', err);
+    const fallback = await fetch(`/meta/${period}.json`, { cache: 'no-store' });
+    if (!fallback.ok) throw err;
+    return fallback.json() as Promise<MetaAnalyticsData>;
+  }
 }

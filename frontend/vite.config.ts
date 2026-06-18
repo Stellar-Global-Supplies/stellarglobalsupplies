@@ -15,7 +15,7 @@ export default defineConfig(({ mode }) => {
         injectRegister: null,        // We handle SW registration manually in main.tsx
         filename: 'sw.js',
         strategies: 'generateSW',
-        includeAssets: ['favicon.svg', 'icons/*.png', 'robots.txt'],
+        includeAssets: ['favicon.svg', 'robots.txt', 'meta/*.json'],
         manifest: false,             // We use our own /public/manifest.json
 
         workbox: {

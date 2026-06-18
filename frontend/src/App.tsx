@@ -13,6 +13,7 @@ import {
   WifiOff,
   ChevronRight,
   LogOut,
+  Sparkles,
 } from 'lucide-react';
 import type { Session } from '@supabase/supabase-js';
 import type { LucideIcon } from 'lucide-react';
@@ -109,17 +110,17 @@ function Sidebar() {
 
       <aside
         className={`
-          fixed top-0 left-0 h-full z-30 flex flex-col
-          bg-slate-900 border-r border-slate-800
+          app-sidebar fixed top-0 left-0 h-full z-30 flex flex-col
+          bg-slate-950/92 border-r border-white/10 backdrop-blur-xl
           transition-all duration-300 ease-in-out
           ${sidebarOpen ? 'w-sidebar' : 'w-sidebar-sm'}
           ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
         `}
       >
         {/* Logo header */}
-        <div className="flex items-center gap-3 px-4 h-header border-b border-slate-800 shrink-0">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shrink-0 shadow-glow-indigo">
-            <span className="text-white font-bold text-sm">S</span>
+        <div className="flex items-center gap-3 px-4 h-header border-b border-white/10 shrink-0">
+          <div className="w-9 h-9 rounded-xl bg-[#00B98E]/15 border border-[#00B98E]/35 flex items-center justify-center shrink-0 shadow-[0_0_24px_rgba(0,185,142,0.25)]">
+            <Sparkles size={17} className="text-[#00B98E]" />
           </div>
           {sidebarOpen && (
             <div className="overflow-hidden">
@@ -144,19 +145,19 @@ function Sidebar() {
                   w-full flex items-center gap-3 px-3 py-2.5 rounded-lg
                   transition-all duration-150 group relative
                   ${isActive
-                    ? 'bg-indigo-600/20 text-indigo-300 border border-indigo-500/30'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                    ? 'bg-[#00B98E]/14 text-emerald-200 border border-[#00B98E]/35 shadow-[0_0_28px_rgba(0,185,142,0.12)]'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-white/10'
                   }
                 `}
                 aria-current={isActive ? 'page' : undefined}
                 title={!sidebarOpen ? label : undefined}
               >
-                <Icon className={`w-5 h-5 shrink-0 ${isActive ? 'text-indigo-400' : ''}`} />
+                <Icon className={`w-5 h-5 shrink-0 ${isActive ? 'text-[#00B98E]' : ''}`} />
                 {sidebarOpen && (
                   <span className="text-sm font-medium truncate">{label}</span>
                 )}
                 {sidebarOpen && isActive && (
-                  <ChevronRight size={14} className="ml-auto text-indigo-400" />
+                  <ChevronRight size={14} className="ml-auto text-[#00B98E]" />
                 )}
                 {/* Tooltip for collapsed state */}
                 {!sidebarOpen && (
@@ -174,9 +175,9 @@ function Sidebar() {
         </nav>
 
         {/* Footer */}
-        <div className="px-2 pb-4 border-t border-slate-800 pt-3 shrink-0">
+        <div className="px-2 pb-4 border-t border-white/10 pt-3 shrink-0">
           <div className="flex items-center gap-3 px-3 py-2">
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-slate-600 to-slate-700 flex items-center justify-center shrink-0">
+            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#00B98E] to-cyan-400 flex items-center justify-center shrink-0">
               <span className="text-xs font-bold text-slate-300">MG</span>
             </div>
             {sidebarOpen && (
@@ -205,8 +206,8 @@ function Header() {
   return (
     <header
       className={`
-        fixed top-0 right-0 z-10 h-header
-        bg-slate-950/80 backdrop-blur-md border-b border-slate-800
+        app-header fixed top-0 right-0 z-10
+        bg-slate-950/88 backdrop-blur-xl border-b border-white/10
         flex items-center gap-4 px-4 md:px-6
         transition-all duration-300
         ${sidebarOpen ? 'left-sidebar' : 'left-sidebar-sm'}
@@ -215,7 +216,7 @@ function Header() {
     >
       <button
         onClick={toggleSidebar}
-        className="p-2 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors"
+        className="p-2 rounded-lg text-slate-300 hover:text-[#00B98E] hover:bg-[#00B98E]/10 transition-colors"
         aria-label="Toggle sidebar"
       >
         <Menu size={18} />
@@ -235,7 +236,7 @@ function Header() {
       >
         <Bell size={18} />
         {unread > 0 && (
-          <span className="absolute top-1 right-1 w-4 h-4 bg-indigo-500 rounded-full text-2xs text-white flex items-center justify-center font-bold">
+          <span className="absolute top-1 right-1 w-4 h-4 bg-[#00B98E] rounded-full text-2xs text-slate-950 flex items-center justify-center font-bold">
             {unread > 9 ? '9+' : unread}
           </span>
         )}
@@ -305,7 +306,7 @@ function PWAUpdateBanner() {
 // Main content router
 // ────────────────────────────────────────────────────────────────────────────
 function MainContent() {
-  const { activeSection, sidebarOpen } = useNavStore();
+  const { activeSection, sidebarOpen, toggleSidebar } = useNavStore();
 
   const content = (() => {
     switch (activeSection) {
@@ -322,7 +323,7 @@ function MainContent() {
   return (
     <main
       className={`
-        min-h-screen pt-header bg-slate-950
+        app-main agentverse-shell bg-slate-950
         transition-all duration-300
         ${sidebarOpen ? 'lg:pl-sidebar' : 'lg:pl-sidebar-sm'}
       `}
@@ -330,6 +331,13 @@ function MainContent() {
       <div className="p-4 md:p-6 animate-fade-in">
         {content}
       </div>
+      <button
+        onClick={toggleSidebar}
+        className="mobile-orbit-menu fixed z-40 lg:hidden h-12 w-12 rounded-2xl bg-[#00B98E] text-slate-950 shadow-[0_18px_40px_rgba(0,185,142,0.35)] flex items-center justify-center border border-white/20"
+        aria-label="Open navigation"
+      >
+        <Menu size={21} />
+      </button>
     </main>
   );
 }
@@ -372,7 +380,7 @@ export default function App() {
       {/* Subtle background grid */}
       <div
         className="fixed inset-0 pointer-events-none opacity-30"
-        style={{ backgroundImage: "url(\"data:image/svg+xml,%3Csvg width='32' height='32' viewBox='0 0 32 32' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 .5H32M.5 0V32' stroke='%23334155' stroke-opacity='0.4'/%3E%3C/svg%3E\")" }}
+        style={{ backgroundImage: "url(\"data:image/svg+xml,%3Csvg width='32' height='32' viewBox='0 0 32 32' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 .5H32M.5 0V32' stroke='%2300B98E' stroke-opacity='0.10'/%3E%3C/svg%3E\")" }}
         aria-hidden="true"
       />
 

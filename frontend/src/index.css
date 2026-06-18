@@ -7,6 +7,10 @@
     --sidebar-width: 260px;
     --sidebar-collapsed-width: 64px;
     --header-height: 60px;
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+    --sgs-accent: #00B98E;
+    --sgs-accent-soft: rgba(0, 185, 142, 0.14);
     color-scheme: dark;
   }
 
@@ -23,6 +27,12 @@
   body {
     @apply bg-slate-950 text-slate-100 antialiased;
     font-feature-settings: "rlig" 1, "calt" 1;
+    min-height: 100vh;
+    min-height: 100dvh;
+    background:
+      radial-gradient(circle at 15% 0%, rgba(0, 185, 142, 0.16), transparent 32rem),
+      radial-gradient(circle at 88% 12%, rgba(59, 130, 246, 0.13), transparent 30rem),
+      #020617;
   }
 
   /* Custom scrollbar */
@@ -44,7 +54,8 @@
 @layer components {
   /* Glassmorphism card */
   .glass-card {
-    @apply bg-slate-800/60 backdrop-blur-sm border border-slate-700/50 rounded-xl;
+    @apply bg-slate-900/68 backdrop-blur-xl border border-white/10 rounded-xl;
+    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.24);
   }
 
   /* Glow effect for agent avatars */
@@ -65,12 +76,41 @@
 
   /* Gradient text */
   .gradient-text {
-    @apply bg-gradient-to-r from-indigo-400 via-purple-400 to-cyan-400 bg-clip-text text-transparent;
+    background: linear-gradient(90deg, #00B98E, #38bdf8, #a78bfa);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
   }
 
   /* KPI card hover */
   .kpi-card {
-    @apply glass-card p-5 transition-all duration-200 hover:border-slate-600 hover:bg-slate-800/80;
+    @apply glass-card p-5 transition-all duration-200 hover:border-emerald-400/35 hover:bg-slate-900/85;
+  }
+
+  .agentverse-shell {
+    background:
+      linear-gradient(90deg, rgba(15, 23, 42, 0.88), rgba(2, 6, 23, 0.84)),
+      radial-gradient(circle at 24px 24px, rgba(0, 185, 142, 0.17) 0 1px, transparent 1px);
+    background-size: auto, 28px 28px;
+  }
+
+  .app-header {
+    height: calc(var(--header-height) + var(--safe-top));
+    padding-top: var(--safe-top);
+  }
+
+  .app-main {
+    padding-top: calc(var(--header-height) + var(--safe-top));
+    min-height: 100dvh;
+  }
+
+  .app-sidebar {
+    padding-top: var(--safe-top);
+  }
+
+  .mobile-orbit-menu {
+    bottom: calc(18px + var(--safe-bottom));
+    left: calc(18px + env(safe-area-inset-left, 0px));
   }
 }
 
