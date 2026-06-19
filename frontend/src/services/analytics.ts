@@ -100,7 +100,6 @@ export async function fetchAnalyticsSummarySupabase(
   const grossProfit = useFilteredSummary ? filteredGrossProfit : Number(summary?.gross_profit ?? 0);
   const grossMarginPct = totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0;
   const totalInvoices = useFilteredSummary ? filteredInvoices : Number(summary?.total_invoices ?? 0);
-  const _avgInvoiceValue = totalInvoices > 0 ? totalRevenue / totalInvoices : 0;
 
   // Build period label
   let periodLabel: string;
@@ -119,7 +118,7 @@ export async function fetchAnalyticsSummarySupabase(
     total_purchase: totalPurchase,
     gross_profit: grossProfit,
     gross_margin_pct: grossMarginPct,
-    total_invoices: Number(summary?.total_invoices ?? 0),
+    total_invoices: totalInvoices,
     avg_invoice_value: Number(summary?.avg_invoice_value ?? 0),
     customer_count: Number(summary?.customer_count ?? customers?.length ?? 0),
     supplier_count: Number(summary?.supplier_count ?? suppliers?.length ?? 0),
