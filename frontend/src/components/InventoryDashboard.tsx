@@ -39,9 +39,77 @@ function Skeleton({ className = '' }: { className?: string }) {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// Fetch inventory from Supabase
+// Fetch inventory from Supabase with optional year/month filter
 // ────────────────────────────────────────────────────────────────────────────
-async function fetchInventory(): Promise<InventoryItem[]> {
+async function fetchInventory(year?: string, month?: string): Promise<InventoryItem[]> {
+  // Build date range for filtering
+  const dateFilter: { gte: string; lte: string } | null = year
+    ? month
+      ? { gte: `${year}-${month}-01`, lte: `${year}-${month}-31` }
+      : { gte: `${year}-01-01`, lte: `${year}-12-31` }
+    : null;
+
+  if (dateFilter) {
+    // Query base tables with date filters for period-specific inventory
+    const [purchaseResult, salesResult] = await Promise.all([
+      supabase
+        .from('purchase_items')
+        .select('item_name, quantity, unit, material_type')
+        .gte('invoice_date', dateFilter.gte)
+        .lte('invoice_date', dateFilter.lte),
+      supabase
+        .from('sales_items')
+        .select('item_name, quantity, unit, material_type')
+        .gte('invoice_date', dateFilter.gte)
+        .lte('invoice_date', dateFilter.lte),
+    ]);
+
+    if (purchaseResult.error) throw new Error(purchaseResult.error.message);
+    if (salesResult.error) throw new Error(salesResult.error.message);
+
+    // Aggregate purchases
+    const purchaseMap = new Map<string, { qty: number; unit: string; material: string }>();
+    for (const row of purchaseResult.data ?? []) {
+      const existing = purchaseMap.get(row.item_name) ?? { qty: 0, unit: row.unit ?? 'units', material: row.material_type ?? 'OTHER' };
+      existing.qty += Number(row.quantity ?? 0);
+      purchaseMap.set(row.item_name, existing);
+    }
+
+    // Aggregate sales
+    const salesMap = new Map<string, { qty: number; unit: string; material: string }>();
+    for (const row of salesResult.data ?? []) {
+      const existing = salesMap.get(row.item_name) ?? { qty: 0, unit: row.unit ?? 'units', material: row.material_type ?? 'OTHER' };
+      existing.qty += Number(row.quantity ?? 0);
+      salesMap.set(row.item_name, existing);
+    }
+
+    // Merge all item names
+    const allItems = new Set([...purchaseMap.keys(), ...salesMap.keys()]);
+    const result: InventoryItem[] = [];
+
+    for (const itemName of allItems) {
+      const p = purchaseMap.get(itemName);
+      const s = salesMap.get(itemName);
+      const purchasedQty = p?.qty ?? 0;
+      const soldQty = s?.qty ?? 0;
+      const unit = p?.unit ?? s?.unit ?? 'units';
+      const material = p?.material ?? s?.material ?? 'OTHER';
+
+      result.push({
+        item_name: itemName,
+        purchased_qty: purchasedQty,
+        sold_qty: soldQty,
+        current_stock: purchasedQty - soldQty,
+        unit,
+        material_type: material as InventoryItem['material_type'],
+      });
+    }
+
+    result.sort((a, b) => b.current_stock - a.current_stock);
+    return result;
+  }
+
+  // No date filter - use the pre-built view (all-time data)
   const { data, error } = await supabase
     .from('inventory_summary')
     .select('*')
@@ -59,14 +127,46 @@ async function fetchInventory(): Promise<InventoryItem[]> {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
+// Filter options
+// ────────────────────────────────────────────────────────────────────────────
+const MONTH_NAMES = [
+  { label: 'All Months', value: '' },
+  { label: 'Jan', value: '01' },
+  { label: 'Feb', value: '02' },
+  { label: 'Mar', value: '03' },
+  { label: 'Apr', value: '04' },
+  { label: 'May', value: '05' },
+  { label: 'Jun', value: '06' },
+  { label: 'Jul', value: '07' },
+  { label: 'Aug', value: '08' },
+  { label: 'Sep', value: '09' },
+  { label: 'Oct', value: '10' },
+  { label: 'Nov', value: '11' },
+  { label: 'Dec', value: '12' },
+];
+
+const YEAR_OPTIONS = [
+  { label: 'All Time', value: '' },
+  { label: '2026', value: '2026' },
+  { label: '2025', value: '2025' },
+];
+
+// ────────────────────────────────────────────────────────────────────────────
 // Inventory Dashboard
 // ────────────────────────────────────────────────────────────────────────────
 export default function InventoryDashboard() {
   const [search, setSearch] = useState('');
+  const [selectedYear, setSelectedYear] = useState('');
+  const [selectedMonth, setSelectedMonth] = useState('');
+
+  const handleYearChange = (year: string) => {
+    setSelectedYear(year);
+    if (!year) setSelectedMonth('');
+  };
 
   const { data: items = [], isLoading, isError, error, refetch } = useQuery({
-    queryKey: ['inventory'],
-    queryFn:  fetchInventory,
+    queryKey: ['inventory', selectedYear, selectedMonth],
+    queryFn:  () => fetchInventory(selectedYear || undefined, selectedMonth || undefined),
     staleTime: 5 * 60 * 1000,
   });
 
@@ -83,6 +183,13 @@ export default function InventoryDashboard() {
         i.item_name.toLowerCase().includes(search.toLowerCase()),
       )
     : items;
+
+  // Build period label
+  const periodLabel = selectedYear
+    ? selectedMonth
+      ? `${MONTH_NAMES.find(m => m.value === selectedMonth)?.label} ${selectedYear}`
+      : `FY ${selectedYear}`
+    : 'All Time';
 
   if (isLoading) {
     return (
@@ -132,20 +239,47 @@ export default function InventoryDashboard() {
   return (
     <div className="space-y-6 max-w-7xl">
       {/* Page header */}
-      <div className="flex items-start justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h2 className="text-xl font-bold text-slate-100">Inventory</h2>
           <p className="text-sm text-slate-400 mt-0.5">
-            {totalItems} items tracked · {fmtQty(totalStock)} total units in stock
+            {periodLabel} · {totalItems} items tracked · {fmtQty(totalStock)} total units
           </p>
         </div>
-        <button
-          onClick={() => refetch()}
-          className="flex items-center gap-2 px-3 py-1.5 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 transition-colors"
-        >
-          <RefreshCw size={12} />
-          Refresh
-        </button>
+
+        <div className="flex items-center gap-2">
+          {/* Year / Month filters */}
+          <div className="flex items-center gap-1 bg-slate-800 border border-slate-700 rounded-lg p-1">
+            <select
+              value={selectedYear}
+              onChange={(e) => handleYearChange(e.target.value)}
+              className="text-2xs bg-transparent text-slate-300 outline-none px-1 py-0.5 cursor-pointer"
+            >
+              {YEAR_OPTIONS.map((y) => (
+                <option key={y.value} value={y.value}>{y.label}</option>
+              ))}
+            </select>
+            <span className="text-slate-600 text-2xs">/</span>
+            <select
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(e.target.value)}
+              disabled={!selectedYear}
+              className="text-2xs bg-transparent text-slate-300 outline-none px-1 py-0.5 cursor-pointer disabled:opacity-40"
+            >
+              {MONTH_NAMES.map((m) => (
+                <option key={m.value} value={m.value}>{m.label}</option>
+              ))}
+            </select>
+          </div>
+
+          <button
+            onClick={() => refetch()}
+            className="flex items-center gap-2 px-3 py-1.5 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 transition-colors"
+          >
+            <RefreshCw size={12} />
+            Refresh
+          </button>
+        </div>
       </div>
 
       {/* KPI cards */}
@@ -306,7 +440,7 @@ export default function InventoryDashboard() {
       {/* Summary footer */}
       <div className="text-2xs text-slate-600 text-center">
         Inventory calculated as <strong className="text-slate-500">purchased quantity - sold quantity</strong> from ingested data.
-        Items with negative stock may indicate data entry gaps or unrecorded opening stock.
+        {selectedYear ? ` Showing data for ${periodLabel}.` : ' Select a year above to view period-specific inventory.'}
       </div>
     </div>
   );

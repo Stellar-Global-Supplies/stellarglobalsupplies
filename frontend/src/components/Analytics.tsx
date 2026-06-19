@@ -519,15 +519,45 @@ const PERIODS = [
   { label: '12M', value: 12 },
 ];
 
+const MONTH_NAMES = [
+  { label: 'All Months', value: '' },
+  { label: 'Jan', value: '01' },
+  { label: 'Feb', value: '02' },
+  { label: 'Mar', value: '03' },
+  { label: 'Apr', value: '04' },
+  { label: 'May', value: '05' },
+  { label: 'Jun', value: '06' },
+  { label: 'Jul', value: '07' },
+  { label: 'Aug', value: '08' },
+  { label: 'Sep', value: '09' },
+  { label: 'Oct', value: '10' },
+  { label: 'Nov', value: '11' },
+  { label: 'Dec', value: '12' },
+];
+
+const YEAR_OPTIONS = [
+  { label: 'All Years', value: '' },
+  { label: '2026', value: '2026' },
+  { label: '2025', value: '2025' },
+];
+
 // ────────────────────────────────────────────────────────────────────────────
 // Analytics main
 // ────────────────────────────────────────────────────────────────────────────
 export default function Analytics() {
   const [months, setMonths] = useState(6);
+  const [selectedYear, setSelectedYear] = useState('');
+  const [selectedMonth, setSelectedMonth] = useState('');
+
+  // Reset month filter when year is cleared
+  const handleYearChange = (year: string) => {
+    setSelectedYear(year);
+    if (!year) setSelectedMonth('');
+  };
 
   const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
-    queryKey: ['analytics-summary', months],
-    queryFn:  () => fetchAnalyticsSummarySupabase(months),
+    queryKey: ['analytics-summary', months, selectedYear, selectedMonth],
+    queryFn:  () => fetchAnalyticsSummarySupabase(months, selectedYear || undefined, selectedMonth || undefined),
     staleTime: 5 * 60 * 1000,
   });
 
@@ -561,7 +591,31 @@ export default function Analytics() {
           <p className="text-sm text-slate-400 mt-0.5">{summary.period}</p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
+          {/* Year / Month filters */}
+          <div className="flex items-center gap-1 bg-slate-800 border border-slate-700 rounded-lg p-1">
+            <select
+              value={selectedYear}
+              onChange={(e) => handleYearChange(e.target.value)}
+              className="text-2xs bg-transparent text-slate-300 outline-none px-1 py-0.5 cursor-pointer"
+            >
+              {YEAR_OPTIONS.map((y) => (
+                <option key={y.value} value={y.value}>{y.label}</option>
+              ))}
+            </select>
+            <span className="text-slate-600 text-2xs">/</span>
+            <select
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(e.target.value)}
+              disabled={!selectedYear}
+              className="text-2xs bg-transparent text-slate-300 outline-none px-1 py-0.5 cursor-pointer disabled:opacity-40"
+            >
+              {MONTH_NAMES.map((m) => (
+                <option key={m.value} value={m.value}>{m.label}</option>
+              ))}
+            </select>
+          </div>
+
           {/* Period selector */}
           <div className="flex items-center bg-slate-800 border border-slate-700 rounded-lg p-1 gap-1">
             {PERIODS.map((p) => (
