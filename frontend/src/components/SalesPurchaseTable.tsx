@@ -81,7 +81,7 @@ async function fetchSalesPurchaseData(
   if (!type || type === 'sales') {
     let query = supabase
       .from('sales_items')
-      .select('invoice_id, invoice_date, customer_name, item_name, quantity, unit, unit_price, total_amount, material_type');
+      .select('invoice_no, invoice_date, customer_name, item_name, quantity, unit, base_amount, gst_amount, total_amount, material_type');
 
     if (dateFilter) {
       query = query.gte('invoice_date', dateFilter.gte).lte('invoice_date', dateFilter.lte);
@@ -93,15 +93,15 @@ async function fetchSalesPurchaseData(
 
     for (const row of data ?? []) {
       result.push({
-        id: `sales-${row.invoice_id}-${row.item_name}`,
+        id: `sales-${row.invoice_no}-${row.item_name}`,
         type: 'sales',
         date: row.invoice_date,
-        invoice_id: row.invoice_id,
+        invoice_id: row.invoice_no,
         party_name: row.customer_name,
         item_name: row.item_name,
         quantity: Number(row.quantity ?? 0),
         unit: row.unit ?? 'units',
-        unit_price: Number(row.unit_price ?? 0),
+        unit_price: Number(row.base_amount ?? 0),
         total_amount: Number(row.total_amount ?? 0),
         material_type: row.material_type ?? 'OTHER',
       });
@@ -112,7 +112,7 @@ async function fetchSalesPurchaseData(
   if (!type || type === 'purchase') {
     let query = supabase
       .from('purchase_items')
-      .select('po_id, invoice_date, vendor_name, item_name, quantity, unit, unit_price, total_amount, material_type');
+      .select('invoice_no, invoice_date, supplier_name, item_name, quantity, unit, base_amount, gst_amount, total_amount, material_type');
 
     if (dateFilter) {
       query = query.gte('invoice_date', dateFilter.gte).lte('invoice_date', dateFilter.lte);
@@ -124,15 +124,15 @@ async function fetchSalesPurchaseData(
 
     for (const row of data ?? []) {
       result.push({
-        id: `purchase-${row.po_id}-${row.item_name}`,
+        id: `purchase-${row.invoice_no}-${row.item_name}`,
         type: 'purchase',
         date: row.invoice_date,
-        invoice_id: row.po_id,
-        party_name: row.vendor_name,
+        invoice_id: row.invoice_no,
+        party_name: row.supplier_name,
         item_name: row.item_name,
         quantity: Number(row.quantity ?? 0),
         unit: row.unit ?? 'units',
-        unit_price: Number(row.unit_price ?? 0),
+        unit_price: Number(row.base_amount ?? 0),
         total_amount: Number(row.total_amount ?? 0),
         material_type: row.material_type ?? 'OTHER',
       });
