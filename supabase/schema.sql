@@ -3,6 +3,7 @@
 
 create extension if not exists pgcrypto;
 
+drop view if exists public.inventory_summary;
 drop view if exists public.item_margin;
 drop view if exists public.material_split;
 drop view if exists public.monthly_gst;
@@ -271,6 +272,37 @@ from sales_items_rollup s
 full join purchase_items_rollup p using (item_name)
 order by sales_amount desc;
 
+-- Inventory summary: purchase_items (incoming) - sales_items (outgoing) = current stock
+create view public.inventory_summary as
+with purchase_rollup as (
+  select
+    item_name,
+    coalesce(sum(quantity), 0)::numeric(14, 3) as purchased_qty,
+    max(unit) as unit,
+    max(material_type) as material_type
+  from public.purchase_items
+  group by item_name
+),
+sales_rollup as (
+  select
+    item_name,
+    coalesce(sum(quantity), 0)::numeric(14, 3) as sold_qty,
+    max(unit) as unit,
+    max(material_type) as material_type
+  from public.sales_items
+  group by item_name
+)
+select
+  coalesce(p.item_name, s.item_name) as item_name,
+  coalesce(p.purchased_qty, 0)::numeric(14, 3) as purchased_qty,
+  coalesce(s.sold_qty, 0)::numeric(14, 3) as sold_qty,
+  (coalesce(p.purchased_qty, 0) - coalesce(s.sold_qty, 0))::numeric(14, 3) as current_stock,
+  coalesce(p.unit, s.unit, 'units') as unit,
+  coalesce(p.material_type, s.material_type, 'OTHER') as material_type
+from purchase_rollup p
+full join sales_rollup s using (item_name)
+order by current_stock desc;
+
 alter view public.analytics_summary set (security_invoker = true);
 alter view public.monthly_revenue set (security_invoker = true);
 alter view public.top_customers set (security_invoker = true);
@@ -280,6 +312,7 @@ alter view public.top_suppliers set (security_invoker = true);
 alter view public.monthly_business set (security_invoker = true);
 alter view public.monthly_gst set (security_invoker = true);
 alter view public.item_margin set (security_invoker = true);
+alter view public.inventory_summary set (security_invoker = true);
 
 alter table public.ingestion_files enable row level security;
 alter table public.customers enable row level security;

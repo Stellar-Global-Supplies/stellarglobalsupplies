@@ -217,6 +217,19 @@ export interface MaterialSplit {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
+// Inventory types (from inventory_summary view)
+// ────────────────────────────────────────────────────────────────────────────
+
+export interface InventoryItem {
+  item_name:     string;
+  purchased_qty: number;
+  sold_qty:      number;
+  current_stock: number;
+  unit:          string;
+  material_type: MaterialType;
+}
+
+// ────────────────────────────────────────────────────────────────────────────
 // Upload pipeline types
 // ────────────────────────────────────────────────────────────────────────────
 
@@ -238,7 +251,7 @@ export interface UploadJob {
 // UI state
 // ────────────────────────────────────────────────────────────────────────────
 
-export type NavSection = 'dashboard' | 'agents' | 'ingest' | 'analytics' | 'web' | 'meta';
+export type NavSection = 'dashboard' | 'agents' | 'ingest' | 'analytics' | 'web' | 'meta' | 'inventory';
 
 export interface AppNotification {
   id:      string;

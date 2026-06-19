@@ -14,6 +14,7 @@ import {
   ChevronRight,
   LogOut,
   Sparkles,
+  Package,
 } from 'lucide-react';
 import type { Session } from '@supabase/supabase-js';
 import type { LucideIcon } from 'lucide-react';
@@ -26,18 +27,20 @@ import MetaMarketingDashboard from '@/components/MetaMarketingDashboard';
 import AgentPanel from '@/components/AgentPanel';
 import DataIngestion from '@/components/DataIngestion';
 import Analytics from '@/components/Analytics';
+import InventoryDashboard from '@/components/InventoryDashboard';
 import AuthPage from '@/components/AuthPage';
 
 // ────────────────────────────────────────────────────────────────────────────
 // Nav item config
 // ────────────────────────────────────────────────────────────────────────────
 const NAV_ITEMS: { section: NavSection; label: string; Icon: LucideIcon }[] = [
-  { section: 'dashboard', label: 'Dashboard',     Icon: LayoutDashboard },
-  { section: 'agents',    label: 'AI Agents',     Icon: Bot              },
-  { section: 'ingest',    label: 'Data Ingest',   Icon: Upload           },
-  { section: 'analytics', label: 'Analytics',     Icon: BarChart3        },
-  { section: 'web',       label: 'Web Traffic',   Icon: Globe            },
-  { section: 'meta',      label: 'Meta Marketing', Icon: Megaphone        },
+  { section: 'dashboard', label: 'Dashboard',      Icon: LayoutDashboard },
+  { section: 'agents',    label: 'AI Agents',      Icon: Bot              },
+  { section: 'ingest',    label: 'Data Ingest',    Icon: Upload           },
+  { section: 'inventory', label: 'Inventory',      Icon: Package          },
+  { section: 'analytics', label: 'Analytics',      Icon: BarChart3        },
+  { section: 'web',       label: 'Web Traffic',    Icon: Globe            },
+  { section: 'meta',      label: 'Meta Marketing',  Icon: Megaphone        },
 ];
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -313,6 +316,7 @@ function MainContent() {
       case 'dashboard': return <Dashboard />;
       case 'agents':    return <AgentPanel />;
       case 'ingest':    return <DataIngestion />;
+      case 'inventory': return <InventoryDashboard />;
       case 'analytics': return <Analytics />;
       case 'web':       return <WebTrafficDashboard />;
       case 'meta':      return <MetaMarketingDashboard />;
