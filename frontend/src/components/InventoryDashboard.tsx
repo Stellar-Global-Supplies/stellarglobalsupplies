@@ -169,7 +169,7 @@ export default function InventoryDashboard() {
             </div>
           </div>
           <p className="text-2xl font-bold text-slate-100 tabular-nums">{lowStockItems.length}</p>
-          <p className="text-2xs text-slate-500 mt-2">Items with < 10 units</p>
+          <p className="text-2xs text-slate-500 mt-2">{'Items with < 10 units'}</p>
         </div>
 
         <div className="kpi-card">
