@@ -3,9 +3,9 @@ import {
   RefreshCw,
   AlertCircle,
   Search,
-  Download,
   FileText,
   ShoppingCart,
+  TrendingUp,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useState } from 'react';

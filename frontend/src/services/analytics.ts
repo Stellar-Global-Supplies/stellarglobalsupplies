@@ -100,20 +100,7 @@ export async function fetchAnalyticsSummarySupabase(
   const grossProfit = useFilteredSummary ? filteredGrossProfit : Number(summary?.gross_profit ?? 0);
   const grossMarginPct = totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0;
   const totalInvoices = useFilteredSummary ? filteredInvoices : Number(summary?.total_invoices ?? 0);
-  const avgInvoiceValue = totalInvoices > 0 ? totalRevenue / totalInvoices : 0;
-
-  // Filter top customers and SKUs by month if year filter is active
-  const filterCustomersByMonth = (custList: any[], monthFilter?: string) => {
-    if (!monthFilter || !dateFilter) return custList;
-    // For now, return all customers since we can't filter the view by date
-    // In production, you'd query the base sales table with date filters
-    return custList;
-  };
-
-  const filterSkusByMonth = (skuList: any[], monthFilter?: string) => {
-    if (!monthFilter || !dateFilter) return skuList;
-    return skuList;
-  };
+  const _avgInvoiceValue = totalInvoices > 0 ? totalRevenue / totalInvoices : 0;
 
   // Build period label
   let periodLabel: string;
@@ -146,13 +133,13 @@ export async function fetchAnalyticsSummarySupabase(
       total_purchase: Number(row.total_purchase ?? 0),
       invoice_count: Number(row.invoice_count ?? 0),
     })),
-    revenue_by_month: byMonthAsc(revenue).map((row) => ({
+    revenue_by_month: byMonthAsc(revenue as any[]).map((row: any) => ({
       month: row.month,
       revenue: Number(row.revenue ?? 0),
       invoices: Number(row.invoices ?? 0),
     })),
     business_by_month: businessByMonth,
-    gst_by_month: byMonthAsc(gst).map((row) => ({
+    gst_by_month: byMonthAsc(gst as any[]).map((row: any) => ({
       month: row.month,
       output_gst: Number(row.output_gst ?? 0),
       input_gst: Number(row.input_gst ?? 0),
