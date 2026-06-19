@@ -271,17 +271,17 @@ function EmptyChatState({
       <p className="text-sm text-slate-400 max-w-xs mb-6">{agent.description}</p>
 
       {prompts.length > 0 && (
-        <div className="w-full max-w-md">
-          <p className="text-xs text-slate-500 mb-3 uppercase tracking-wide">Try asking</p>
+        <div className="w-full max-w-lg">
+          <p className="text-xs text-slate-500 mb-3 uppercase tracking-wide text-center">Try asking</p>
           <div className="grid grid-cols-1 gap-2">
             {prompts.map((p) => (
               <button
                 key={p}
                 onClick={() => onPrompt(p)}
-                className="text-left text-xs p-3 rounded-lg border border-slate-700 bg-slate-800/50 hover:bg-slate-800 hover:border-slate-600 text-slate-300 transition-all duration-150"
+                className="text-left text-xs p-3.5 rounded-lg border border-slate-700 bg-slate-800/50 hover:bg-slate-800 hover:border-slate-600 text-slate-300 transition-all duration-150 w-full"
               >
-                <Sparkles size={11} className="inline mr-1.5 text-indigo-400" />
-                {p}
+                <Sparkles size={12} className="inline mr-2 text-indigo-400 shrink-0" />
+                <span className="leading-relaxed">{p}</span>
               </button>
             ))}
           </div>
