@@ -152,11 +152,11 @@ function MessageBubble({
 
   return (
     <div
-      className={`flex gap-3 ${isUser ? 'flex-row-reverse' : 'flex-row'} items-start group animate-slide-up`}
+      className={`flex gap-3 ${isUser ? 'justify-end' : 'justify-start'} items-start group animate-slide-up`}
     >
       {/* Avatar */}
       <div
-        className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-0.5"
+        className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${isUser ? 'order-2' : 'order-1'}`}
         style={
           isUser
             ? { backgroundColor: '#334155' }
@@ -171,7 +171,7 @@ function MessageBubble({
       </div>
 
       {/* Bubble */}
-      <div className={`max-w-[78%] flex flex-col gap-1 ${isUser ? 'items-end' : 'items-start'}`}>
+      <div className={`max-w-[78%] flex flex-col gap-1 ${isUser ? 'items-end order-1' : 'items-start order-2'}`}>
         <div
           className={`
             relative px-4 py-3 rounded-2xl text-sm leading-relaxed
