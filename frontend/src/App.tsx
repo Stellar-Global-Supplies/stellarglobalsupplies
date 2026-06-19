@@ -15,6 +15,7 @@ import {
   LogOut,
   Sparkles,
   Package,
+  FileText,
 } from 'lucide-react';
 import type { Session } from '@supabase/supabase-js';
 import type { LucideIcon } from 'lucide-react';
@@ -28,19 +29,21 @@ import AgentPanel from '@/components/AgentPanel';
 import DataIngestion from '@/components/DataIngestion';
 import Analytics from '@/components/Analytics';
 import InventoryDashboard from '@/components/InventoryDashboard';
+import SalesPurchaseTable from '@/components/SalesPurchaseTable';
 import AuthPage from '@/components/AuthPage';
 
 // ────────────────────────────────────────────────────────────────────────────
 // Nav item config
 // ────────────────────────────────────────────────────────────────────────────
 const NAV_ITEMS: { section: NavSection; label: string; Icon: LucideIcon }[] = [
-  { section: 'dashboard', label: 'Dashboard',      Icon: LayoutDashboard },
-  { section: 'agents',    label: 'AI Agents',      Icon: Bot              },
-  { section: 'ingest',    label: 'Data Ingest',    Icon: Upload           },
-  { section: 'inventory', label: 'Inventory',      Icon: Package          },
-  { section: 'analytics', label: 'Analytics',      Icon: BarChart3        },
-  { section: 'web',       label: 'Web Traffic',    Icon: Globe            },
-  { section: 'meta',      label: 'Meta Marketing',  Icon: Megaphone        },
+  { section: 'dashboard', label: 'Dashboard',        Icon: LayoutDashboard },
+  { section: 'agents',    label: 'AI Agents',        Icon: Bot              },
+  { section: 'ingest',    label: 'Data Ingest',      Icon: Upload           },
+  { section: 'inventory', label: 'Inventory',        Icon: Package          },
+  { section: 'analytics', label: 'Analytics',        Icon: BarChart3        },
+  { section: 'registers', label: 'Sales & Purchase', Icon: FileText         },
+  { section: 'web',       label: 'Web Traffic',      Icon: Globe            },
+  { section: 'meta',      label: 'Meta Marketing',   Icon: Megaphone        },
 ];
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -318,6 +321,7 @@ function MainContent() {
       case 'ingest':    return <DataIngestion />;
       case 'inventory': return <InventoryDashboard />;
       case 'analytics': return <Analytics />;
+      case 'registers': return <SalesPurchaseTable />;
       case 'web':       return <WebTrafficDashboard />;
       case 'meta':      return <MetaMarketingDashboard />;
       default:          return <Dashboard />;

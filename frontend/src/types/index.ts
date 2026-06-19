@@ -251,7 +251,7 @@ export interface UploadJob {
 // UI state
 // ────────────────────────────────────────────────────────────────────────────
 
-export type NavSection = 'dashboard' | 'agents' | 'ingest' | 'analytics' | 'web' | 'meta' | 'inventory';
+export type NavSection = 'dashboard' | 'agents' | 'ingest' | 'analytics' | 'web' | 'meta' | 'inventory' | 'registers';
 
 export interface AppNotification {
   id:      string;

@@ -45,7 +45,10 @@ async function fetchInventory(year?: string, month?: string): Promise<InventoryI
   // Build date range for filtering
   const dateFilter: { gte: string; lte: string } | null = year
     ? month
-      ? { gte: `${year}-${month}-01`, lte: `${year}-${month}-31` }
+      ? (() => {
+          const lastDay = new Date(Number(year), Number(month), 0).getDate();
+          return { gte: `${year}-${month}-01`, lte: `${year}-${month}-${String(lastDay).padStart(2, '0')}` };
+        })()
       : { gte: `${year}-01-01`, lte: `${year}-12-31` }
     : null;
 

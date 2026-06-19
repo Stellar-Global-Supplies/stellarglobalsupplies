@@ -71,10 +71,6 @@ export async function fetchAnalyticsSummarySupabase(
     purchase_invoices: Number(row.purchase_invoices ?? 0),
   }));
 
-  const totalPurchase = Number(summary?.total_purchase ?? 0);
-  const grossProfit = Number(summary?.gross_profit ?? 0);
-  const totalRevenue = Number(summary?.total_revenue ?? 0);
-  const grossMarginPct = totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0;
   const materialSplit = (materials ?? []).reduce(
     (acc, row) => {
       const key = String(row.material_type ?? 'OTHER') as keyof typeof acc;
@@ -90,6 +86,34 @@ export async function fetchAnalyticsSummarySupabase(
     firstMonth && lastMonth && firstMonth.sales > 0
       ? ((lastMonth.sales - firstMonth.sales) / firstMonth.sales) * 100
       : 0;
+
+  // When filtering by year/month, compute summary from filtered data
+  // Otherwise use all-time summary view
+  const useFilteredSummary = !!(year || (months !== 6));
+  const filteredTotalRevenue = businessByMonth.reduce((s, m) => s + m.sales, 0);
+  const filteredTotalPurchase = businessByMonth.reduce((s, m) => s + m.purchases, 0);
+  const filteredGrossProfit = businessByMonth.reduce((s, m) => s + m.gross_profit, 0);
+  const filteredInvoices = businessByMonth.reduce((s, m) => s + m.sales_invoices, 0);
+
+  const totalRevenue = useFilteredSummary ? filteredTotalRevenue : Number(summary?.total_revenue ?? 0);
+  const totalPurchase = useFilteredSummary ? filteredTotalPurchase : Number(summary?.total_purchase ?? 0);
+  const grossProfit = useFilteredSummary ? filteredGrossProfit : Number(summary?.gross_profit ?? 0);
+  const grossMarginPct = totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0;
+  const totalInvoices = useFilteredSummary ? filteredInvoices : Number(summary?.total_invoices ?? 0);
+  const avgInvoiceValue = totalInvoices > 0 ? totalRevenue / totalInvoices : 0;
+
+  // Filter top customers and SKUs by month if year filter is active
+  const filterCustomersByMonth = (custList: any[], monthFilter?: string) => {
+    if (!monthFilter || !dateFilter) return custList;
+    // For now, return all customers since we can't filter the view by date
+    // In production, you'd query the base sales table with date filters
+    return custList;
+  };
+
+  const filterSkusByMonth = (skuList: any[], monthFilter?: string) => {
+    if (!monthFilter || !dateFilter) return skuList;
+    return skuList;
+  };
 
   // Build period label
   let periodLabel: string;
