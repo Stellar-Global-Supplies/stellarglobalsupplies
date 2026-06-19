@@ -17,7 +17,7 @@ You only need to do the one-time setup below — after that, every code change d
 | API Gateway | HTTP API v2 — 13 routes |
 | Lambda: presign | S3 pre-signed URL generator |
 | Lambda: ingest | SGS CSV/JSON parser → DynamoDB (S3-triggered) |
-| Lambda: agent-router | 6 AI agents (gemini-2.5-flash-lite) + Google Calendar/Gmail tools |
+| Lambda: agent-router | 6 AI agents (gemini-2.5-flash-lite) + Google Calendar/Gmail |
 | Lambda: google-auth | Personal Google OAuth 2.0 flow |
 | DynamoDB | Single-table design (sales, purchases, sessions, tokens) |
 | SSM | Encrypted storage for Gemini key + Google OAuth credentials |

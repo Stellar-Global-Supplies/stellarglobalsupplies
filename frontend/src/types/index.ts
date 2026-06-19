@@ -126,7 +126,7 @@ export interface ChatResponse {
     sales_records:    number;
     recent_invoices:  number;
     analytics_snap:   boolean;
-    google_tools_used?: string[];
+    tools_used?: string[];
   };
 }
 

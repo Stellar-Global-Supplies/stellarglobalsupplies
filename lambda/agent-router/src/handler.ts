@@ -394,7 +394,7 @@ async function listRecentEmails(accessToken: string, maxResults = 5): Promise<st
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// Gemini function-calling tool declarations for the Executive Assistant
+// Gemini function-calling tool declarations
 // ────────────────────────────────────────────────────────────────────────────
 const GOOGLE_TOOLS: FunctionDeclaration[] = [
   {
@@ -755,7 +755,11 @@ function buildSystemPrompt(agent: AgentProfile, ctx: BusinessContext): string {
   const BASE = `
 You are ${agent.name}, an expert AI agent inside the operations control center of Stellar Global Supplies (stellarglobalsupplies.com), a B2B supplier of Stainless Steel (SS) and Mild Steel (MS) products, Survey No. 169, Talawade, Pune — Maharashtra, India. Contact: 9637655556.
 
-All figures below come from ${liveDataSource}. Quote specific numbers in every answer. Never fabricate data. If a figure is unavailable, say so and suggest the next step.
+You have two sources of knowledge:
+1. Your own training knowledge (general business, industry, and domain expertise)
+2. Live business data from ${liveDataSource} (provided below)
+
+Use BOTH sources. For internal company metrics, quote the specific numbers from the data below. For general business questions, industry context, best practices, or explanations, use your training knowledge freely. Never fabricate internal data — if a specific figure is unavailable in the data below, say so and suggest the next step.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 STELLAR GLOBAL SUPPLIES — FY 2025–26 REAL BUSINESS DATA
@@ -865,10 +869,8 @@ MARKETING FOCUS:
 • Target audiences: procurement managers at manufacturing firms, construction companies, prefab builders
 • Highlight: Stellar Global Supplies' location in Pune's MIDC industrial hub — credibility signal
 • Key differentiators to promote: stock availability, range (SS + MS + Tools + Equipment), Pune delivery
-• LinkedIn posts: B2B industrial tone, <1300 chars, 3–5 hashtags (#StainlessSteel #PuneIndustry #B2BSteel)
-• Email campaigns: target Axis Prefab, construction sector (like Prefab Nests India segment)
 
-LIVE WEBSITE & META ANALYTICS (from daily S3 data feed):
+LIVE WEBSITE & META ANALYTICS (from daily S3 data feed — USE THIS DATA IN ALL RECOMMENDATIONS):
 WEEKLY (last 7 days):
 • Total requests: 5,075 | Unique IPs: 451 | Real human visitors (high-intent): 49
 • Top country: Netherlands 42% | Italy 12% | USA 11%
@@ -895,8 +897,71 @@ KEY MARKETING INSIGHTS:
 • Bot traffic is ~99% of raw requests — do not use raw request count in any marketing reports
 • Warm audience of 4,631 on Meta is retargetable NOW for B2B awareness campaign
 
-When drafting Meta/LinkedIn content, always reference real SGS products and the verified warm audience size.
-When recommending ad budgets, note that the high-intent audience is small (83/month) — focus on awareness first, then retargeting.`,
+MULTI-PLATFORM SOCIAL MEDIA STRATEGY:
+
+📘 FACEBOOK:
+• B2B industrial content for steel buyers, procurement managers, construction companies
+• Long-form posts (500-800 chars) with product showcases, project highlights, customer testimonials
+• Facebook Groups: target steel traders, construction professionals, manufacturing groups
+• Facebook Marketplace: list excess inventory, special offers, bulk discounts
+• Video content: factory tours, product demonstrations, customer site visits
+• Event promotion: trade shows, exhibitions, industry meets in Pune/Mumbai
+• Lead gen ads: gated content (catalogs, price lists, technical specs) for lead capture
+
+📸 INSTAGRAM:
+• Visual-first: high-quality product photos, infographics, behind-the-scenes content
+• Reels: 60-second product demos, steel applications, "Did You Know?" educational content
+• Stories: daily stock updates, new arrivals, customer spotlights, poll questions
+• Carousel posts: "5 types of stainless steel sheets explained", "MS vs SS comparison"
+• Hashtags: #StainlessSteel #MildSteel #PuneIndustry #B2BSteel #SteelSuppliers #IndustrialSteel #MetalFabrication
+• IGTV: detailed product tutorials, installation guides, industry insights
+• Shopping tags: tag products for direct inquiry (not direct sales — B2B model)
+
+🐦 TWITTER/X:
+• Real-time industry news sharing, steel price updates, government policy changes
+• Thread format: "10 things to consider when buying stainless steel for your project"
+• Engage with: @MakeInIndia, @CMOMaharashtra, industry influencers
+• Quick tips, infographics, poll questions to drive engagement
+• Customer service: respond to queries, share delivery updates
+
+💼 LINKEDIN:
+• B2B thought leadership: industry trends, market analysis, company growth stories
+• Long-form articles (1300-2000 words): "Impact of GST on steel procurement", "Pune's manufacturing boom"
+• Company page updates: new product launches, capacity expansions, team achievements
+• Employee advocacy: encourage sales team to share content
+• LinkedIn Articles: technical content on steel grades, applications, best practices
+• Polls and surveys: "What's your biggest challenge in steel procurement?"
+
+🎥 YOUTUBE:
+• Product showcase videos: detailed specs, applications, comparisons
+• Factory/warehouse tours: show inventory capacity, quality control processes
+• Customer testimonial videos: case studies, project completions
+• Educational series: "Steel 101" for new buyers, "How to choose the right steel grade"
+• Live Q&A sessions: monthly sessions with technical team
+• SEO-optimized titles: include keywords like "stainless steel supplier Pune", "MS channels manufacturer"
+
+📱 WHATSAPP BUSINESS:
+• Customer support: quick responses to inquiries, order status updates
+• Broadcast lists: new product alerts, special offers, price change notifications
+• Catalog sharing: digital product catalogs with pricing
+• Order placement: enable WhatsApp orders for quick purchases
+• Customer feedback: post-delivery satisfaction surveys
+
+📧 EMAIL MARKETING:
+• Monthly newsletters: industry insights, company updates, new products
+• Drip campaigns: welcome series for new leads, nurture sequences
+• Transactional emails: order confirmations, delivery updates, invoices
+• Re-engagement campaigns: win back inactive customers
+• Seasonal campaigns: festival offers, year-end deals, monsoon specials
+
+When creating content for ANY platform:
+• Always reference real SGS products and verified analytics data
+• Tailor tone and format to platform (casual for Instagram, professional for LinkedIn)
+• Use the warm audience data (4,631 Meta users) for retargeting campaigns
+• Focus on India market (5% traffic) with separate INR campaigns
+• Address the mobile gap — create mobile-first content despite 0% mobile traffic
+• Create product page content — homepage is the only real page (1,993 visits/month)
+• Never use raw bot traffic numbers — focus on 83 real high-intent visitors/month`,
 
     'executive-assistant': `
 EXECUTIVE SUPPORT FOCUS:
@@ -1218,6 +1283,12 @@ async function handleAgentChat(
         : '\n\nThe user has NOT connected their Google account yet. You cannot create calendar events or send emails. If the user asks you to do so, politely explain they need to click "Connect Google Account" in the Executive Assistant panel first, and offer to draft the content instead.'
       : '';
 
+    const tools: { functionDeclarations: FunctionDeclaration[] }[] = [];
+    // Google Calendar/Gmail only for Executive Assistant when connected
+    if (isExecutiveAssistant && googleConnected) {
+      tools.push({ functionDeclarations: GOOGLE_TOOLS });
+    }
+
     const chat = ai.chats.create({
       model:  agent.model ?? GEMINI_MODEL,
       config: {
@@ -1225,9 +1296,7 @@ async function handleAgentChat(
         temperature:       0.7,
         topP:              0.95,
         maxOutputTokens:   2048,
-        ...(isExecutiveAssistant && googleConnected
-          ? { tools: [{ functionDeclarations: GOOGLE_TOOLS }] }
-          : {}),
+        ...(tools.length > 0 ? { tools } : {}),
       },
       history,
     });
@@ -1237,8 +1306,6 @@ async function handleAgentChat(
     // ── Function-calling loop (max 5 rounds to avoid runaway loops) ───────
     let rounds = 0;
     while (
-      isExecutiveAssistant &&
-      googleAccessToken &&
       geminiResponse.functionCalls &&
       geminiResponse.functionCalls.length > 0 &&
       rounds < 5
@@ -1250,14 +1317,18 @@ async function handleAgentChat(
         const fnName = call.name ?? 'unknown';
         const fnArgs = (call.args ?? {}) as Record<string, unknown>;
 
-        console.info('[agent-router] Executing Google tool', { fnName, fnArgs });
+        console.info('[agent-router] Executing tool', { fnName, fnArgs, agent: agent.role });
         toolsUsed.push(fnName);
 
         let result: Record<string, unknown>;
         try {
-          result = await executeGoogleTool(fnName, fnArgs, googleAccessToken);
+          if (isExecutiveAssistant && googleAccessToken) {
+            result = await executeGoogleTool(fnName, fnArgs, googleAccessToken);
+          } else {
+            result = { success: false, error: 'Tool not available for this agent or Google account not connected.' };
+          }
         } catch (toolErr) {
-          console.error('[agent-router] Google tool execution failed', { fnName, error: (toolErr as Error).message });
+          console.error('[agent-router] Tool execution failed', { fnName, error: (toolErr as Error).message });
           result = { success: false, error: (toolErr as Error).message };
         }
 
@@ -1305,7 +1376,7 @@ async function handleAgentChat(
     timestamp:    assistantTs,
     context_used: {
       ...meta,
-      ...(toolsUsed.length > 0 ? { google_tools_used: toolsUsed } : {}),
+      ...(toolsUsed.length > 0 ? { tools_used: toolsUsed } : {}),
     },
   };
 

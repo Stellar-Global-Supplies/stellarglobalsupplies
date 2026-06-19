@@ -502,7 +502,7 @@ function ChatPanel({
           content:     response.content,
           timestamp:   response.timestamp,
           isStreaming: false,
-          toolsUsed:   response.context_used?.google_tools_used,
+          toolsUsed:   response.context_used?.tools_used,
         });
       } catch (err) {
         updateLastMessage(agent.agent_id, {
