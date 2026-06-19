@@ -22,6 +22,7 @@ import {
   Unlink,
   Mail,
   CalendarCheck,
+  TrendingDown,
 } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import type { LucideIcon } from 'lucide-react';
@@ -47,6 +48,7 @@ const ICON_MAP: Record<string, LucideIcon> = {
   Cloud,
   Megaphone,
   Calendar,
+  TrendingDown,
 };
 
 function AgentIcon({ icon, size = 20, className = '' }: { icon: string; size?: number; className?: string }) {
@@ -110,6 +112,12 @@ const SUGGESTED_PROMPTS: Record<string, string[]> = {
     'Schedule a 30-minute sales review with the team tomorrow at 4pm.',
     'Summarize my 5 most recent emails.',
     'Draft a follow-up email to our top customer and send it.',
+  ],
+  'demand-forecasting': [
+    'Forecast SS and MS demand for the next quarter based on historical trends.',
+    'How will monsoon season (Jun-Sep) impact our construction material sales?',
+    'Predict inventory requirements for Diwali season considering past patterns.',
+    'What are the demand risks given our customer concentration?',
   ],
 };
 

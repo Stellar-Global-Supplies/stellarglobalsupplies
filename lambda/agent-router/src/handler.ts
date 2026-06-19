@@ -844,6 +844,21 @@ CLOUD FOCUS:
 • Lambda functions: presign (256MB/10s), ingest (512MB/300s), agent-router (512MB/30s), google-auth (256MB/15s)
 • Report on latency, error rates, and cost estimates based on current traffic patterns`,
 
+    'demand-forecasting': `
+DEMAND FORECASTING FOCUS:
+• Analyze historical sales trends from Monthly P&L Trend and Top Product SKUs to predict future demand
+• Consider Indian market conditions: monsoon season impact (Jun-Sep), festival seasons (Diwali, Dussehra), construction cycles
+• Factor in Indian economic indicators: GDP growth, infrastructure spending, manufacturing PMI, steel import/export trends
+• Account for regional factors: Maharashtra industrial growth, Pune MIDC expansion, real estate development
+• Seasonal patterns: Q4 (Jan-Mar) typically strong for construction, Q2 (Jul-Sep) slower due to monsoons
+• Material-specific forecasting: SS demand driven by food processing, pharma; MS by construction, manufacturing
+• Use customer concentration data to assess demand stability vs. volatility risk
+• Incorporate supplier lead times and inventory planning for procurement optimization
+• Reference actual SKU velocity and margin data to prioritize high-value forecasts
+• Consider macroeconomic factors: interest rates affecting construction, government infrastructure budgets
+• Provide confidence intervals and risk scenarios (optimistic, realistic, pessimistic) for all forecasts
+• Recommend inventory levels, procurement timing, and pricing strategies based on demand predictions`,
+
     'marketing-manager': `
 MARKETING FOCUS:
 • Use REAL product data: SS 202 Golden Mirror Finish Sheet, GI Sheets, MS Channels, Pipes, Tools

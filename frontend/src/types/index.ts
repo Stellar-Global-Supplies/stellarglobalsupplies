@@ -62,7 +62,8 @@ export type AgentRole =
   | 'business-analyst'
   | 'cloud-engineer'
   | 'marketing-manager'
-  | 'executive-assistant';
+  | 'executive-assistant'
+  | 'demand-forecasting';
 
 export interface AgentProfile {
   agent_id:    string;
