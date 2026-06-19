@@ -4,10 +4,8 @@ import { LockKeyhole, Mail, Loader2, Building2, ArrowRight, Sparkles, ShieldChec
 import { supabase } from '@/lib/supabase';
 
 export default function AuthPage() {
-  const [mode, setMode] = useState<'signin' | 'signup'>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -15,22 +13,12 @@ export default function AuthPage() {
     event.preventDefault();
     setLoading(true);
     setError(null);
-    setMessage(null);
 
-    const result =
-      mode === 'signin'
-        ? await supabase.auth.signInWithPassword({ email, password })
-        : await supabase.auth.signUp({ email, password });
-
+    const result = await supabase.auth.signInWithPassword({ email, password });
     setLoading(false);
 
     if (result.error) {
       setError(result.error.message);
-      return;
-    }
-
-    if (mode === 'signup' && !result.data.session) {
-      setMessage('Account created. Check your email to confirm access.');
     }
   };
 
@@ -91,9 +79,7 @@ export default function AuthPage() {
                 <ShieldCheck size={13} />
                 Supabase Auth
               </p>
-              <h2 className="text-2xl font-bold mt-2">
-                {mode === 'signin' ? 'Sign in' : 'Create account'}
-              </h2>
+              <h2 className="text-2xl font-bold mt-2">Sign in</h2>
               <p className="text-sm text-slate-400 mt-1">
                 Use your approved operations account to access the dashboard.
               </p>
@@ -132,7 +118,6 @@ export default function AuthPage() {
               </label>
 
               {error && <p className="text-xs text-red-300 bg-red-950/50 border border-red-900 rounded-lg p-3">{error}</p>}
-              {message && <p className="text-xs text-emerald-300 bg-emerald-950/40 border border-emerald-900 rounded-lg p-3">{message}</p>}
 
               <button
                 type="submit"
@@ -140,25 +125,9 @@ export default function AuthPage() {
                 className="agent-button w-full h-11"
               >
                 {loading ? <Loader2 size={16} className="animate-spin" /> : <ArrowRight size={16} />}
-                {mode === 'signin' ? 'Sign in' : 'Create account'}
+                Sign in
               </button>
             </form>
-
-            <div className="mt-5 pt-5 border-t border-white/10 flex items-center justify-between gap-3">
-              <p className="text-xs text-slate-500">
-                {mode === 'signin' ? 'Need an account?' : 'Already registered?'}
-              </p>
-              <button
-                onClick={() => {
-                  setMode(mode === 'signin' ? 'signup' : 'signin');
-                  setError(null);
-                  setMessage(null);
-                }}
-                className="text-xs font-semibold text-cyan-300 hover:text-cyan-200"
-              >
-                {mode === 'signin' ? 'Create one' : 'Sign in instead'}
-              </button>
-            </div>
           </div>
         </div>
       </section>
