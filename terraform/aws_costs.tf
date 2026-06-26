@@ -34,13 +34,10 @@ resource "aws_iam_role_policy" "aws_costs" {
   })
 }
 
-# Package the lambda (uses the lambda source dir so terraform plan doesn't fail when dist/ is missing)
+# Package the lambda — built artifact is placed in dist/ by the build-lambdas CI job
 data "archive_file" "aws_costs" {
   type        = "zip"
-  # Use the source directory (lambda/aws-costs) instead of dist/ so `terraform plan` works
-  # even when the build step hasn't been run locally. CI/production should still build
-  # compiled artifacts into dist/ before deployment if needed.
-  source_dir  = "${local.lambda_dir}/aws-costs"
+  source_dir  = "${local.lambda_dir}/aws-costs/dist"
   output_path = "${path.module}/.terraform-build/aws-costs.zip"
 }
 

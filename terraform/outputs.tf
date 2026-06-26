@@ -80,6 +80,11 @@ output "lambda_google_auth_arn" {
   value       = aws_lambda_function.google_auth.arn
 }
 
+output "lambda_aws_costs_arn" {
+  description = "AWS Costs Lambda ARN"
+  value       = aws_lambda_function.aws_costs.arn
+}
+
 output "google_oauth_redirect_uri" {
   description = "Register this EXACT URL as an Authorized redirect URI on the Google Cloud Console OAuth Client"
   value       = local.google_oauth_redirect_uri
