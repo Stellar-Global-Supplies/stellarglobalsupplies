@@ -530,7 +530,7 @@ function ChatPanel({
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-theme(spacing.header)-3rem)] min-h-[500px]">
+    <div className="flex flex-col h-full max-h-[calc(100vh-8rem)] min-h-[400px]">
       {/* Chat header */}
       <div
         className="flex items-center gap-3 px-4 py-3 border-b border-slate-800 shrink-0"
@@ -596,9 +596,9 @@ function ChatPanel({
         )}
       </div>
 
-      {/* Input bar */}
-      <div className="shrink-0 px-4 py-3 border-t border-slate-800 bg-slate-950/50">
-        <div className="flex items-end gap-2 bg-slate-800 rounded-xl border border-slate-700 focus-within:border-indigo-500/60 transition-colors px-3 py-2">
+      {/* Input bar - pinned to bottom */}
+      <div className="shrink-0 px-4 py-3 border-t border-slate-800 bg-slate-900/90 backdrop-blur-sm">
+        <div className="flex items-end gap-2 bg-slate-800/80 rounded-xl border border-slate-700 focus-within:border-indigo-500/60 transition-colors px-3 py-2">
           <textarea
             ref={inputRef}
             rows={1}
@@ -607,7 +607,7 @@ function ChatPanel({
             onKeyDown={handleKeyDown}
             placeholder={`Message ${agent.name}… (Enter to send, Shift+Enter for new line)`}
             disabled={loading}
-            className="flex-1 bg-transparent text-sm text-slate-200 placeholder-slate-500 resize-none outline-none disabled:opacity-50 py-1 max-h-40"
+            className="flex-1 bg-transparent text-sm text-slate-200 placeholder-slate-500 resize-none outline-none disabled:opacity-50 py-1 max-h-[80px]"
             aria-label="Chat message"
           />
           <button

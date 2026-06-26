@@ -25,11 +25,27 @@ export default function AuthPage() {
   return (
     <main className="agentverse-shell min-h-screen text-slate-100 grid lg:grid-cols-[1.05fr_0.95fr]">
       <section className="hidden lg:flex relative overflow-hidden p-10 flex-col justify-between border-r border-white/10">
-        {/* Animated gradient orbs */}
+        {/* Animated gradient orbs - more visible */}
         <div className="absolute inset-0">
-          <div className="absolute top-20 left-20 w-96 h-96 bg-emerald-500/20 rounded-full blur-3xl animate-pulse" />
-          <div className="absolute bottom-20 right-20 w-96 h-96 bg-cyan-500/20 rounded-full blur-3xl animate-pulse delay-1000" />
-          <div className="absolute top-1/2 left-1/2 w-96 h-96 bg-purple-500/20 rounded-full blur-3xl animate-pulse delay-2000" />
+          <div className="absolute top-10 left-10 w-[500px] h-[500px] bg-emerald-500/30 rounded-full blur-3xl animate-pulse" />
+          <div className="absolute bottom-10 right-10 w-[500px] h-[500px] bg-cyan-500/30 rounded-full blur-3xl animate-pulse delay-1000" />
+          <div className="absolute top-1/4 left-1/3 w-[500px] h-[500px] bg-purple-500/30 rounded-full blur-3xl animate-pulse delay-2000" />
+        </div>
+
+        {/* Floating particles on login */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          {[...Array(30)].map((_, i) => (
+            <div
+              key={i}
+              className={`absolute rounded-full animate-float ${i % 3 === 0 ? 'w-1.5 h-1.5 bg-emerald-400/80' : i % 3 === 1 ? 'w-1 h-1 bg-cyan-400/80' : 'w-1.5 h-1.5 bg-purple-400/80'}`}
+              style={{
+                left: `${Math.random() * 100}%`,
+                top: `${Math.random() * 100}%`,
+                animationDelay: `${Math.random() * 5}s`,
+                animationDuration: `${15 + Math.random() * 10}s`,
+              }}
+            />
+          ))}
         </div>
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(0,185,142,0.20),transparent_30%),radial-gradient(circle_at_72%_34%,rgba(56,189,248,0.16),transparent_30%),radial-gradient(circle_at_42%_82%,rgba(167,139,250,0.14),transparent_26%)]" />
         <div className="relative">
@@ -68,13 +84,19 @@ export default function AuthPage() {
       </section>
 
       <section className="flex items-center justify-center p-5 relative">
-        {/* Animated background particles */}
+        {/* Animated background particles - more visible */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <div className="absolute top-10 left-10 w-2 h-2 bg-emerald-400/60 rounded-full animate-ping" />
-          <div className="absolute top-1/4 right-20 w-2 h-2 bg-cyan-400/60 rounded-full animate-ping delay-300" />
-          <div className="absolute bottom-20 left-1/4 w-2 h-2 bg-purple-400/60 rounded-full animate-ping delay-700" />
-          <div className="absolute bottom-1/3 right-1/3 w-2 h-2 bg-blue-400/60 rounded-full animate-ping delay-1000" />
-          <div className="absolute top-1/2 left-20 w-1.5 h-1.5 bg-emerald-300/60 rounded-full animate-ping delay-500" />
+          {[...Array(25)].map((_, i) => (
+            <div
+              key={i}
+              className={`absolute rounded-full animate-ping ${i % 3 === 0 ? 'w-2 h-2 bg-emerald-400/70' : i % 3 === 1 ? 'w-1.5 h-1.5 bg-cyan-400/70' : 'w-2 h-2 bg-purple-400/70'}`}
+              style={{
+                left: `${Math.random() * 100}%`,
+                top: `${Math.random() * 100}%`,
+                animationDelay: `${Math.random() * 3}s`,
+              }}
+            />
+          ))}
         </div>
 
         <div className="w-full max-w-md relative z-10">
