@@ -528,6 +528,34 @@ resource "aws_iam_role_policy" "agent_router" {
   })
 }
 
+# ---- dynamodb-cleanup Lambda role ----
+resource "aws_iam_role" "dynamodb_cleanup" {
+  name               = "${local.prefix}-dynamodb-cleanup-role"
+  assume_role_policy = data.aws_iam_policy_document.lambda_trust.json
+}
+
+resource "aws_iam_role_policy" "dynamodb_cleanup" {
+  name = "${local.prefix}-dynamodb-cleanup-policy"
+  role = aws_iam_role.dynamodb_cleanup.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid      = "DynamoReadWrite"
+        Effect   = "Allow"
+        Action   = ["dynamodb:Scan", "dynamodb:BatchWriteItem"]
+        Resource = aws_dynamodb_table.ops.arn
+      },
+      {
+        Sid      = "Logs"
+        Effect   = "Allow"
+        Action   = ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"]
+        Resource = "arn:aws:logs:*:*:*"
+      }
+    ]
+  })
+}
+
 # ---- google-auth Lambda role ----
 resource "aws_iam_role" "google_auth" {
   name               = "${local.prefix}-google-auth-role"
@@ -586,6 +614,12 @@ data "archive_file" "agent_router" {
   output_path = "${path.module}/.terraform-build/agent-router.zip"
 }
 
+data "archive_file" "dynamodb_cleanup" {
+  type        = "zip"
+  source_dir  = "${local.lambda_dir}/dynamodb-cleanup/dist"
+  output_path = "${path.module}/.terraform-build/dynamodb-cleanup.zip"
+}
+
 data "archive_file" "google_auth" {
   type        = "zip"
   source_dir  = "${local.lambda_dir}/google-auth/dist"
@@ -607,6 +641,11 @@ resource "aws_cloudwatch_log_group" "ingest" {
 
 resource "aws_cloudwatch_log_group" "agent_router" {
   name              = "/aws/lambda/${local.prefix}-agent-router"
+  retention_in_days = var.log_retention_days
+}
+
+resource "aws_cloudwatch_log_group" "dynamodb_cleanup" {
+  name              = "/aws/lambda/${local.prefix}-dynamodb-cleanup"
   retention_in_days = var.log_retention_days
 }
 
@@ -689,6 +728,46 @@ resource "aws_lambda_function" "agent_router" {
   }
 
   depends_on = [aws_cloudwatch_log_group.agent_router]
+}
+
+resource "aws_lambda_function" "dynamodb_cleanup" {
+  function_name    = "${local.prefix}-dynamodb-cleanup"
+  role             = aws_iam_role.dynamodb_cleanup.arn
+  handler          = "handler.handler"
+  runtime          = var.lambda_runtime
+  filename         = data.archive_file.dynamodb_cleanup.output_path
+  source_code_hash = data.archive_file.dynamodb_cleanup.output_base64sha256
+  memory_size      = 256
+  timeout          = 120
+
+  environment {
+    variables = {
+      DYNAMODB_TABLE = aws_dynamodb_table.ops.name
+      ENVIRONMENT    = var.environment
+    }
+  }
+
+  depends_on = [aws_cloudwatch_log_group.dynamodb_cleanup]
+}
+
+# EventBridge rule to trigger cleanup Lambda every morning at 9am IST (3:30 UTC)
+resource "aws_cloudwatch_event_rule" "dynamodb_daily_cleanup" {
+  name                = "${local.prefix}-dynamodb-daily-cleanup"
+  description         = "Triggers dynamodb-cleanup Lambda every morning at 9am IST"
+  schedule_expression = "cron(30 3 * * ? *)"
+}
+
+resource "aws_cloudwatch_event_target" "dynamodb_daily_cleanup" {
+  rule      = aws_cloudwatch_event_rule.dynamodb_daily_cleanup.name
+  arn       = aws_lambda_function.dynamodb_cleanup.arn
+}
+
+resource "aws_lambda_permission" "eventbridge_dynamodb_cleanup" {
+  statement_id  = "AllowEventBridgeInvokeDynamoDBCleanup"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.dynamodb_cleanup.function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.dynamodb_daily_cleanup.arn
 }
 
 resource "aws_lambda_function" "google_auth" {

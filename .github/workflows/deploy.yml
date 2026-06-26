@@ -114,7 +114,7 @@ jobs:
 
     strategy:
       matrix:
-        lambda: [presign, ingest, agent-router, google-auth, aws-costs]
+        lambda: [presign, ingest, agent-router, google-auth, aws-costs, dynamodb-cleanup]
       fail-fast: false   # ← one Lambda failure must NOT cancel the others
 
     steps:
@@ -205,6 +205,18 @@ jobs:
         with:
           name: lambda-aws-costs-dist
           path: lambda/aws-costs/dist/
+
+      - name: Download lambda-dynamodb-cleanup dist
+        uses: actions/download-artifact@v4
+        with:
+          name: lambda-dynamodb-cleanup-dist
+          path: lambda/dynamodb-cleanup/dist/
+
+      - name: Download lambda-dynamodb-cleanup dist
+        uses: actions/download-artifact@v4
+        with:
+          name: lambda-dynamodb-cleanup-dist
+          path: lambda/dynamodb-cleanup/dist/
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -467,4 +479,8 @@ jobs:
           echo "  • Sales Analytics"
           echo "  • Web Traffic Dashboard"
           echo "  • Meta Marketing Intelligence"
+          echo "  • AWS Cost Dashboard (with forecasting)"
+          echo ""
+          echo "  Scheduled jobs:"
+          echo "  • DynamoDB cleanup: daily at 9am IST"
           echo "════════════════════════════════════════════════════════════════"
