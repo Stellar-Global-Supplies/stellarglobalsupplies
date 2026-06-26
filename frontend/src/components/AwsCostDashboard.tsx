@@ -18,24 +18,24 @@ const fmtMonth = (m: string) => {
   return d.toLocaleDateString(undefined, { month: 'short', year: '2-digit' });
 };
 
-const MONTH_OPTIONS = [
-  { value: 1, label: '1 Month' },
-  { value: 3, label: '3 Months' },
-  { value: 6, label: '6 Months' },
-  { value: 12, label: '12 Months' },
+const MONTHS = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'
 ];
 
 export default function AwsCostDashboard() {
   const [response, setResponse] = useState<AwsCostResponse | null>(null);
-  const [months, setMonths] = useState(1);
+  const now = new Date();
+  const [selectedYear, setSelectedYear] = useState(now.getFullYear());
+  const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const loadData = async (m: number) => {
+  const loadData = async (year: number, month: number) => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetchAwsCosts(m);
+      const res = await fetchAwsCosts(year, month);
       setResponse(res);
     } catch (err: any) {
       setError(err?.message ?? 'Failed to load AWS costs');
@@ -45,14 +45,19 @@ export default function AwsCostDashboard() {
   };
 
   useEffect(() => {
-    loadData(months);
-  }, [months]);
+    loadData(selectedYear, selectedMonth);
+  }, [selectedYear, selectedMonth]);
 
   const data = response?.services ?? [];
   const monthlyTotals = response?.monthly_totals ?? [];
   const forecasts = response?.forecasts;
+  const selectedPeriod = response?.selected_period ?? `${selectedYear}-${String(selectedMonth).padStart(2, '0')}`;
 
-  const monthLabel = `${months} Month${months > 1 ? 's' : ''}`;
+  const monthLabel = `${MONTHS[selectedMonth - 1]} ${selectedYear}`;
+  
+  // Generate year options (current year ± 3 years)
+  const currentYear = now.getFullYear();
+  const yearOptions = Array.from({ length: 7 }, (_, i) => currentYear - 3 + i);
 
   if (loading) return <div className="agent-card p-4 animate-pulse">Loading cloud cost data…</div>;
   if (error)   return <div className="agent-card p-4 text-red-300">Error: {error}</div>;
@@ -124,23 +129,30 @@ export default function AwsCostDashboard() {
           <p className="text-xs text-slate-500">Total: {fmt(total)}</p>
         </div>
 
-        {/* Month filter */}
+        {/* Year and Month filters */}
         <div className="flex items-center gap-2">
-          {MONTH_OPTIONS.map((opt) => (
-            <button
-              key={opt.value}
-              onClick={() => setMonths(opt.value)}
-              className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${
-                months === opt.value
-                  ? 'bg-emerald-500/20 border-emerald-400/50 text-emerald-300'
-                  : 'border-slate-700 text-slate-400 hover:border-slate-500'
-              }`}
-            >
-              {opt.label}
-            </button>
-          ))}
+          <select
+            value={selectedYear}
+            onChange={(e) => setSelectedYear(parseInt(e.target.value, 10))}
+            className="px-3 py-1.5 text-xs rounded-lg border border-slate-700 bg-slate-800 text-slate-300 hover:border-slate-500 transition-colors outline-none focus:border-emerald-400/60"
+          >
+            {yearOptions.map((year) => (
+              <option key={year} value={year}>{year}</option>
+            ))}
+          </select>
+
+          <select
+            value={selectedMonth}
+            onChange={(e) => setSelectedMonth(parseInt(e.target.value, 10))}
+            className="px-3 py-1.5 text-xs rounded-lg border border-slate-700 bg-slate-800 text-slate-300 hover:border-slate-500 transition-colors outline-none focus:border-emerald-400/60"
+          >
+            {MONTHS.map((month, index) => (
+              <option key={index + 1} value={index + 1}>{month}</option>
+            ))}
+          </select>
+
           <button
-            onClick={() => loadData(months)}
+            onClick={() => loadData(selectedYear, selectedMonth)}
             className="p-1.5 text-slate-400 hover:text-slate-200 transition-colors"
             title="Refresh"
           >

@@ -75,12 +75,44 @@ function forecastCosts(
 
 export const handler: APIGatewayProxyHandlerV2 = async (event) => {
   try {
-    // Parse months query param (default: 1 = current month)
-    const monthsParam = event.queryStringParameters?.months ?? '1';
-    const months = Math.min(Math.max(parseInt(monthsParam, 10) || 1, 1), 13);
+    // Parse year and month query params (default: current month)
+    const now = new Date();
+    const yearParam = event.queryStringParameters?.year;
+    const monthParam = event.queryStringParameters?.month;
+    
+    const selectedYear = yearParam ? parseInt(yearParam, 10) : now.getFullYear();
+    const selectedMonth = monthParam ? parseInt(monthParam, 10) : now.getMonth() + 1;
+    
+    // Validate month range
+    const month = Math.min(Math.max(selectedMonth, 1), 12);
+    const year = selectedYear;
 
-    // Fetch historical data
-    const results = await fetchCostsForPeriod(months);
+    // Calculate start and end dates for the selected month
+    const startDate = new Date(year, month - 1, 1).toISOString().slice(0, 10);
+    const endDate = new Date(year, month, 0).toISOString().slice(0, 10); // Last day of selected month
+
+    // Fetch data for the selected month
+    const cmd = new GetCostAndUsageCommand({
+      TimePeriod: { Start: startDate, End: endDate },
+      Granularity: 'MONTHLY',
+      Metrics: ['UnblendedCost'],
+      GroupBy: [{ Type: 'DIMENSION', Key: 'SERVICE' }],
+    });
+
+    const resp = await client.send(cmd);
+    const results = [resp.ResultsByTime?.[0] ?? {}];
+    
+    // Also fetch last 6 months for trend/forecast context
+    const contextMonths = 6;
+    const contextStart = new Date(year, month - contextMonths, 1).toISOString().slice(0, 10);
+    const contextCmd = new GetCostAndUsageCommand({
+      TimePeriod: { Start: contextStart, End: endDate },
+      Granularity: 'MONTHLY',
+      Metrics: ['UnblendedCost'],
+      GroupBy: [{ Type: 'DIMENSION', Key: 'SERVICE' }],
+    });
+    const contextResp = await client.send(contextCmd);
+    const contextResults = contextResp.ResultsByTime ?? [];
     const aggregated = aggregateByService(results);
 
     // Monthly totals for trend/forecast
@@ -92,18 +124,27 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
       ),
     }));
 
-    // Generate forecasts
-    const forecastNextMonth = forecastCosts(monthlyTotals, 1);
-    const forecast3Month = forecastCosts(monthlyTotals, 3);
-    const forecast6Month = forecastCosts(monthlyTotals, 6);
-    const forecast12Month = forecastCosts(monthlyTotals, 12);
+    // Generate forecasts based on context data
+    const contextMonthlyTotals = contextResults.map((r: any) => ({
+      month: r.TimePeriod?.Start?.slice(0, 7) ?? 'unknown',
+      total: (r.Groups ?? []).reduce(
+        (sum: number, g: any) => sum + Number(g.Metrics?.UnblendedCost?.Amount ?? 0),
+        0,
+      ),
+    }));
+
+    const forecastNextMonth = forecastCosts(contextMonthlyTotals, 1);
+    const forecast3Month = forecastCosts(contextMonthlyTotals, 3);
+    const forecast6Month = forecastCosts(contextMonthlyTotals, 6);
+    const forecast12Month = forecastCosts(contextMonthlyTotals, 12);
 
     return {
       statusCode: 200,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         services: aggregated,
-        monthly_totals: monthlyTotals,
+        selected_period: `${year}-${String(month).padStart(2, '0')}`,
+        monthly_totals: contextMonthlyTotals,
         forecasts: {
           next_month: forecastNextMonth,
           three_months: forecast3Month,

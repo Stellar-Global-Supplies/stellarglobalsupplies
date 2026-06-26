@@ -14,11 +14,14 @@ export type AwsCostResponse = {
 
 /**
  * Fetches AWS cost data from the shared API Gateway (/aws-costs route).
- * Supports ?months=N query param to control the lookback window.
+ * Supports ?year=N&month=N query params for specific month selection.
  */
-export async function fetchAwsCosts(months: number = 1): Promise<AwsCostResponse> {
+export async function fetchAwsCosts(year?: number, month?: number): Promise<AwsCostResponse> {
   const base = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, '') ?? '';
-  const endpoint = `${base}/aws-costs?months=${months}`;
+  const params = new URLSearchParams();
+  if (year) params.set('year', String(year));
+  if (month) params.set('month', String(month));
+  const endpoint = `${base}/aws-costs?${params.toString()}`;
 
   try {
     const res = await fetch(endpoint);
