@@ -501,7 +501,12 @@ resource "aws_iam_role_policy" "agent_router" {
       {
         Sid      = "BedrockInvoke"
         Effect   = "Allow"
-        Action   = ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream", "aws-marketplace:Subscribe"]
+        Action   = [
+          "bedrock:InvokeModel",
+          "bedrock:InvokeModelWithResponseStream",
+          "aws-marketplace:Subscribe",
+          "aws-marketplace:ViewSubscriptions"
+        ]
         Resource = "*"
       },
       {
