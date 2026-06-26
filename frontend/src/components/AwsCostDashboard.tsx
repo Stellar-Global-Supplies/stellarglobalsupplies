@@ -51,7 +51,6 @@ export default function AwsCostDashboard() {
   const data = response?.services ?? [];
   const monthlyTotals = response?.monthly_totals ?? [];
   const forecasts = response?.forecasts;
-  const selectedPeriod = response?.selected_period ?? `${selectedYear}-${String(selectedMonth).padStart(2, '0')}`;
 
   const monthLabel = `${MONTHS[selectedMonth - 1]} ${selectedYear}`;
   

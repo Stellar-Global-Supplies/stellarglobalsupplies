@@ -3,6 +3,7 @@ export type MonthlyTotal = { month: string; total: number };
 export type Forecast = { forecastMonth: string; forecastCost: number };
 export type AwsCostResponse = {
   services: AwsCost[];
+  selected_period: string;
   monthly_totals: MonthlyTotal[];
   forecasts: {
     next_month: Forecast[];
@@ -57,6 +58,7 @@ const mockTotals: MonthlyTotal[] = [
 
 const mockResponse: AwsCostResponse = {
   services: mockServices,
+  selected_period: '2026-06',
   monthly_totals: mockTotals,
   forecasts: {
     next_month: [{ forecastMonth: '2026-07', forecastCost: 200.0 }],
