@@ -1,4 +1,4 @@
-# Copy to terraform.tfvars (gitignored) for local `terraform plan/apply` runs.
+p# Copy to terraform.tfvars (gitignored) for local `terraform plan/apply` runs.
 # In CI, these are passed as -var flags sourced from GitHub Secrets.
 
 aws_region          = "ap-south-1"
@@ -14,8 +14,9 @@ route53_zone_id     = "Z0123456789ABCDEFGHIJ"
 # ops.stellarglobalsupplies.com
 acm_certificate_arn = "arn:aws:acm:us-east-1:123456789012:certificate/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
 
-# Google Gemini API key (free tier) — https://aistudio.google.com/app/apikey
-gemini_api_key      = "AIza..."
+# AWS Bedrock model ID (default: Claude Sonnet 4.5)
+# Override if you want to use a different Bedrock model
+bedrock_model_id    = "anthropic.claude-sonnet-4-5-20250929-v1:0"
 
 # ─────────────────────────────────────────────────────────────────────────
 # Google OAuth 2.0 — for the Executive Assistant agent's Calendar/Gmail access

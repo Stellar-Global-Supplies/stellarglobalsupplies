@@ -17,10 +17,10 @@ You only need to do the one-time setup below — after that, every code change d
 | API Gateway | HTTP API v2 — 13 routes |
 | Lambda: presign | S3 pre-signed URL generator |
 | Lambda: ingest | SGS CSV/JSON parser → DynamoDB (S3-triggered) |
-| Lambda: agent-router | 6 AI agents (gemini-2.5-flash-lite) + Google Calendar/Gmail |
+| Lambda: agent-router | 6 AI agents (Claude Sonnet 4.5 via AWS Bedrock) + Google Calendar/Gmail |
 | Lambda: google-auth | Personal Google OAuth 2.0 flow |
 | DynamoDB | Single-table design (sales, purchases, sessions, tokens) |
-| SSM | Encrypted storage for Gemini key + Google OAuth credentials |
+| SSM | Encrypted storage for Google OAuth credentials |
 
 ---
 
@@ -46,7 +46,7 @@ git push -u origin main
 | AWS IAM credentials | IAM → Users → Create user → Attach `AdministratorAccess` (or least-privilege policy) → Security credentials → Create access key |
 | Route53 Zone ID | Route53 → Hosted zones → click `stellarglobalsupplies.com` → copy Hosted zone ID |
 | ACM Certificate ARN | Certificate Manager in **us-east-1** → Request → `ops.stellarglobalsupplies.com` → DNS validation → copy ARN after it turns `Issued` |
-| Gemini API key | https://aistudio.google.com/app/apikey → Create API key (free tier: 500 req/day) |
+| AWS Bedrock | Claude Sonnet 4.5 model `anthropic.claude-sonnet-4-5-20250929-v1:0` (uses IAM authentication — no API key needed) |
 | Google OAuth Client | See Step 3 below |
 
 ### Step 3 — Google OAuth (for Executive Assistant Calendar/Gmail)
@@ -75,7 +75,7 @@ Add all 11 secrets:
 | `TF_BACKEND_DYNAMODB_TABLE` | `stellar-tf-locks` |
 | `TF_VAR_route53_zone_id` | Your Route53 Zone ID |
 | `TF_VAR_acm_certificate_arn` | ACM cert ARN (us-east-1) |
-| `TF_VAR_gemini_api_key` | Gemini API key |
+| `TF_VAR_bedrock_model_id` | AWS Bedrock model ID (default: `anthropic.claude-sonnet-4-5-20250929-v1:0`) |
 | `TF_VAR_google_oauth_client_id` | Google OAuth Client ID |
 | `TF_VAR_google_oauth_client_secret` | Google OAuth Client Secret |
 
@@ -161,7 +161,7 @@ Every `git push origin main` automatically redeploys. You can also trigger manua
 | SSM Parameter Store | ₹0 (free tier) |
 | **Total** | **~₹600–1,100 / month** |
 
-Gemini API (gemini-2.5-flash-lite): free tier provides 500 requests/day — sufficient for a team of 2–3 using agents daily.
+AWS Bedrock (Claude Sonnet 4.5): Uses IAM authentication — no API key required. Pricing: ~$3 per 1M input tokens, ~$15 per 1M output tokens. Typical agent conversation (~2K tokens) costs ~$0.01-0.02 per interaction.
 
 ---
 
@@ -172,7 +172,7 @@ Gemini API (gemini-2.5-flash-lite): free tier provides 500 requests/day — suff
 | Terraform fails with `NoSuchBucket` | The bootstrap job failed — check Job 0 logs, verify `TF_BACKEND_BUCKET` secret |
 | Lambda builds fail | Check Node 22 compatibility — run `npm ci && npm run build` locally first |
 | CloudFront 403 on all pages | S3 bucket policy not applied yet — wait 2–3 min and retry |
-| Agents return 502 | Gemini API key invalid or quota exceeded — check `TF_VAR_gemini_api_key` secret |
+| Agents return 502 | Bedrock model not accessible — ensure Lambda IAM role has `bedrock:InvokeModel` permission |
 | Google OAuth `redirect_uri_mismatch` | You haven't added the redirect URI from Step 6 to Google Cloud Console |
 | Analytics S3 bucket access denied | Your IAM role needs `s3:GetObject` on `stellar-analytics-reports-471112840461` |
 
@@ -191,7 +191,7 @@ stellar-ops/
 ├── lambda/
 │   ├── presign/                   ← S3 pre-signed URL generator
 │   ├── ingest/                    ← SGS file format CSV/JSON parser
-│   ├── agent-router/              ← AI agents + Gemini 2.5 Flash Lite + Google tools
+│   ├── agent-router/              ← AI agents + Claude Sonnet 4.5 (AWS Bedrock) + Google tools
 │   └── google-auth/               ← Google OAuth flow
 ├── frontend/
 │   ├── src/components/

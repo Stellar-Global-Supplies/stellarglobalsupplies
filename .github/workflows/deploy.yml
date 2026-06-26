@@ -29,7 +29,7 @@ concurrency:
 # TF_BACKEND_DYNAMODB_TABLE          DynamoDB lock table             (create once)
 # TF_VAR_route53_zone_id             Route53 hosted zone ID
 # TF_VAR_acm_certificate_arn         ACM cert ARN (must be us-east-1)
-# TF_VAR_gemini_api_key              Google Gemini API key
+# TF_VAR_bedrock_model_id            AWS Bedrock model ID (default: Claude Sonnet 4.5)
 # TF_VAR_google_oauth_client_id      Google OAuth 2.0 Client ID
 # TF_VAR_google_oauth_client_secret  Google OAuth 2.0 Client Secret
 # ─────────────────────────────────────────────────────────────────────────────
@@ -241,16 +241,15 @@ jobs:
             -var="aws_region=${{ secrets.AWS_REGION }}" \
             -var="route53_zone_id=${{ secrets.TF_VAR_route53_zone_id }}" \
             -var="acm_certificate_arn=${{ secrets.TF_VAR_acm_certificate_arn }}" \
-            -var="gemini_api_key=${{ secrets.TF_VAR_gemini_api_key }}" \
+            -var="bedrock_model_id=${{ secrets.TF_VAR_bedrock_model_id }}" \
             -var="google_oauth_client_id=${{ secrets.TF_VAR_google_oauth_client_id }}" \
-            -var="google_oauth_client_secret=${{ secrets.TF_VAR_google_oauth_client_secret }}"\
-            -var="supabase_url=${{ secrets.TF_VAR_SUPABASE_URL }}"\
-            -var="supabase_service_role_key=${{ secrets.TF_VAR_SUPABASE_SERVICE_ROLE_KEY }}"\
-            
+            -var="google_oauth_client_secret=${{ secrets.TF_VAR_google_oauth_client_secret }}" \
+            -var="supabase_url=${{ secrets.TF_VAR_SUPABASE_URL }}" \
+            -var="supabase_service_role_key=${{ secrets.TF_VAR_SUPABASE_SERVICE_ROLE_KEY }}"
         env:
           TF_VAR_route53_zone_id:              ${{ secrets.TF_VAR_route53_zone_id }}
           TF_VAR_acm_certificate_arn:          ${{ secrets.TF_VAR_acm_certificate_arn }}
-          TF_VAR_gemini_api_key:               ${{ secrets.TF_VAR_gemini_api_key }}
+          TF_VAR_bedrock_model_id:             ${{ secrets.TF_VAR_bedrock_model_id }}
           TF_VAR_google_oauth_client_id:       ${{ secrets.TF_VAR_google_oauth_client_id }}
           TF_VAR_google_oauth_client_secret:   ${{ secrets.TF_VAR_google_oauth_client_secret }}
 
@@ -453,7 +452,7 @@ jobs:
           echo "  API URL     : $API"
           echo "  Commit      : ${{ github.sha }}"
           echo "  Deployed at : $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
-          echo "  Gemini model: gemini-2.5-flash-lite"
+          echo "  AI model: Claude Sonnet 4.5 (AWS Bedrock)"
           echo ""
           echo "  Dashboards available:"
           echo "  • CEO Sales & Purchase Dashboard"

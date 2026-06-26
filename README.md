@@ -6,7 +6,7 @@ Mild Steel (MS) products.
 
 A Progressive Web App (installable, offline-capable) backed by a fully
 serverless AWS architecture, with six specialised AI agents (powered by
-Google Gemini) grounded in live DynamoDB business data.
+AWS Bedrock Claude Sonnet 4.5) grounded in live DynamoDB business data.
 
 ---
 
@@ -24,7 +24,7 @@ stellar-ops/
 ├── lambda/
 │   ├── presign/                 # S3 pre-signed URL generator
 │   ├── ingest/                  # S3-triggered CSV/JSON → DynamoDB parser
-│   └── agent-router/            # Multi-agent Gemini router + analytics API
+│   └── agent-router/            # Multi-agent Bedrock router + analytics API
 ├── frontend/                    # React + Vite + TypeScript PWA
 │   ├── src/
 │   │   ├── components/          # Dashboard, AgentPanel, DataIngestion, Analytics
@@ -45,7 +45,7 @@ stellar-ops/
 
 ```
 Browser (PWA) → CloudFront → S3 (frontend)
-              → API Gateway (HTTP API) → Lambda (agent-router) → DynamoDB + Gemini
+              → API Gateway (HTTP API) → Lambda (agent-router) → DynamoDB + Bedrock
               → S3 (data bucket, raw-ingest/) → Lambda (ingest) → DynamoDB
 ```
 
@@ -63,7 +63,7 @@ design, access patterns, and entity schemas.
 - An existing **Route 53 hosted zone** for `stellarglobalsupplies.com`
 - An **ACM certificate** issued in **us-east-1** covering
   `ops.stellarglobalsupplies.com` (required for CloudFront)
-- A **Google Gemini API key** (free tier) — https://aistudio.google.com/app/apikey
+- **AWS Bedrock access** (Claude Sonnet 4.5 model — uses IAM authentication, no API key needed)
 - Node.js 22+, Terraform ≥ 1.5, AWS CLI configured
 
 ### 2. Terraform state backend
@@ -99,7 +99,7 @@ Actions**:
 | `TF_BACKEND_DYNAMODB_TABLE`  | Terraform lock table name                         |
 | `TF_VAR_route53_zone_id`     | Route53 hosted zone ID for stellarglobalsupplies.com |
 | `TF_VAR_acm_certificate_arn` | ACM cert ARN (us-east-1)                          |
-| `TF_VAR_gemini_api_key`      | Google Gemini API key                             |
+| `TF_VAR_bedrock_model_id`    | AWS Bedrock model ID (default: Claude Sonnet 4.5) |
 | `TF_VAR_google_oauth_client_id`     | Google OAuth 2.0 Client ID (see step 5 below)  |
 | `TF_VAR_google_oauth_client_secret` | Google OAuth 2.0 Client Secret                 |
 
@@ -244,8 +244,8 @@ analytics snapshots.
 
 - Both S3 buckets are fully private; the frontend bucket is only readable by
   CloudFront via Origin Access Control (OAC)
-- The Gemini API key is stored as a `SecureString` in SSM Parameter Store and
-  is only readable by the `agent-router` Lambda's IAM role
+- AWS Bedrock uses IAM role-based authentication — no API key needed. The Lambda's
+  IAM role must have `bedrock:InvokeModel` permission
 - All IAM roles follow least-privilege — each Lambda can only access the
   exact DynamoDB/S3/SSM resources it needs
 - API Gateway CORS is locked to `https://ops.stellarglobalsupplies.com`

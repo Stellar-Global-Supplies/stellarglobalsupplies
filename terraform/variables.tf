@@ -42,10 +42,10 @@ variable "acm_certificate_arn" {
   type        = string
 }
 
-variable "gemini_api_key" {
-  description = "Google Gemini API key; stored encrypted in SSM Parameter Store"
+variable "bedrock_model_id" {
+  description = "AWS Bedrock model ID for AI agents (default: Claude Sonnet 4.5)"
   type        = string
-  sensitive   = true
+  default     = "anthropic.claude-sonnet-4-5-20250929-v1:0"
 }
 
 variable "google_oauth_client_id" {

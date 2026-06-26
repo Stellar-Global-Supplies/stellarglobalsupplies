@@ -2,7 +2,7 @@
   "name": "stellar-lambda-agent-router",
   "version": "1.0.0",
   "private": true,
-  "description": "Multi-agent AI router \u2014 Supabase business context + DynamoDB chat storage + Google Gemini API integration",
+  "description": "Multi-agent AI router \u2014 Supabase business context + DynamoDB chat storage + AWS Bedrock (Claude) integration",
   "scripts": {
     "build": "esbuild src/handler.ts --bundle --platform=node --target=node22 --format=cjs --outfile=dist/handler.js --external:@aws-sdk/*",
     "type-check": "tsc --noEmit"
@@ -11,8 +11,8 @@
     "@aws-sdk/client-dynamodb": "^3.600.0",
     "@aws-sdk/client-ssm": "^3.600.0",
     "@aws-sdk/lib-dynamodb": "^3.600.0",
+    "@aws-sdk/client-bedrock-runtime": "^3.600.0",
     "@supabase/supabase-js": "^2.50.0",
-    "@google/genai": "^0.7.0",
     "@aws-sdk/client-s3": "^3.600.0"
   },
   "devDependencies": {

@@ -11,7 +11,7 @@ import {
 } from '@aws-sdk/lib-dynamodb';
 import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
 import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
-import { GoogleGenAI, Type, type Content, type FunctionDeclaration } from '@google/genai';
+import { BedrockRuntimeClient, ConverseCommand, type ConverseRequest } from '@aws-sdk/client-bedrock-runtime';
 import { createClient } from '@supabase/supabase-js';
 import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda';
 import { randomUUID } from 'crypto';
@@ -21,11 +21,10 @@ import { randomUUID } from 'crypto';
 // ────────────────────────────────────────────────────────────────────────────
 const REGION         = process.env.AWS_REGION       ?? 'ap-south-1';
 const DYNAMODB_TABLE = process.env.DYNAMODB_TABLE!;
-const GEMINI_PARAM   = process.env.GEMINI_KEY_PARAM!;
 const GOOGLE_CLIENT_ID_PARAM     = process.env.GOOGLE_CLIENT_ID_PARAM!;
 const GOOGLE_CLIENT_SECRET_PARAM = process.env.GOOGLE_CLIENT_SECRET_PARAM!;
 const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN   ?? '*';
-const GEMINI_MODEL        = 'gemini-2.5-flash-lite';
+const BEDROCK_MODEL  = process.env.BEDROCK_MODEL    ?? 'anthropic.claude-sonnet-4-5-20250929-v1:0';
 const ANALYTICS_BUCKET    = process.env.ANALYTICS_BUCKET ?? 'stellar-analytics-reports-471112840461';
 const SUPABASE_URL        = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -162,24 +161,15 @@ interface ItemMargin {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// Shared Gemini client (lazy, cached across warm invocations)
+// Shared Bedrock client (lazy, cached across warm invocations)
 // ────────────────────────────────────────────────────────────────────────────
-let cachedGeminiKey: string | null = null;
-let geminiClient: GoogleGenAI | null = null;
+let bedrockClient: BedrockRuntimeClient | null = null;
 
-async function getGeminiClient(): Promise<GoogleGenAI> {
-  if (geminiClient && cachedGeminiKey) return geminiClient;
+function getBedrockClient(): BedrockRuntimeClient {
+  if (bedrockClient) return bedrockClient;
 
-  const ssmResult = await ssm.send(
-    new GetParameterCommand({ Name: GEMINI_PARAM, WithDecryption: true }),
-  );
-
-  const apiKey = ssmResult.Parameter?.Value;
-  if (!apiKey) throw new Error('Gemini API key not found in SSM Parameter Store.');
-
-  cachedGeminiKey = apiKey;
-  geminiClient    = new GoogleGenAI({ apiKey });
-  return geminiClient;
+  bedrockClient = new BedrockRuntimeClient({ region: REGION });
+  return bedrockClient;
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -394,21 +384,21 @@ async function listRecentEmails(accessToken: string, maxResults = 5): Promise<st
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// Gemini function-calling tool declarations
+// Bedrock tool definitions (Claude function calling format)
 // ────────────────────────────────────────────────────────────────────────────
-const GOOGLE_TOOLS: FunctionDeclaration[] = [
+const GOOGLE_TOOLS = [
   {
     name: 'create_calendar_event',
     description: 'Creates a new event on the user\'s primary Google Calendar. Use this when the user asks to schedule a meeting, touchpoint, or calendar event.',
-    parameters: {
-      type: Type.OBJECT,
+    input_schema: {
+      type: 'object',
       properties: {
-        summary:     { type: Type.STRING, description: 'Event title' },
-        description: { type: Type.STRING, description: 'Event description / agenda notes' },
-        start:       { type: Type.STRING, description: 'Start datetime in ISO 8601 format, e.g. 2026-06-15T10:00:00+05:30' },
-        end:         { type: Type.STRING, description: 'End datetime in ISO 8601 format, e.g. 2026-06-15T11:00:00+05:30' },
-        attendees:   { type: Type.ARRAY, items: { type: Type.STRING }, description: 'List of attendee email addresses' },
-        location:    { type: Type.STRING, description: 'Event location (optional, can be a video call link)' },
+        summary:     { type: 'string', description: 'Event title' },
+        description: { type: 'string', description: 'Event description / agenda notes' },
+        start:       { type: 'string', description: 'Start datetime in ISO 8601 format, e.g. 2026-06-15T10:00:00+05:30' },
+        end:         { type: 'string', description: 'End datetime in ISO 8601 format, e.g. 2026-06-15T11:00:00+05:30' },
+        attendees:   { type: 'array', items: { type: 'string' }, description: 'List of attendee email addresses' },
+        location:    { type: 'string', description: 'Event location (optional, can be a video call link)' },
       },
       required: ['summary', 'start', 'end'],
     },
@@ -416,22 +406,22 @@ const GOOGLE_TOOLS: FunctionDeclaration[] = [
   {
     name: 'list_upcoming_calendar_events',
     description: 'Lists the user\'s upcoming events on their primary Google Calendar. Use this to check availability before scheduling, or to summarise the week ahead.',
-    parameters: {
-      type: Type.OBJECT,
+    input_schema: {
+      type: 'object',
       properties: {
-        max_results: { type: Type.NUMBER, description: 'Maximum number of events to return (default 10)' },
+        max_results: { type: 'number', description: 'Maximum number of events to return (default 10)' },
       },
     },
   },
   {
     name: 'send_email',
     description: 'Sends an email from the user\'s Gmail account. Use this when the user explicitly asks to send a follow-up email, synopsis, or message to a client.',
-    parameters: {
-      type: Type.OBJECT,
+    input_schema: {
+      type: 'object',
       properties: {
-        to:      { type: Type.STRING, description: 'Recipient email address' },
-        subject: { type: Type.STRING, description: 'Email subject line' },
-        body:    { type: Type.STRING, description: 'Plain-text email body' },
+        to:      { type: 'string', description: 'Recipient email address' },
+        subject: { type: 'string', description: 'Email subject line' },
+        body:    { type: 'string', description: 'Plain-text email body' },
       },
       required: ['to', 'subject', 'body'],
     },
@@ -439,19 +429,19 @@ const GOOGLE_TOOLS: FunctionDeclaration[] = [
   {
     name: 'list_recent_emails',
     description: 'Lists recent emails from the user\'s Gmail inbox (sender, subject, snippet). Use this to build meeting synopses or summarise recent client communication.',
-    parameters: {
-      type: Type.OBJECT,
+    input_schema: {
+      type: 'object',
       properties: {
-        max_results: { type: Type.NUMBER, description: 'Maximum number of emails to return (default 5)' },
+        max_results: { type: 'number', description: 'Maximum number of emails to return (default 5)' },
       },
     },
   },
 ];
 
 /**
- * Executes a Gemini function call against the live Google APIs.
- * Returns a plain-object result suitable for feeding back to Gemini as a
- * functionResponse part.
+ * Executes a Bedrock/Claude function call against the live Google APIs.
+ * Returns a plain-object result suitable for feeding back to Bedrock as a
+ * tool_result part.
  */
 async function executeGoogleTool(
   name: string,
@@ -1251,20 +1241,20 @@ async function handleAgentChat(
     GSI1SK:     `TS#${now}`,
   });
 
-  // ── 5. Build Gemini content history ─────────────────────────────────────
-  // Convert DynamoDB history to Gemini Content format
-  const history: Content[] = historyRecords.map((m) => ({
-    role:  m.role === 'user' ? 'user' : 'model',
-    parts: [{ text: m.content }],
+  // ── 5. Build Bedrock message history ────────────────────────────────────
+  // Convert DynamoDB history to Bedrock Converse format
+  const bedrockMessages: Array<{ role: 'user' | 'assistant'; content: Array<{ text: string }> }> = historyRecords.map((m) => ({
+    role:    m.role === 'user' ? 'user' : 'assistant',
+    content: [{ text: m.content }],
   }));
 
-  // ── 6. Call Gemini API ───────────────────────────────────────────────────
+  // ── 6. Call Bedrock API ──────────────────────────────────────────────────
   let assistantContent = '';
   let toolsUsed: string[] = [];
 
   try {
-    const ai           = await getGeminiClient();
-    const systemPrompt = buildSystemPrompt(agent, ctx);
+    const bedrock       = getBedrockClient();
+    const systemPrompt  = buildSystemPrompt(agent, ctx);
 
     const isExecutiveAssistant = agent.role === 'executive-assistant';
     let googleAccessToken: string | null = null;
@@ -1283,70 +1273,113 @@ async function handleAgentChat(
         : '\n\nThe user has NOT connected their Google account yet. You cannot create calendar events or send emails. If the user asks you to do so, politely explain they need to click "Connect Google Account" in the Executive Assistant panel first, and offer to draft the content instead.'
       : '';
 
-    const tools: { functionDeclarations: FunctionDeclaration[] }[] = [];
+    const toolConfig: { tools?: Array<{ toolSpec: { name: string; description: string; inputSchema: { json: Record<string, unknown> } } }> } = {};
     // Google Calendar/Gmail only for Executive Assistant when connected
     if (isExecutiveAssistant && googleConnected) {
-      tools.push({ functionDeclarations: GOOGLE_TOOLS });
+      toolConfig.tools = GOOGLE_TOOLS.map((tool) => ({
+        toolSpec: {
+          name:        tool.name,
+          description: tool.description,
+          inputSchema: { json: tool.input_schema },
+        },
+      }));
     }
 
-    const chat = ai.chats.create({
-      model:  agent.model ?? GEMINI_MODEL,
-      config: {
-        systemInstruction: systemPrompt + googleNote,
-        temperature:       0.7,
-        topP:              0.95,
-        maxOutputTokens:   2048,
-        ...(tools.length > 0 ? { tools } : {}),
+    const converseRequest: ConverseRequest = {
+      modelId:     agent.model ?? BEDROCK_MODEL,
+      system:      [{ text: systemPrompt + googleNote }],
+      messages:    [...bedrockMessages, { role: 'user', content: [{ text: message.trim() }] }],
+      inferenceConfig: {
+        temperature: 0.7,
+        topP:        0.95,
+        maxTokens:   2048,
       },
-      history,
-    });
+      ...(toolConfig.tools ? { toolConfig } : {}),
+    };
 
-    let geminiResponse = await chat.sendMessage({ message: message.trim() });
+    let bedrockResponse = await bedrock.send(new ConverseCommand(converseRequest));
 
-    // ── Function-calling loop (max 5 rounds to avoid runaway loops) ───────
+    // ── Tool-calling loop (max 5 rounds to avoid runaway loops) ────────────
     let rounds = 0;
     while (
-      geminiResponse.functionCalls &&
-      geminiResponse.functionCalls.length > 0 &&
+      bedrockResponse.output?.message?.stopReason === 'tool_use' &&
       rounds < 5
     ) {
       rounds++;
-      const functionResponseParts = [];
+      const toolResults: Array<{ toolResult: { toolUseId: string; content: Array<{ json: Record<string, unknown> }> } }> = [];
+      const assistantMessage = bedrockResponse.output.message;
 
-      for (const call of geminiResponse.functionCalls) {
-        const fnName = call.name ?? 'unknown';
-        const fnArgs = (call.args ?? {}) as Record<string, unknown>;
+      if (assistantMessage.content) {
+        for (const block of assistantMessage.content) {
+          if (block.toolUse) {
+            const fnName = block.toolUse.name;
+            const fnArgs = (block.toolUse.input ?? {}) as Record<string, unknown>;
+            const toolUseId = block.toolUse.toolUseId;
 
-        console.info('[agent-router] Executing tool', { fnName, fnArgs, agent: agent.role });
-        toolsUsed.push(fnName);
+            console.info('[agent-router] Executing tool', { fnName, fnArgs, agent: agent.role });
+            toolsUsed.push(fnName);
 
-        let result: Record<string, unknown>;
-        try {
-          if (isExecutiveAssistant && googleAccessToken) {
-            result = await executeGoogleTool(fnName, fnArgs, googleAccessToken);
-          } else {
-            result = { success: false, error: 'Tool not available for this agent or Google account not connected.' };
+            let result: Record<string, unknown>;
+            try {
+              if (isExecutiveAssistant && googleAccessToken) {
+                result = await executeGoogleTool(fnName, fnArgs, googleAccessToken);
+              } else {
+                result = { success: false, error: 'Tool not available for this agent or Google account not connected.' };
+              }
+            } catch (toolErr) {
+              console.error('[agent-router] Tool execution failed', { fnName, error: (toolErr as Error).message });
+              result = { success: false, error: (toolErr as Error).message };
+            }
+
+            toolResults.push({
+              toolResult: {
+                toolUseId,
+                content: [{ json: result }],
+              },
+            });
           }
-        } catch (toolErr) {
-          console.error('[agent-router] Tool execution failed', { fnName, error: (toolErr as Error).message });
-          result = { success: false, error: (toolErr as Error).message };
         }
-
-        functionResponseParts.push({
-          functionResponse: { name: fnName, response: result },
-        });
       }
 
-      geminiResponse = await chat.sendMessage({ message: functionResponseParts as never });
+      // Add assistant message and tool results to history
+      bedrockMessages.push(assistantMessage as { role: 'assistant'; content: Array<{ text?: string; toolUse?: { name: string; input: Record<string, unknown>; toolUseId: string } }> });
+      bedrockMessages.push({
+        role:    'user',
+        content: toolResults.map((tr) => ({
+          toolResult: tr.toolResult,
+        })),
+      } as unknown as { role: 'user'; content: Array<{ text: string }> });
+
+      // Continue conversation with tool results
+      const continueRequest: ConverseRequest = {
+        modelId:     agent.model ?? BEDROCK_MODEL,
+        system:      [{ text: systemPrompt + googleNote }],
+        messages:    bedrockMessages,
+        inferenceConfig: {
+          temperature: 0.7,
+          topP:        0.95,
+          maxTokens:   2048,
+        },
+        ...(toolConfig.tools ? { toolConfig } : {}),
+      };
+
+      bedrockResponse = await bedrock.send(new ConverseCommand(continueRequest));
     }
 
-    assistantContent = geminiResponse.text ?? '';
+    // Extract final response
+    const finalMessage = bedrockResponse.output?.message;
+    if (finalMessage?.content) {
+      const textParts = finalMessage.content
+        .filter((block): block is { text: string } => 'text' in block)
+        .map((block) => block.text);
+      assistantContent = textParts.join('\n');
+    }
 
     if (!assistantContent) {
-      throw new Error('Gemini returned an empty response.');
+      throw new Error('Bedrock returned an empty response.');
     }
-  } catch (geminiErr) {
-    console.error('[agent-router] Gemini API error', geminiErr);
+  } catch (bedrockErr) {
+    console.error('[agent-router] Bedrock API error', bedrockErr);
     return respond(502, {
       error: 'AI service temporarily unavailable. Please try again in a moment.',
     });

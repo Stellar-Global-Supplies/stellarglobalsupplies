@@ -378,16 +378,8 @@ attribute {
 }
 
 # ────────────────────────────────────────────────────────────────────────────────
-# SSM PARAMETER STORE — GEMINI API KEY (SecureString)
+# SSM PARAMETER STORE — GOOGLE OAUTH CREDENTIALS (SecureString)
 # ────────────────────────────────────────────────────────────────────────────────
-resource "aws_ssm_parameter" "gemini_api_key" {
-  name        = "/${local.prefix}/gemini-api-key"
-  description = "Google Gemini API key for AI agent Lambda"
-  type        = "SecureString"
-  value       = var.gemini_api_key
-  tags        = var.tags
-}
-
 resource "aws_ssm_parameter" "google_oauth_client_id" {
   name        = "/${local.prefix}/google-oauth-client-id"
   description = "Google OAuth 2.0 Client ID for personal Calendar/Gmail access"
@@ -502,10 +494,15 @@ resource "aws_iam_role_policy" "agent_router" {
         Effect   = "Allow"
         Action   = ["ssm:GetParameter"]
         Resource = [
-          aws_ssm_parameter.gemini_api_key.arn,
           aws_ssm_parameter.google_oauth_client_id.arn,
           aws_ssm_parameter.google_oauth_client_secret.arn,
         ]
+      },
+      {
+        Sid      = "BedrockInvoke"
+        Effect   = "Allow"
+        Action   = ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"]
+        Resource = "*"
       },
       {
         Sid    = "AnalyticsS3Read"
@@ -675,7 +672,7 @@ resource "aws_lambda_function" "agent_router" {
   environment {
     variables = {
       DYNAMODB_TABLE              = aws_dynamodb_table.ops.name
-      GEMINI_KEY_PARAM            = aws_ssm_parameter.gemini_api_key.name
+      BEDROCK_MODEL               = var.bedrock_model_id
       GOOGLE_CLIENT_ID_PARAM      = aws_ssm_parameter.google_oauth_client_id.name
       GOOGLE_CLIENT_SECRET_PARAM  = aws_ssm_parameter.google_oauth_client_secret.name
       ANALYTICS_BUCKET            = var.analytics_bucket_name
@@ -922,13 +919,13 @@ resource "null_resource" "seed_agents" {
         --region ${var.aws_region} \
         --request-items '{
           "${aws_dynamodb_table.ops.name}": [
-            {"PutRequest":{"Item":{"PK":{"S":"AGENT#sales-analyst"},"SK":{"S":"PROFILE#v0"},"GSI1PK":{"S":"ROLE#sales-analyst"},"GSI1SK":{"S":"AGENT#sales-analyst"},"entityType":{"S":"AGENT"},"agent_id":{"S":"sales-analyst"},"name":{"S":"Sales Analyst"},"role":{"S":"sales-analyst"},"color":{"S":"#6366f1"},"icon":{"S":"TrendingUp"},"description":{"S":"Examines raw metal pricing, historical metrics, and predicts volume patterns."},"model":{"S":"gemini-2.5-flash-lite"},"created_at":{"S":"2025-01-01T00:00:00Z"}}}},
-            {"PutRequest":{"Item":{"PK":{"S":"AGENT#sales-strategist"},"SK":{"S":"PROFILE#v0"},"GSI1PK":{"S":"ROLE#sales-strategist"},"GSI1SK":{"S":"AGENT#sales-strategist"},"entityType":{"S":"AGENT"},"agent_id":{"S":"sales-strategist"},"name":{"S":"Sales Strategist"},"role":{"S":"sales-strategist"},"color":{"S":"#8b5cf6"},"icon":{"S":"Target"},"description":{"S":"Designs enterprise tier discounts, B2B contract negotiations, and steel supply outreach roadmaps."},"model":{"S":"gemini-2.5-flash-lite"},"created_at":{"S":"2025-01-01T00:00:00Z"}}}},
-            {"PutRequest":{"Item":{"PK":{"S":"AGENT#business-analyst"},"SK":{"S":"PROFILE#v0"},"GSI1PK":{"S":"ROLE#business-analyst"},"GSI1SK":{"S":"AGENT#business-analyst"},"entityType":{"S":"AGENT"},"agent_id":{"S":"business-analyst"},"name":{"S":"Business Analyst"},"role":{"S":"business-analyst"},"color":{"S":"#06b6d4"},"icon":{"S":"BarChart2"},"description":{"S":"Parses operational performance data, margins, and pipeline logjams."},"model":{"S":"gemini-2.5-flash-lite"},"created_at":{"S":"2025-01-01T00:00:00Z"}}}},
-            {"PutRequest":{"Item":{"PK":{"S":"AGENT#cloud-engineer"},"SK":{"S":"PROFILE#v0"},"GSI1PK":{"S":"ROLE#cloud-engineer"},"GSI1SK":{"S":"AGENT#cloud-engineer"},"entityType":{"S":"AGENT"},"agent_id":{"S":"cloud-engineer"},"name":{"S":"Cloud Engineer"},"role":{"S":"cloud-engineer"},"color":{"S":"#f59e0b"},"icon":{"S":"Cloud"},"description":{"S":"Reports system health, latency metrics, and operational cost from CloudWatch."},"model":{"S":"gemini-2.5-flash-lite"},"created_at":{"S":"2025-01-01T00:00:00Z"}}}},
-            {"PutRequest":{"Item":{"PK":{"S":"AGENT#marketing-manager"},"SK":{"S":"PROFILE#v0"},"GSI1PK":{"S":"ROLE#marketing-manager"},"GSI1SK":{"S":"AGENT#marketing-manager"},"entityType":{"S":"AGENT"},"agent_id":{"S":"marketing-manager"},"name":{"S":"Marketing Manager"},"role":{"S":"marketing-manager"},"color":{"S":"#10b981"},"icon":{"S":"Megaphone"},"description":{"S":"Drafts B2B LinkedIn updates, email newsletters, and SEO product copy."},"model":{"S":"gemini-2.5-flash-lite"},"created_at":{"S":"2025-01-01T00:00:00Z"}}}},
-            {"PutRequest":{"Item":{"PK":{"S":"AGENT#executive-assistant"},"SK":{"S":"PROFILE#v0"},"GSI1PK":{"S":"ROLE#executive-assistant"},"GSI1SK":{"S":"AGENT#executive-assistant"},"entityType":{"S":"AGENT"},"agent_id":{"S":"executive-assistant"},"name":{"S":"Executive Assistant"},"role":{"S":"executive-assistant"},"color":{"S":"#ef4444"},"icon":{"S":"Calendar"},"description":{"S":"Drafts calendar events, schedules team touchpoints, and builds meeting synopses."},"model":{"S":"gemini-2.5-flash-lite"},"created_at":{"S":"2025-01-01T00:00:00Z"}}}},
-            {"PutRequest":{"Item":{"PK":{"S":"AGENT#demand-forecasting"},"SK":{"S":"PROFILE#v0"},"GSI1PK":{"S":"ROLE#demand-forecasting"},"GSI1SK":{"S":"AGENT#demand-forecasting"},"entityType":{"S":"AGENT"},"agent_id":{"S":"demand-forecasting"},"name":{"S":"Demand Forecaster"},"role":{"S":"demand-forecasting"},"color":{"S":"#8b5cf6"},"icon":{"S":"TrendingDown"},"description":{"S":"Analyzes historical sales data and Indian market conditions to predict demand, inventory needs, and procurement timing."},"model":{"S":"gemini-2.5-flash-lite"},"created_at":{"S":"2025-01-01T00:00:00Z"}}}}
+            {"PutRequest":{"Item":{"PK":{"S":"AGENT#sales-analyst"},"SK":{"S":"PROFILE#v0"},"GSI1PK":{"S":"ROLE#sales-analyst"},"GSI1SK":{"S":"AGENT#sales-analyst"},"entityType":{"S":"AGENT"},"agent_id":{"S":"sales-analyst"},"name":{"S":"Sales Analyst"},"role":{"S":"sales-analyst"},"color":{"S":"#6366f1"},"icon":{"S":"TrendingUp"},"description":{"S":"Examines raw metal pricing, historical metrics, and predicts volume patterns."},"model":{"S":"anthropic.claude-sonnet-4-5-20250929-v1:0"},"created_at":{"S":"2025-01-01T00:00:00Z"}}}},
+            {"PutRequest":{"Item":{"PK":{"S":"AGENT#sales-strategist"},"SK":{"S":"PROFILE#v0"},"GSI1PK":{"S":"ROLE#sales-strategist"},"GSI1SK":{"S":"AGENT#sales-strategist"},"entityType":{"S":"AGENT"},"agent_id":{"S":"sales-strategist"},"name":{"S":"Sales Strategist"},"role":{"S":"sales-strategist"},"color":{"S":"#8b5cf6"},"icon":{"S":"Target"},"description":{"S":"Designs enterprise tier discounts, B2B contract negotiations, and steel supply outreach roadmaps."},"model":{"S":"anthropic.claude-sonnet-4-5-20250929-v1:0"},"created_at":{"S":"2025-01-01T00:00:00Z"}}}},
+            {"PutRequest":{"Item":{"PK":{"S":"AGENT#business-analyst"},"SK":{"S":"PROFILE#v0"},"GSI1PK":{"S":"ROLE#business-analyst"},"GSI1SK":{"S":"AGENT#business-analyst"},"entityType":{"S":"AGENT"},"agent_id":{"S":"business-analyst"},"name":{"S":"Business Analyst"},"role":{"S":"business-analyst"},"color":{"S":"#06b6d4"},"icon":{"S":"BarChart2"},"description":{"S":"Parses operational performance data, margins, and pipeline logjams."},"model":{"S":"anthropic.claude-sonnet-4-5-20250929-v1:0"},"created_at":{"S":"2025-01-01T00:00:00Z"}}}},
+            {"PutRequest":{"Item":{"PK":{"S":"AGENT#cloud-engineer"},"SK":{"S":"PROFILE#v0"},"GSI1PK":{"S":"ROLE#cloud-engineer"},"GSI1SK":{"S":"AGENT#cloud-engineer"},"entityType":{"S":"AGENT"},"agent_id":{"S":"cloud-engineer"},"name":{"S":"Cloud Engineer"},"role":{"S":"cloud-engineer"},"color":{"S":"#f59e0b"},"icon":{"S":"Cloud"},"description":{"S":"Reports system health, latency metrics, and operational cost from CloudWatch."},"model":{"S":"anthropic.claude-sonnet-4-5-20250929-v1:0"},"created_at":{"S":"2025-01-01T00:00:00Z"}}}},
+            {"PutRequest":{"Item":{"PK":{"S":"AGENT#marketing-manager"},"SK":{"S":"PROFILE#v0"},"GSI1PK":{"S":"ROLE#marketing-manager"},"GSI1SK":{"S":"AGENT#marketing-manager"},"entityType":{"S":"AGENT"},"agent_id":{"S":"marketing-manager"},"name":{"S":"Marketing Manager"},"role":{"S":"marketing-manager"},"color":{"S":"#10b981"},"icon":{"S":"Megaphone"},"description":{"S":"Drafts B2B LinkedIn updates, email newsletters, and SEO product copy."},"model":{"S":"anthropic.claude-sonnet-4-5-20250929-v1:0"},"created_at":{"S":"2025-01-01T00:00:00Z"}}}},
+            {"PutRequest":{"Item":{"PK":{"S":"AGENT#executive-assistant"},"SK":{"S":"PROFILE#v0"},"GSI1PK":{"S":"ROLE#executive-assistant"},"GSI1SK":{"S":"AGENT#executive-assistant"},"entityType":{"S":"AGENT"},"agent_id":{"S":"executive-assistant"},"name":{"S":"Executive Assistant"},"role":{"S":"executive-assistant"},"color":{"S":"#ef4444"},"icon":{"S":"Calendar"},"description":{"S":"Drafts calendar events, schedules team touchpoints, and builds meeting synopses."},"model":{"S":"anthropic.claude-sonnet-4-5-20250929-v1:0"},"created_at":{"S":"2025-01-01T00:00:00Z"}}}},
+            {"PutRequest":{"Item":{"PK":{"S":"AGENT#demand-forecasting"},"SK":{"S":"PROFILE#v0"},"GSI1PK":{"S":"ROLE#demand-forecasting"},"GSI1SK":{"S":"AGENT#demand-forecasting"},"entityType":{"S":"AGENT"},"agent_id":{"S":"demand-forecasting"},"name":{"S":"Demand Forecaster"},"role":{"S":"demand-forecasting"},"color":{"S":"#8b5cf6"},"icon":{"S":"TrendingDown"},"description":{"S":"Analyzes historical sales data and Indian market conditions to predict demand, inventory needs, and procurement timing."},"model":{"S":"anthropic.claude-sonnet-4-5-20250929-v1:0"},"created_at":{"S":"2025-01-01T00:00:00Z"}}}}
           ]
         }'
     EOF

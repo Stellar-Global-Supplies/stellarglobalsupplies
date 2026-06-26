@@ -14,7 +14,7 @@ Browser (PWA)
   ├── API ───► API Gateway (HTTP API v2)
   │              │
   │              ├── POST /upload/presign  ──► Lambda: presign       ──► S3 pre-signed URL
-  │              ├── POST /agents/{id}/chat ──► Lambda: agent-router  ──► DynamoDB + Gemini API
+  │              ├── POST /agents/{id}/chat ──► Lambda: agent-router  ──► DynamoDB + Bedrock
   │              ├── GET  /agents           ──► Lambda: agent-router  ──► DynamoDB
   │              └── GET  /analytics/summary──► Lambda: agent-router  ──► DynamoDB
   │
@@ -101,7 +101,7 @@ Browser (PWA)
   "color":        "#6366f1",
   "icon":         "TrendingUp",
   "description":  "Examines raw metal pricing, historical metrics, and predicts volume patterns.",
-  "model":        "gemini-2.5-flash-lite",
+  "model":        "global.anthropic.claude-sonnet-4-5-20250929-v1:0",
   "created_at":   "2025-01-01T00:00:00Z"
 }
 
@@ -154,10 +154,10 @@ Browser (PWA)
   1. Retrieves agent system prompt from DynamoDB
   2. Pulls contextual business data (recent sales summary, top SKUs, open POs)
   3. Reconstructs conversation history from DynamoDB
-  4. Calls Gemini API with full context
+  4. Calls AWS Bedrock (Claude Sonnet 4.5) with full context
   5. For the **Executive Assistant** agent, also checks for a connected
      Google account (`USER#<id>/GOOGLE_TOKEN#v0`) and, if present, enables
-     Gemini function-calling tools for Google Calendar and Gmail
+     Bedrock tool use for Google Calendar and Gmail
      (`create_calendar_event`, `list_upcoming_calendar_events`,
      `send_email`, `list_recent_emails`)
   6. Persists user + assistant messages to DynamoDB
