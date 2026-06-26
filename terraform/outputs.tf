@@ -106,7 +106,7 @@ output "iam_role_agent_router" {
 # ────────────────────────────────────────────────────────────────────────────────
 # SSM
 # ────────────────────────────────────────────────────────────────────────────────
-output "gemini_key_ssm_param" {
-  description = "SSM parameter path for the Gemini API key"
-  value       = aws_ssm_parameter.gemini_api_key.name
+output "google_oauth_client_id_param" {
+  description = "SSM parameter path for the Google OAuth Client ID"
+  value       = aws_ssm_parameter.google_oauth_client_id.name
 }
