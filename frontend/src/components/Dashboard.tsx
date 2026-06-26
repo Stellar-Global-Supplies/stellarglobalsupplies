@@ -94,17 +94,17 @@ interface KPICardProps {
 function KPICard({ title, value, change, icon, color }: KPICardProps) {
   const positive = change >= 0;
   return (
-    <div className="kpi-card group">
+    <div className="kpi-card group card-glow ripple-effect">
       <div className="flex items-start justify-between mb-3">
         <p className="text-xs font-medium text-slate-400 uppercase tracking-wide">{title}</p>
         <div
-          className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"
+          className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 animate-pulse"
           style={{ backgroundColor: `${color}20`, color }}
         >
           {icon}
         </div>
       </div>
-      <p className="text-2xl font-bold text-slate-100 tabular-nums">{value}</p>
+      <p className="text-2xl font-bold text-slate-100 tabular-nums number-glow animate-slot">{value}</p>
       <div className="flex items-center gap-1 mt-2">
         {positive ? (
           <TrendingUp size={13} className="text-emerald-400" />
@@ -131,7 +131,7 @@ function RevenueChart({ data }: { data: AnalyticsSummary['revenue_by_month'] }) 
   }));
 
   return (
-    <div className="glass-card p-5">
+    <div className="glass-card p-5 chart-glow data-shimmer">
       <div className="flex items-center justify-between mb-4">
         <div>
           <h3 className="text-sm font-semibold text-slate-200">Revenue Trend</h3>
@@ -268,7 +268,7 @@ function BusinessTrendChart({ data }: { data: AnalyticsSummary['business_by_mont
   }));
 
   return (
-    <div className="glass-card p-5">
+    <div className="glass-card p-5 chart-glow">
       <div className="flex items-center justify-between mb-4">
         <div>
           <h3 className="text-sm font-semibold text-slate-200">Sales, Purchases & Profit</h3>
@@ -304,7 +304,7 @@ function GSTChart({ data }: { data: AnalyticsSummary['gst_by_month'] }) {
   }));
 
   return (
-    <div className="glass-card p-5">
+    <div className="glass-card p-5 chart-glow">
       <div className="flex items-center justify-between mb-4">
         <div>
           <h3 className="text-sm font-semibold text-slate-200">GST Movement</h3>
@@ -588,16 +588,20 @@ export default function Dashboard() {
       <div className="flex items-start justify-between">
         <div>
           <h2 className="text-xl font-bold text-slate-100">Operations Dashboard</h2>
-          <p className="text-sm text-slate-400 mt-0.5">
+          <p className="text-sm text-slate-400 mt-0.5 flex items-center gap-2">
             Stellar Global Supplies · {summary.period}
+            <span className="inline-flex items-center gap-1 text-2xs text-emerald-400">
+              <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-ping" />
+              Live
+            </span>
           </p>
         </div>
         <button
           onClick={() => refetch()}
-          className="flex items-center gap-2 px-3 py-1.5 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 transition-colors"
+          className="flex items-center gap-2 px-3 py-1.5 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 transition-colors ripple-effect"
         >
-          <RefreshCw size={12} />
-          Refresh
+          <RefreshCw size={12} className="animate-spin-slow" />
+          Refresh <span className="live-dot" />
         </button>
       </div>
 
@@ -660,6 +664,23 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <TopSKUs      skus={summary.top_skus} />
         <QuickActions />
+      </div>
+
+      {/* Floating sparkle particles for live feel */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
+        {[...Array(8)].map((_, i) => (
+          <div
+            key={i}
+            className="sparkle-particle absolute w-1.5 h-1.5 rounded-full"
+            style={{
+              left: `${10 + Math.random() * 80}%`,
+              top: `${10 + Math.random() * 80}%`,
+              backgroundColor: i % 2 === 0 ? '#00B98E' : '#38bdf8',
+              animationDelay: `${i * 1.5}s`,
+              animationDuration: `${3 + Math.random() * 2}s`,
+            }}
+          />
+        ))}
       </div>
     </div>
   );
