@@ -1,7 +1,7 @@
 variable "aws_region" {
   description = "Primary AWS region for all resources"
   type        = string
-  default     = "ap-south-1"
+  default     = "us-east-1"
 }
 
 variable "project_name" {
@@ -43,9 +43,9 @@ variable "acm_certificate_arn" {
 }
 
 variable "bedrock_model_id" {
-  description = "AWS Bedrock model ID for AI agents (default: Claude Sonnet 4.5)"
+  description = "AWS Bedrock model ID for AI agents (default: Claude 3.5 Sonnet)"
   type        = string
-  default     = "anthropic.claude-sonnet-4-5-20250929-v1:0"
+  default     = "anthropic.claude-3-5-sonnet-20241022-v2:0"
 }
 
 variable "google_oauth_client_id" {
@@ -109,7 +109,7 @@ variable "raw_ingest_retention_days" {
 variable "log_retention_days" {
   description = "CloudWatch log retention in days"
   type        = number
-  default     = 30
+  default     = 1
 }
 
 variable "tags" {

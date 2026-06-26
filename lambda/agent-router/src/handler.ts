@@ -19,12 +19,12 @@ import { randomUUID } from 'crypto';
 // ────────────────────────────────────────────────────────────────────────────
 // Config
 // ────────────────────────────────────────────────────────────────────────────
-const REGION         = process.env.AWS_REGION       ?? 'ap-south-1';
+const REGION         = process.env.AWS_REGION       ?? 'us-east-1';
 const DYNAMODB_TABLE = process.env.DYNAMODB_TABLE!;
 const GOOGLE_CLIENT_ID_PARAM     = process.env.GOOGLE_CLIENT_ID_PARAM!;
 const GOOGLE_CLIENT_SECRET_PARAM = process.env.GOOGLE_CLIENT_SECRET_PARAM!;
 const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN   ?? '*';
-const BEDROCK_MODEL  = process.env.BEDROCK_MODEL    ?? 'anthropic.claude-sonnet-4-5-20250929-v1:0';
+const BEDROCK_MODEL  = process.env.BEDROCK_MODEL    ?? 'anthropic.claude-3-5-sonnet-20241022-v2:0';
 const ANALYTICS_BUCKET    = process.env.ANALYTICS_BUCKET ?? 'stellar-analytics-reports-471112840461';
 const SUPABASE_URL        = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
