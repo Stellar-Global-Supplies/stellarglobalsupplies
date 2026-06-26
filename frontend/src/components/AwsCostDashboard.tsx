@@ -1,11 +1,10 @@
 import { useEffect, useState } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell,
-  PieChart, Pie, Legend,
+  PieChart, Pie, Legend, AreaChart, Area,
 } from 'recharts';
-import { fetchAwsCosts } from '@/services/aws';
-
-type AwsCost = { service: string; cost: number };
+import { fetchAwsCosts, type AwsCostResponse } from '@/services/aws';
+import { RefreshCw, TrendingUp, TrendingDown, DollarSign, Calendar } from 'lucide-react';
 
 // Colour palette for pie / bar cells
 const COLOURS = [
@@ -14,38 +13,54 @@ const COLOURS = [
 ];
 
 const fmt = (v: number) => `$${v.toFixed(2)}`;
+const fmtMonth = (m: string) => {
+  const d = new Date(m + '-01');
+  return d.toLocaleDateString(undefined, { month: 'short', year: '2-digit' });
+};
+
+const MONTH_OPTIONS = [
+  { value: 1, label: '1 Month' },
+  { value: 3, label: '3 Months' },
+  { value: 6, label: '6 Months' },
+  { value: 12, label: '12 Months' },
+];
 
 export default function AwsCostDashboard() {
-  const [data, setData] = useState<AwsCost[] | null>(null);
+  const [response, setResponse] = useState<AwsCostResponse | null>(null);
+  const [months, setMonths] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const loadData = async (m: number) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetchAwsCosts(m);
+      setResponse(res);
+    } catch (err: any) {
+      setError(err?.message ?? 'Failed to load AWS costs');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    let mounted = true;
-    (async () => {
-      try {
-        setLoading(true);
-        const res = await fetchAwsCosts();
-        if (!mounted) return;
-        // Sort descending by cost so charts are naturally ordered
-        setData([...res].sort((a, b) => b.cost - a.cost));
-      } catch (err: any) {
-        if (mounted) setError(err?.message ?? 'Failed to load AWS costs');
-      } finally {
-        if (mounted) setLoading(false);
-      }
-    })();
-    return () => { mounted = false; };
-  }, []);
+    loadData(months);
+  }, [months]);
 
-  const monthLabel = new Date().toLocaleString(undefined, { month: 'long', year: 'numeric' });
+  const data = response?.services ?? [];
+  const monthlyTotals = response?.monthly_totals ?? [];
+  const forecasts = response?.forecasts;
 
-  if (loading) return <div className="agent-card p-4">Loading cloud cost data…</div>;
+  const monthLabel = `${months} Month${months > 1 ? 's' : ''}`;
+
+  if (loading) return <div className="agent-card p-4 animate-pulse">Loading cloud cost data…</div>;
   if (error)   return <div className="agent-card p-4 text-red-300">Error: {error}</div>;
-  if (!data || data.length === 0)
+  if (data.length === 0)
     return <div className="agent-card p-4">No cost data available for {monthLabel}.</div>;
 
   const total     = data.reduce((s, d) => s + d.cost, 0);
+  const top4      = data.slice(0, 4);
   const top5      = data.slice(0, 5);
   const others    = data.slice(5).reduce((s, d) => s + d.cost, 0);
   const pieData   = [
@@ -57,30 +72,163 @@ export default function AwsCostDashboard() {
     pct: parseFloat(((d.cost / total) * 100).toFixed(1)),
   }));
 
+  // Build combined trend + forecast chart data
+  const hasMonthlyData = monthlyTotals.length > 0;
+  const trendData = monthlyTotals.map((m) => ({
+    month: fmtMonth(m.month),
+    actual: m.total,
+    forecast: null as number | null,
+  }));
+
+  // Add forecast data to chart (only from the 12-month forecast)
+  const fc12 = forecasts?.twelve_months ?? [];
+  const combinedData = hasMonthlyData ? [...trendData] : [];
+  if (fc12.length > 0) {
+    // Extend the last data point
+    const last = combinedData[combinedData.length - 1];
+    if (last) {
+      combinedData.push(...fc12.map((f) => ({
+        month: fmtMonth(f.forecastMonth),
+        actual: null as number | null,
+        forecast: f.forecastCost,
+      })));
+    }
+  }
+
+  // Forecast KPI helpers
+  const fcNext = forecasts?.next_month?.[0];
+  const fc3 = forecasts?.three_months;
+  const fc6 = forecasts?.six_months;
+  const fc12m = forecasts?.twelve_months;
+
+  // Calculate trend direction
+  const lastActual = monthlyTotals.length >= 2
+    ? monthlyTotals[monthlyTotals.length - 1].total
+    : total;
+  const prevActual = monthlyTotals.length >= 2
+    ? monthlyTotals[monthlyTotals.length - 2].total
+    : total;
+  const trend = lastActual - prevActual;
+
   return (
     <div className="space-y-4">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">Cloud Costs — {monthLabel}</h2>
-        <div className="text-sm text-slate-300">Total: {fmt(total)}</div>
+      {/* Header with filters */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h2 className="text-lg font-semibold flex items-center gap-2">
+            Cloud Costs
+            <span className="text-xs text-slate-400 font-normal">{monthLabel}</span>
+          </h2>
+          <p className="text-xs text-slate-500">Total: {fmt(total)}</p>
+        </div>
+
+        {/* Month filter */}
+        <div className="flex items-center gap-2">
+          {MONTH_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              onClick={() => setMonths(opt.value)}
+              className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${
+                months === opt.value
+                  ? 'bg-emerald-500/20 border-emerald-400/50 text-emerald-300'
+                  : 'border-slate-700 text-slate-400 hover:border-slate-500'
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+          <button
+            onClick={() => loadData(months)}
+            className="p-1.5 text-slate-400 hover:text-slate-200 transition-colors"
+            title="Refresh"
+          >
+            <RefreshCw size={14} className="animate-spin-slow" />
+          </button>
+        </div>
       </div>
 
-      {/* Summary KPI row */}
+      {/* Forecast KPI Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {top5.slice(0, 4).map((d, i) => (
-          <div key={d.service} className="agent-card p-3">
-            <div className="text-xs text-slate-400 mb-1">{d.service}</div>
-            <div className="text-lg font-semibold" style={{ color: COLOURS[i] }}>{fmt(d.cost)}</div>
-            <div className="text-xs text-slate-500">{((d.cost / total) * 100).toFixed(1)}% of total</div>
+        {[
+          { label: 'Next Month', value: fcNext?.forecastCost ?? 0, color: '#00B98E' },
+          { label: '3 Month Avg', value: fc3 ? fc3.reduce((s, f) => s + f.forecastCost, 0) / fc3.length : 0, color: '#3B82F6' },
+          { label: '6 Month Avg', value: fc6 ? fc6.reduce((s, f) => s + f.forecastCost, 0) / fc6.length : 0, color: '#F59E0B' },
+          { label: '12 Month Avg', value: fc12m ? fc12m.reduce((s, f) => s + f.forecastCost, 0) / fc12m.length : 0, color: '#8B5CF6' },
+        ].map((kpi) => (
+          <div key={kpi.label} className="agent-card p-3 card-glow">
+            <div className="text-xs text-slate-400 mb-1">{kpi.label}</div>
+            <div className="text-lg font-semibold number-glow" style={{ color: kpi.color }}>{fmt(kpi.value)}</div>
+            <div className="flex items-center gap-1 mt-1">
+              <Calendar size={10} className="text-slate-500" />
+              <span className="text-2xs text-slate-500">Forecasted</span>
+            </div>
           </div>
         ))}
       </div>
 
-      {/* Row 1: Bar chart (all services) + Pie chart */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      {/* Summary KPI row */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {top4.map((d, i) => (
+          <div key={d.service} className="agent-card p-3 card-glow">
+            <div className="text-xs text-slate-400 mb-1">{d.service}</div>
+            <div className="text-lg font-semibold" style={{ color: COLOURS[i] }}>{fmt(d.cost)}</div>
+            <div className="flex items-center gap-1 mt-1">
+              <span className="text-2xs text-slate-500">{((d.cost / total) * 100).toFixed(1)}% of total</span>
+              {i === 0 && trend !== 0 && (
+                <div className={`flex items-center gap-0.5 text-2xs ${trend > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                  {trend > 0 ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
+                  {Math.abs(trend).toFixed(1)}%
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
 
-        {/* Bar chart — cost by service */}
-        <div className="agent-card p-4">
+      {/* Trend + Forecast Chart */}
+      {combinedData.length > 0 && (
+        <div className="agent-card p-4 chart-glow">
+          <h3 className="text-sm font-medium mb-3 flex items-center gap-2">
+            Cost Trend & Forecast
+            <span className="text-2xs text-slate-500 font-normal">Actual + Projected</span>
+          </h3>
+          <div style={{ width: '100%', height: 220 }}>
+            <ResponsiveContainer>
+              <AreaChart data={combinedData} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                <YAxis tickFormatter={(v) => `$${Number(v).toFixed(0)}`} tick={{ fontSize: 11 }} width={60} />
+                <Tooltip
+                  formatter={(v: any, name: string) => [fmt(Number(v)), name === 'actual' ? 'Actual' : 'Forecast']}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="actual"
+                  stroke="#00B98E"
+                  strokeWidth={2}
+                  fill="rgba(0,185,142,0.12)"
+                  name="actual"
+                  connectNulls
+                />
+                <Area
+                  type="monotone"
+                  dataKey="forecast"
+                  stroke="#8B5CF6"
+                  strokeWidth={2}
+                  strokeDasharray="5 5"
+                  fill="rgba(139,92,246,0.08)"
+                  name="forecast"
+                  connectNulls
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
+
+      {/* Row 1: Bar chart + Pie chart */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="agent-card p-4 chart-glow">
           <h3 className="text-sm font-medium mb-3">Cost by Service</h3>
           <div style={{ width: '100%', height: 280 }}>
             <ResponsiveContainer>
@@ -99,9 +247,8 @@ export default function AwsCostDashboard() {
           </div>
         </div>
 
-        {/* Pie chart — top 5 + other */}
-        <div className="agent-card p-4">
-          <h3 className="text-sm font-medium mb-3">Cost Distribution (Top 5)</h3>
+        <div className="agent-card p-4 chart-glow">
+          <h3 className="text-sm font-medium mb-3">Cost Distribution</h3>
           <div style={{ width: '100%', height: 280 }}>
             <ResponsiveContainer>
               <PieChart>
@@ -129,19 +276,13 @@ export default function AwsCostDashboard() {
         </div>
       </div>
 
-      {/* Row 2: % share bar + data table */}
+      {/* Row 2: % share + Data table */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-
-        {/* % share horizontal bar */}
-        <div className="agent-card p-4">
+        <div className="agent-card p-4 chart-glow">
           <h3 className="text-sm font-medium mb-3">% Share by Service</h3>
           <div style={{ width: '100%', height: 280 }}>
             <ResponsiveContainer>
-              <BarChart
-                layout="vertical"
-                data={shareData}
-                margin={{ top: 4, right: 40, left: 80, bottom: 4 }}
-              >
+              <BarChart layout="vertical" data={shareData} margin={{ top: 4, right: 40, left: 80, bottom: 4 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" horizontal={false} />
                 <XAxis type="number" tickFormatter={(v) => `${v}%`} tick={{ fontSize: 11 }} domain={[0, 100]} />
                 <YAxis type="category" dataKey="service" tick={{ fontSize: 11 }} width={74} />
@@ -156,10 +297,9 @@ export default function AwsCostDashboard() {
           </div>
         </div>
 
-        {/* Detailed table */}
         <div className="agent-card p-4">
           <h3 className="text-sm font-medium mb-3">Breakdown Table</h3>
-          <div className="overflow-auto">
+          <div className="overflow-auto max-h-[280px]">
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-slate-400 text-left">
@@ -172,10 +312,7 @@ export default function AwsCostDashboard() {
                 {data.map((row, i) => (
                   <tr key={row.service} className="border-t border-white/5">
                     <td className="py-1.5 pr-4 flex items-center gap-2">
-                      <span
-                        className="inline-block w-2.5 h-2.5 rounded-full flex-shrink-0"
-                        style={{ background: COLOURS[i % COLOURS.length] }}
-                      />
+                      <span className="inline-block w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: COLOURS[i % COLOURS.length] }} />
                       {row.service}
                     </td>
                     <td className="py-1.5 pr-4">{fmt(row.cost)}</td>
