@@ -1,0 +1,13 @@
+{
+  "name": "aws-costs",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@aws-sdk/client-cost-explorer": "^3.0.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json && npm run copy",
+    "copy": "mkdir -p dist && cp -R src/* dist/ || true"
+  }
+}
