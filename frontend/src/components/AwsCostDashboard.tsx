@@ -4,7 +4,7 @@ import {
   PieChart, Pie, Legend, AreaChart, Area,
 } from 'recharts';
 import { fetchAwsCosts, type AwsCostResponse } from '@/services/aws';
-import { RefreshCw, TrendingUp, TrendingDown, DollarSign, Calendar } from 'lucide-react';
+import { RefreshCw, TrendingUp, TrendingDown, Calendar } from 'lucide-react';
 
 // Colour palette for pie / bar cells
 const COLOURS = [
@@ -82,16 +82,18 @@ export default function AwsCostDashboard() {
 
   // Add forecast data to chart (only from the 12-month forecast)
   const fc12 = forecasts?.twelve_months ?? [];
-  const combinedData = hasMonthlyData ? [...trendData] : [];
+  const combinedData: { month: string; actual: number | null; forecast: number | null }[] = hasMonthlyData ? [...trendData] : [];
   if (fc12.length > 0) {
     // Extend the last data point
     const last = combinedData[combinedData.length - 1];
     if (last) {
-      combinedData.push(...fc12.map((f) => ({
-        month: fmtMonth(f.forecastMonth),
-        actual: null as number | null,
-        forecast: f.forecastCost,
-      })));
+      fc12.forEach((f) => {
+        combinedData.push({
+          month: fmtMonth(f.forecastMonth),
+          actual: null,
+          forecast: f.forecastCost,
+        });
+      });
     }
   }
 
