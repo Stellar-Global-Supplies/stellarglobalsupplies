@@ -25,6 +25,12 @@ export default function AuthPage() {
   return (
     <main className="agentverse-shell min-h-screen text-slate-100 grid lg:grid-cols-[1.05fr_0.95fr]">
       <section className="hidden lg:flex relative overflow-hidden p-10 flex-col justify-between border-r border-white/10">
+        {/* Animated gradient orbs */}
+        <div className="absolute inset-0">
+          <div className="absolute top-20 left-20 w-96 h-96 bg-emerald-500/20 rounded-full blur-3xl animate-pulse" />
+          <div className="absolute bottom-20 right-20 w-96 h-96 bg-cyan-500/20 rounded-full blur-3xl animate-pulse delay-1000" />
+          <div className="absolute top-1/2 left-1/2 w-96 h-96 bg-purple-500/20 rounded-full blur-3xl animate-pulse delay-2000" />
+        </div>
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(0,185,142,0.20),transparent_30%),radial-gradient(circle_at_72%_34%,rgba(56,189,248,0.16),transparent_30%),radial-gradient(circle_at_42%_82%,rgba(167,139,250,0.14),transparent_26%)]" />
         <div className="relative">
           <div className="inline-flex items-center gap-3">
@@ -61,8 +67,17 @@ export default function AuthPage() {
         </div>
       </section>
 
-      <section className="flex items-center justify-center p-5">
-        <div className="w-full max-w-md">
+      <section className="flex items-center justify-center p-5 relative">
+        {/* Animated background particles */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute top-10 left-10 w-2 h-2 bg-emerald-400/60 rounded-full animate-ping" />
+          <div className="absolute top-1/4 right-20 w-2 h-2 bg-cyan-400/60 rounded-full animate-ping delay-300" />
+          <div className="absolute bottom-20 left-1/4 w-2 h-2 bg-purple-400/60 rounded-full animate-ping delay-700" />
+          <div className="absolute bottom-1/3 right-1/3 w-2 h-2 bg-blue-400/60 rounded-full animate-ping delay-1000" />
+          <div className="absolute top-1/2 left-20 w-1.5 h-1.5 bg-emerald-300/60 rounded-full animate-ping delay-500" />
+        </div>
+
+        <div className="w-full max-w-md relative z-10">
           <div className="lg:hidden flex items-center gap-3 mb-8">
             <div className="h-10 w-10 rounded-xl bg-emerald-500/15 border border-emerald-400/30 flex items-center justify-center text-emerald-300">
               <Building2 size={20} />
@@ -73,7 +88,7 @@ export default function AuthPage() {
             </div>
           </div>
 
-          <div className="agent-card p-6 sm:p-7">
+          <div className="agent-card p-6 sm:p-7 backdrop-blur-xl bg-slate-800/50 border-2 border-emerald-500/20 shadow-2xl shadow-emerald-500/10">
             <div className="mb-6">
               <p className="agent-chip w-fit text-[#00B98E] border-[rgba(0,185,142,0.28)] bg-[rgba(0,185,142,0.08)]">
                 <ShieldCheck size={13} />

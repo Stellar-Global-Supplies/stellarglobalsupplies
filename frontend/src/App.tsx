@@ -389,19 +389,95 @@ export default function App() {
   }
 
   return (
-    <div className="relative min-h-screen bg-slate-950 text-slate-100">
+    <div className="relative min-h-screen bg-slate-950 text-slate-100 overflow-hidden">
+      {/* Animated background orbs */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden">
+        <div className="absolute top-0 left-0 w-[500px] h-[500px] bg-emerald-500/10 rounded-full blur-3xl animate-pulse" />
+        <div className="absolute top-1/2 right-0 w-[600px] h-[600px] bg-cyan-500/10 rounded-full blur-3xl animate-pulse delay-1000" />
+        <div className="absolute bottom-0 left-1/3 w-[500px] h-[500px] bg-purple-500/10 rounded-full blur-3xl animate-pulse delay-2000" />
+        <div className="absolute top-1/4 left-1/2 w-[400px] h-[400px] bg-blue-500/10 rounded-full blur-3xl animate-pulse delay-3000" />
+      </div>
+
       {/* Subtle background grid */}
       <div
-        className="fixed inset-0 pointer-events-none opacity-30"
-        style={{ backgroundImage: "url(\"data:image/svg+xml,%3Csvg width='32' height='32' viewBox='0 0 32 32' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 .5H32M.5 0V32' stroke='%2300B98E' stroke-opacity='0.10'/%3E%3C/svg%3E\")" }}
+        className="fixed inset-0 pointer-events-none opacity-20"
+        style={{ backgroundImage: "url(\"data:image/svg+xml,%3Csvg width='32' height='32' viewBox='0 0 32 32' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 .5H32M.5 0V32' stroke='%2300B98E' stroke-opacity='0.15'/%3E%3C/svg%3E\")" }}
         aria-hidden="true"
       />
+
+      {/* Floating particles */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden">
+        {[...Array(20)].map((_, i) => (
+          <div
+            key={i}
+            className="absolute w-1 h-1 bg-emerald-400/40 rounded-full animate-float"
+            style={{
+              left: `${Math.random() * 100}%`,
+              top: `${Math.random() * 100}%`,
+              animationDelay: `${Math.random() * 5}s`,
+              animationDuration: `${15 + Math.random() * 10}s`,
+            }}
+          />
+        ))}
+      </div>
 
       <PWAUpdateBanner />
       <Sidebar />
       <Header />
       <MainContent />
       <NotificationToasts />
+
+      {/* Global CSS for animations */}
+      <style>{`
+        @keyframes float {
+          0%, 100% {
+            transform: translateY(0) translateX(0);
+            opacity: 0;
+          }
+          10% {
+            opacity: 0.6;
+          }
+          90% {
+            opacity: 0.6;
+          }
+          100% {
+            transform: translateY(-100vh) translateX(50px);
+            opacity: 0;
+          }
+        }
+
+        .animate-float {
+          animation: float linear infinite;
+        }
+
+        .delay-300 {
+          animation-delay: 300ms;
+        }
+
+        .delay-700 {
+          animation-delay: 700ms;
+        }
+
+        .delay-1000 {
+          animation-delay: 1000ms;
+        }
+
+        .delay-2000 {
+          animation-delay: 2000ms;
+        }
+
+        .delay-3000 {
+          animation-delay: 3000ms;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .animate-float,
+          .animate-ping,
+          .animate-pulse {
+            animation: none;
+          }
+        }
+      `}</style>
     </div>
   );
 }
