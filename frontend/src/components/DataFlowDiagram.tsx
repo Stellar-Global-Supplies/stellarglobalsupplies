@@ -57,7 +57,7 @@ const DataFlowDiagram: React.FC = () => {
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
         </svg>
       ),
-      description: 'Claude Sonnet 4.5',
+      description: 'Amazon Nova Pro',
     },
     {
       id: 'supabase',
@@ -88,39 +88,39 @@ const DataFlowDiagram: React.FC = () => {
       </h3>
 
       <div className="relative overflow-x-auto">
-        <div className="flex items-center justify-between min-w-[1200px] px-4">
+        <div className="flex items-center justify-between min-w-[1400px] px-8 gap-2">
           {flowSteps.map((step, index) => (
             <React.Fragment key={step.id}>
               {/* Step Node */}
-              <div className="flex flex-col items-center relative">
+              <div className="flex flex-col items-center relative flex-shrink-0">
                 {/* Animated pulse ring */}
                 <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="w-20 h-20 rounded-full bg-gradient-to-r from-cyan-500 to-blue-500 opacity-20 animate-ping" />
+                  <div className="w-24 h-24 rounded-full bg-gradient-to-r from-cyan-500 to-blue-500 opacity-20 animate-ping" />
                 </div>
 
                 {/* Main icon container */}
-                <div className="relative w-20 h-20 rounded-full bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-500/50 z-10">
+                <div className="relative w-24 h-24 rounded-full bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-500/50 z-10">
                   <div className="text-white">
                     {step.icon}
                   </div>
                 </div>
 
                 {/* Label */}
-                <div className="mt-3 text-center">
+                <div className="mt-4 text-center px-2">
                   <div className="text-white font-semibold text-sm">{step.label}</div>
-                  <div className="text-slate-400 text-xs">{step.description}</div>
+                  <div className="text-slate-400 text-xs mt-1">{step.description}</div>
                 </div>
               </div>
 
               {/* Animated connection line */}
               {index < flowSteps.length - 1 && (
-                <div className="flex-1 relative h-1 mx-2">
+                <div className="flex-1 relative h-1.5 mx-3">
                   {/* Base line */}
                   <div className="absolute inset-0 bg-gradient-to-r from-cyan-500/50 to-blue-500/50 rounded-full" />
 
                   {/* Animated flowing dots */}
                   <div className="absolute inset-0 overflow-hidden">
-                    <div className="animate-flow w-3 h-3 rounded-full bg-cyan-400 shadow-lg shadow-cyan-400/75" />
+                    <div className="animate-flow w-4 h-4 rounded-full bg-cyan-400 shadow-lg shadow-cyan-400/75" />
                   </div>
                 </div>
               )}
@@ -149,26 +149,26 @@ const DataFlowDiagram: React.FC = () => {
 
       {/* CSS Animation */}
       <style>{`
-        @keyframes flow {
-          0% {
-            transform: translateX(-100%);
-            opacity: 0;
-          }
-          10% {
-            opacity: 1;
-          }
-          90% {
-            opacity: 1;
-          }
-          100% {
-            transform: translateX(400%);
-            opacity: 0;
-          }
+      @keyframes flow {
+        0% {
+          transform: translateX(-100%);
+          opacity: 0;
         }
+        15% {
+          opacity: 1;
+        }
+        85% {
+          opacity: 1;
+        }
+        100% {
+          transform: translateX(500%);
+          opacity: 0;
+        }
+      }
 
-        .animate-flow {
-          animation: flow 3s linear infinite;
-        }
+      .animate-flow {
+        animation: flow 2.5s linear infinite;
+      }
 
         @media (prefers-reduced-motion: reduce) {
           .animate-flow,

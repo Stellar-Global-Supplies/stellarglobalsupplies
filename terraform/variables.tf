@@ -43,9 +43,9 @@ variable "acm_certificate_arn" {
 }
 
 variable "bedrock_model_id" {
-  description = "AWS Bedrock model ID for AI agents (default: Claude Sonnet 4.5)"
+  description = "AWS Bedrock model ID for AI agents (default: Amazon Nova Pro)"
   type        = string
-  default     = "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
+  default     = "amazon.nova-pro-v1:0"
 }
 
 variable "google_oauth_client_id" {

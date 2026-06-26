@@ -14,9 +14,9 @@ route53_zone_id     = "Z0123456789ABCDEFGHIJ"
 # ops.stellarglobalsupplies.com
 acm_certificate_arn = "arn:aws:acm:us-east-1:123456789012:certificate/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
 
-# AWS Bedrock model ID (default: Claude Sonnet 4.5)
+# AWS Bedrock model ID (default: Amazon Nova Pro)
 # Override if you want to use a different Bedrock model
-bedrock_model_id    = "anthropic.claude-sonnet-4-5-20250929-v1:0"
+bedrock_model_id    = "amazon.nova-pro-v1:0"
 
 # ─────────────────────────────────────────────────────────────────────────
 # Google OAuth 2.0 — for the Executive Assistant agent's Calendar/Gmail access
