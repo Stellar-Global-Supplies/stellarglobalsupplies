@@ -24,7 +24,7 @@ const DYNAMODB_TABLE = process.env.DYNAMODB_TABLE!;
 const GOOGLE_CLIENT_ID_PARAM     = process.env.GOOGLE_CLIENT_ID_PARAM!;
 const GOOGLE_CLIENT_SECRET_PARAM = process.env.GOOGLE_CLIENT_SECRET_PARAM!;
 const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN   ?? '*';
-const BEDROCK_MODEL  = process.env.BEDROCK_MODEL    ?? 'anthropic.claude-sonnet-4-5-20250929-v1:0';
+const BEDROCK_MODEL  = process.env.BEDROCK_MODEL    ?? 'us.anthropic.claude-sonnet-4-5-20250929-v1:0';
 const ANALYTICS_BUCKET    = process.env.ANALYTICS_BUCKET ?? 'stellar-analytics-reports-471112840461';
 const SUPABASE_URL        = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -1291,7 +1291,6 @@ async function handleAgentChat(
       messages:    [...bedrockMessages, { role: 'user', content: [{ text: message.trim() }] }],
       inferenceConfig: {
         temperature: 0.7,
-        topP:        0.95,
         maxTokens:   2048,
       },
       ...(toolConfig.tools ? { toolConfig } : {}),
@@ -1357,7 +1356,6 @@ async function handleAgentChat(
         messages:    bedrockMessages,
         inferenceConfig: {
           temperature: 0.7,
-          topP:        0.95,
           maxTokens:   2048,
         },
         ...(toolConfig.tools ? { toolConfig } : {}),
