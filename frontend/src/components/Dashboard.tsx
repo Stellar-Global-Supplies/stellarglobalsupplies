@@ -13,6 +13,7 @@ import {
   Factory,
   ReceiptText,
 } from 'lucide-react';
+import DataFlowDiagram from './DataFlowDiagram';
 import {
   AreaChart,
   Area,
@@ -598,6 +599,11 @@ export default function Dashboard() {
           <RefreshCw size={12} />
           Refresh
         </button>
+      </div>
+
+      {/* Data Flow Diagram */}
+      <div className="mb-6">
+        <DataFlowDiagram />
       </div>
 
       {/* KPI cards */}
