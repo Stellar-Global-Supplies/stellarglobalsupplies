@@ -114,7 +114,7 @@ jobs:
 
     strategy:
       matrix:
-        lambda: [presign, ingest, agent-router, google-auth]
+        lambda: [presign, ingest, agent-router, google-auth, aws-costs]
       fail-fast: false   # ← one Lambda failure must NOT cancel the others
 
     steps:
@@ -199,6 +199,12 @@ jobs:
         with:
           name: lambda-google-auth-dist
           path: lambda/google-auth/dist/
+
+      - name: Download lambda-aws-costs dist
+        uses: actions/download-artifact@v4
+        with:
+          name: lambda-aws-costs-dist
+          path: lambda/aws-costs/dist/
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
