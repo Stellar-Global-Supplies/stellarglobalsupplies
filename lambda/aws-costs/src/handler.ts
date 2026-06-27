@@ -2,24 +2,6 @@ import { APIGatewayProxyHandlerV2 } from 'aws-lambda';
 
 // Cost Explorer API disabled to avoid charges
 // Using mock data instead
-// const client = new CostExplorerClient({ region: process.env.AWS_REGION ?? 'us-east-1' });
-
-/** Fetch AWS costs for a given number of months back, grouped by service */
-async function fetchCostsForPeriod(monthsBack: number) {
-  const now = new Date();
-  const end = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10); // last day of current month
-  const start = new Date(now.getFullYear(), now.getMonth() - monthsBack + 1, 1).toISOString().slice(0, 10);
-
-  const cmd = new GetCostAndUsageCommand({
-    TimePeriod: { Start: start, End: end },
-    Granularity: 'MONTHLY',
-    Metrics: ['UnblendedCost'],
-    GroupBy: [{ Type: 'DIMENSION', Key: 'SERVICE' }],
-  });
-
-  const resp = await client.send(cmd);
-  return resp.ResultsByTime ?? [];
-}
 
 /** Aggregate multiple months of cost data into a single service-level breakdown */
 function aggregateByService(results: any[]): { service: string; cost: number }[] {
