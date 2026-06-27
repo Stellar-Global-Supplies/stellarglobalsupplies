@@ -420,6 +420,41 @@ resource "aws_ssm_parameter" "google_oauth_client_secret" {
   tags        = var.tags
 }
 
+
+# ────────────────────────────────────────────────────────────────────────────────
+# SSM PARAMETER STORE — SOCIAL MEDIA CREDENTIALS (SecureString)
+# ────────────────────────────────────────────────────────────────────────────────
+resource "aws_ssm_parameter" "linkedin_client_id" {
+  name        = "/${local.prefix}/linkedin-client-id"
+  description = "LinkedIn OAuth 2.0 Client ID for Company Page posting"
+  type        = "SecureString"
+  value       = var.linkedin_client_id
+  tags        = var.tags
+}
+
+resource "aws_ssm_parameter" "linkedin_client_secret" {
+  name        = "/${local.prefix}/linkedin-client-secret"
+  description = "LinkedIn OAuth 2.0 Client Secret for Company Page posting"
+  type        = "SecureString"
+  value       = var.linkedin_client_secret
+  tags        = var.tags
+}
+
+resource "aws_ssm_parameter" "facebook_client_id" {
+  name        = "/${local.prefix}/facebook-client-id"
+  description = "Facebook App Client ID for Page posting"
+  type        = "SecureString"
+  value       = var.facebook_client_id
+  tags        = var.tags
+}
+
+resource "aws_ssm_parameter" "facebook_client_secret" {
+  name        = "/${local.prefix}/facebook-client-secret"
+  description = "Facebook App Client Secret for Page posting"
+  type        = "SecureString"
+  value       = var.facebook_client_secret
+  tags        = var.tags
+}
 # ────────────────────────────────────────────────────────────────────────────────
 # IAM — SHARED LAMBDA TRUST POLICY
 # ────────────────────────────────────────────────────────────────────────────────
@@ -646,6 +681,91 @@ resource "aws_lambda_function" "email_sender" {
     }
   }
 
+
+# ---- social-poster Lambda role ----
+resource "aws_iam_role" "social_poster" {
+  name               = "${local.prefix}-social-poster-role"
+  assume_role_policy = data.aws_iam_policy_document.lambda_trust.json
+}
+
+resource "aws_iam_role_policy" "social_poster" {
+  name = "${local.prefix}-social-poster-policy"
+  role = aws_iam_role.social_poster.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid      = "DynamoDBTokens"
+        Effect   = "Allow"
+        Action   = ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:DeleteItem", "dynamodb:Query"]
+        Resource = aws_dynamodb_table.ops.arn
+      },
+      {
+        Sid      = "SSMRead"
+        Effect   = "Allow"
+        Action   = ["ssm:GetParameter"]
+        Resource = [
+          aws_ssm_parameter.linkedin_client_id.arn,
+          aws_ssm_parameter.linkedin_client_secret.arn,
+          aws_ssm_parameter.facebook_client_id.arn,
+          aws_ssm_parameter.facebook_client_secret.arn,
+        ]
+      },
+      {
+        Sid      = "S3Attachments"
+        Effect   = "Allow"
+        Action   = ["s3:GetObject"]
+        Resource = "${aws_s3_bucket.attachments.arn}/*"
+      },
+      {
+        Sid      = "Logs"
+        Effect   = "Allow"
+        Action   = ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"]
+        Resource = "arn:aws:logs:*:*:*"
+      }
+    ]
+  })
+}
+
+resource "aws_cloudwatch_log_group" "social_poster" {
+  name              = "/aws/lambda/${local.prefix}-social-poster"
+  retention_in_days = var.log_retention_days
+}
+
+data "archive_file" "social_poster" {
+  type        = "zip"
+  source_dir  = "${local.lambda_dir}/social-poster/dist"
+  output_path = "${path.module}/.terraform-build/social-poster.zip"
+}
+
+resource "aws_lambda_function" "social_poster" {
+  function_name    = "${local.prefix}-social-poster"
+  role             = aws_iam_role.social_poster.arn
+  handler          = "handler.handler"
+  runtime          = var.lambda_runtime
+  filename         = data.archive_file.social_poster.output_path
+  source_code_hash = data.archive_file.social_poster.output_base64sha256
+  memory_size      = 256
+  timeout          = 60
+
+  environment {
+    variables = {
+      DYNAMODB_TABLE              = aws_dynamodb_table.ops.name
+      ATTACHMENTS_BUCKET          = aws_s3_bucket.attachments.bucket
+      LINKEDIN_CLIENT_ID_PARAM    = aws_ssm_parameter.linkedin_client_id.name
+      LINKEDIN_CLIENT_SECRET_PARAM = aws_ssm_parameter.linkedin_client_secret.name
+      LINKEDIN_REDIRECT_URI       = "${aws_apigatewayv2_api.ops.api_endpoint}/social/linkedin/callback"
+      FACEBOOK_CLIENT_ID_PARAM    = aws_ssm_parameter.facebook_client_id.name
+      FACEBOOK_CLIENT_SECRET_PARAM = aws_ssm_parameter.facebook_client_secret.name
+      FACEBOOK_REDIRECT_URI       = "${aws_apigatewayv2_api.ops.api_endpoint}/social/facebook/callback"
+      FRONTEND_URL                = "https://${local.fqdn}"
+      ALLOWED_ORIGIN              = "https://${local.fqdn}"
+      ENVIRONMENT                 = var.environment
+    }
+  }
+
+  depends_on = [aws_cloudwatch_log_group.social_poster]
+}
   depends_on = [aws_cloudwatch_log_group.email_sender]
 }
 
@@ -1166,6 +1286,86 @@ resource "aws_apigatewayv2_route" "email_send" {
   target    = "integrations/${aws_apigatewayv2_integration.email_sender.id}"
 }
 
+
+# ---- social-poster API Integration ----
+resource "aws_apigatewayv2_integration" "social_poster" {
+  api_id                 = aws_apigatewayv2_api.ops.id
+  integration_type       = "AWS_PROXY"
+  integration_uri        = aws_lambda_function.social_poster.invoke_arn
+  payload_format_version = "2.0"
+  timeout_milliseconds   = 30000
+}
+
+# LinkedIn routes
+resource "aws_apigatewayv2_route" "linkedin_url" {
+  api_id    = aws_apigatewayv2_api.ops.id
+  route_key = "GET /social/linkedin/url"
+  target    = "integrations/${aws_apigatewayv2_integration.social_poster.id}"
+}
+
+resource "aws_apigatewayv2_route" "linkedin_callback" {
+  api_id    = aws_apigatewayv2_api.ops.id
+  route_key = "GET /social/linkedin/callback"
+  target    = "integrations/${aws_apigatewayv2_integration.social_poster.id}"
+}
+
+resource "aws_apigatewayv2_route" "linkedin_status" {
+  api_id    = aws_apigatewayv2_api.ops.id
+  route_key = "GET /social/linkedin/status"
+  target    = "integrations/${aws_apigatewayv2_integration.social_poster.id}"
+}
+
+resource "aws_apigatewayv2_route" "linkedin_disconnect" {
+  api_id    = aws_apigatewayv2_api.ops.id
+  route_key = "POST /social/linkedin/disconnect"
+  target    = "integrations/${aws_apigatewayv2_integration.social_poster.id}"
+}
+
+resource "aws_apigatewayv2_route" "linkedin_post" {
+  api_id    = aws_apigatewayv2_api.ops.id
+  route_key = "POST /social/linkedin/post"
+  target    = "integrations/${aws_apigatewayv2_integration.social_poster.id}"
+}
+
+# Facebook routes
+resource "aws_apigatewayv2_route" "facebook_url" {
+  api_id    = aws_apigatewayv2_api.ops.id
+  route_key = "GET /social/facebook/url"
+  target    = "integrations/${aws_apigatewayv2_integration.social_poster.id}"
+}
+
+resource "aws_apigatewayv2_route" "facebook_callback" {
+  api_id    = aws_apigatewayv2_api.ops.id
+  route_key = "GET /social/facebook/callback"
+  target    = "integrations/${aws_apigatewayv2_integration.social_poster.id}"
+}
+
+resource "aws_apigatewayv2_route" "facebook_status" {
+  api_id    = aws_apigatewayv2_api.ops.id
+  route_key = "GET /social/facebook/status"
+  target    = "integrations/${aws_apigatewayv2_integration.social_poster.id}"
+}
+
+resource "aws_apigatewayv2_route" "facebook_disconnect" {
+  api_id    = aws_apigatewayv2_api.ops.id
+  route_key = "POST /social/facebook/disconnect"
+  target    = "integrations/${aws_apigatewayv2_integration.social_poster.id}"
+}
+
+resource "aws_apigatewayv2_route" "facebook_post" {
+  api_id    = aws_apigatewayv2_api.ops.id
+  route_key = "POST /social/facebook/post"
+  target    = "integrations/${aws_apigatewayv2_integration.social_poster.id}"
+}
+
+# Lambda permission for API Gateway
+resource "aws_lambda_permission" "apigw_social_poster" {
+  statement_id  = "AllowAPIGWInvokeSocialPoster"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.social_poster.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_apigatewayv2_api.ops.execution_arn}/*/*"
+}
 resource "aws_apigatewayv2_integration" "email_sender" {
   api_id           = aws_apigatewayv2_api.ops.id
   integration_type = "AWS_PROXY"

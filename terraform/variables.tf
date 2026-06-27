@@ -141,3 +141,33 @@ variable "sender_email" {
   type        = string
   default     = "noreply@stellarglobalsupplies.com"
 }
+
+# ─────────────────────────────────────────────────────────────────────────
+# LinkedIn OAuth 2.0 — for Company Page posting
+# ─────────────────────────────────────────────────────────────────────────
+variable "linkedin_client_id" {
+  description = "LinkedIn OAuth 2.0 Client ID for Company Page posting"
+  type        = string
+  sensitive   = true
+}
+
+variable "linkedin_client_secret" {
+  description = "LinkedIn OAuth 2.0 Client Secret"
+  type        = string
+  sensitive   = true
+}
+
+# ─────────────────────────────────────────────────────────────────────────
+# Facebook OAuth 2.0 — for Facebook Page posting
+# ─────────────────────────────────────────────────────────────────────────
+variable "facebook_client_id" {
+  description = "Facebook App Client ID for Page posting"
+  type        = string
+  sensitive   = true
+}
+
+variable "facebook_client_secret" {
+  description = "Facebook App Client Secret"
+  type        = string
+  sensitive   = true
+}

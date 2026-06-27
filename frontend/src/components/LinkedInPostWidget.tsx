@@ -1,16 +1,48 @@
-import { useState, useCallback } from 'react';
-import { Linkedin, Upload, Send, Loader2, XCircle } from 'lucide-react';
-import { useMutation } from '@tanstack/react-query';
+import { useState, useCallback, useEffect } from 'react';
+import { Linkedin, Upload, Send, Loader2, XCircle, Link } from 'lucide-react';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { supabase } from '@/lib/supabase';
+import { getLinkedInConnectUrl, getLinkedInStatus, disconnectLinkedIn, postToLinkedIn } from '@/api/client';
 
 type LinkedInPostData = {
   content: string;
-  imageFile?: File;
+  imageUrl?: string;
 };
 
 export default function LinkedInPostWidget() {
   const [content, setContent] = useState('');
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string>('');
+  const [uploadedImageUrl, setUploadedImageUrl] = useState<string | undefined>(undefined);
+
+  // Get current user
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user?.id) setUserId(session.user.id);
+    });
+  }, []);
+
+  // Check LinkedIn connection status
+  const { data: connectionStatus, refetch: refetchStatus } = useQuery({
+    queryKey: ['linkedin-status', userId],
+    queryFn: () => getLinkedInStatus(userId),
+    enabled: !!userId,
+  });
+
+  // Handle OAuth redirect (check for connected=true in URL)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('social') === 'linkedin') {
+      if (params.get('connected') === 'true') {
+        refetchStatus();
+        window.history.replaceState({}, '', window.location.pathname);
+      } else if (params.get('error')) {
+        alert(`LinkedIn connection failed: ${params.get('error')}`);
+        window.history.replaceState({}, '', window.location.pathname);
+      }
+    }
+  }, [refetchStatus]);
 
   const handleImageUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -36,27 +68,14 @@ export default function LinkedInPostWidget() {
 
   const postMutation = useMutation({
     mutationFn: async (data: LinkedInPostData) => {
-      // TODO: Implement LinkedIn API call
-      // This will require:
-      // 1. LinkedIn OAuth integration (similar to Google OAuth)
-      // 2. Store LinkedIn access tokens in DynamoDB
-      // 3. Upload image to LinkedIn (if provided)
-      // 4. Call LinkedIn UGC API to create post
-      
-      console.log('Posting to LinkedIn:', data);
-      
-      // Mock success for now
-      return new Promise((resolve) => {
-        setTimeout(() => {
-          resolve({ success: true, postId: 'mock-post-id' });
-        }, 1000);
-      });
+      if (!userId) throw new Error('Not authenticated');
+      return postToLinkedIn(userId, data.content, data.imageUrl);
     },
     onSuccess: () => {
-      alert('LinkedIn post published successfully!');
       setContent('');
       setImageFile(null);
       setImagePreview(null);
+      setUploadedImageUrl(undefined);
     },
     onError: (error: any) => {
       alert(`Failed to post: ${error?.message ?? 'Unknown error'}`);
@@ -73,7 +92,7 @@ export default function LinkedInPostWidget() {
 
     postMutation.mutate({
       content: content.trim(),
-      imageFile: imageFile || undefined,
+      imageUrl: uploadedImageUrl,
     });
   };
 
@@ -85,6 +104,39 @@ export default function LinkedInPostWidget() {
         <Linkedin size={18} className="text-blue-400" />
         LinkedIn Post
       </h2>
+
+      {/* Connection Status */}
+      {userId && connectionStatus?.connected ? (
+        <div className="flex items-center justify-between p-2 bg-emerald-900/30 border border-emerald-700/50 rounded-lg mb-4">
+          <div className="flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full bg-emerald-400" />
+            <span className="text-xs text-emerald-300">
+              Connected: {connectionStatus.linkedin_page_name || 'LinkedIn Company Page'}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={async () => {
+              await disconnectLinkedIn(userId);
+              refetchStatus();
+            }}
+            className="text-xs text-red-400 hover:text-red-300"
+          >
+            Disconnect
+          </button>
+        </div>
+      ) : userId ? (
+        <div className="flex items-center justify-between p-2 bg-slate-800/50 border border-slate-700 rounded-lg mb-4">
+          <span className="text-xs text-slate-400">Not connected to LinkedIn</span>
+          <a
+            href={getLinkedInConnectUrl(userId)}
+            className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300"
+          >
+            <Link size={12} />
+            Connect LinkedIn
+          </a>
+        </div>
+      ) : null}
 
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* Post Content */}

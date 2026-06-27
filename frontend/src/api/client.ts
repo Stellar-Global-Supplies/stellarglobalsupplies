@@ -257,6 +257,73 @@ export async function sendBulkEmail(payload: BulkEmailRequest): Promise<BulkEmai
   }
 }
 
+// ────────────────────────────────────────────────────────────────────────────
+// Social Media — LinkedIn & Facebook posting
+// ────────────────────────────────────────────────────────────────────────────
+
+export interface LinkedInConnectionStatus {
+  connected: boolean;
+  linkedin_page_name?: string;
+  linkedin_urn?: string;
+  connected_at?: string;
+  scope?: string;
+}
+
+export interface FacebookConnectionStatus {
+  connected: boolean;
+  facebook_page_id?: string;
+  facebook_page_name?: string;
+  connected_at?: string;
+}
+
+export function getLinkedInConnectUrl(userId: string): string {
+  return `${BASE_URL}/social/linkedin/url?user_id=${encodeURIComponent(userId)}`;
+}
+
+export async function getLinkedInStatus(userId: string): Promise<LinkedInConnectionStatus> {
+  return request<LinkedInConnectionStatus>(
+    `/social/linkedin/status?user_id=${encodeURIComponent(userId)}`,
+  );
+}
+
+export async function disconnectLinkedIn(userId: string): Promise<{ success: boolean }> {
+  return request<{ success: boolean }>('/social/linkedin/disconnect', {
+    method: 'POST',
+    body: JSON.stringify({ user_id: userId }),
+  });
+}
+
+export async function postToLinkedIn(userId: string, content: string, imageUrl?: string): Promise<{ success: boolean; postId?: string; platform: string }> {
+  return request<{ success: boolean; postId?: string; platform: string }>('/social/linkedin/post', {
+    method: 'POST',
+    body: JSON.stringify({ user_id: userId, content, image_url: imageUrl }),
+  });
+}
+
+export function getFacebookConnectUrl(userId: string): string {
+  return `${BASE_URL}/social/facebook/url?user_id=${encodeURIComponent(userId)}`;
+}
+
+export async function getFacebookStatus(userId: string): Promise<FacebookConnectionStatus> {
+  return request<FacebookConnectionStatus>(
+    `/social/facebook/status?user_id=${encodeURIComponent(userId)}`,
+  );
+}
+
+export async function disconnectFacebook(userId: string): Promise<{ success: boolean }> {
+  return request<{ success: boolean }>('/social/facebook/disconnect', {
+    method: 'POST',
+    body: JSON.stringify({ user_id: userId }),
+  });
+}
+
+export async function postToFacebook(userId: string, message: string, imageUrl?: string): Promise<{ success: boolean; postId?: string; platform: string }> {
+  return request<{ success: boolean; postId?: string; platform: string }>('/social/facebook/post', {
+    method: 'POST',
+    body: JSON.stringify({ user_id: userId, message, image_url: imageUrl }),
+  });
+}
+
 export async function fetchMetaAnalytics(period: AnalyticsPeriod = 'weekly'): Promise<MetaAnalyticsData> {
   try {
     const data = await request<MetaAnalyticsData>(`/analytics/meta?period=${period}`);

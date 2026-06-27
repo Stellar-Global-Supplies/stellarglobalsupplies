@@ -32,6 +32,10 @@ concurrency:
 # TF_VAR_bedrock_model_id            AWS Bedrock model ID (default: Claude Sonnet 4.5)
 # TF_VAR_google_oauth_client_id      Google OAuth 2.0 Client ID
 # TF_VAR_google_oauth_client_secret  Google OAuth 2.0 Client Secret
+# TF_VAR_linkedin_client_id          LinkedIn OAuth 2.0 Client ID
+# TF_VAR_linkedin_client_secret      LinkedIn OAuth 2.0 Client Secret
+# TF_VAR_facebook_client_id          Facebook App Client ID
+# TF_VAR_facebook_client_secret      Facebook App Client Secret
 # ─────────────────────────────────────────────────────────────────────────────
 
 env:
@@ -114,7 +118,7 @@ jobs:
 
     strategy:
       matrix:
-        lambda: [presign, ingest, agent-router, google-auth, aws-costs, dynamodb-cleanup, email-sender, cur-processor]
+        lambda: [presign, ingest, agent-router, google-auth, aws-costs, dynamodb-cleanup, email-sender, cur-processor, social-poster]
       fail-fast: false   # ← one Lambda failure must NOT cancel the others
 
     steps:
@@ -218,29 +222,11 @@ jobs:
           name: lambda-email-sender-dist
           path: lambda/email-sender/dist/
 
-      - name: Download lambda-cur-processor dist
+      - name: Download lambda-social-poster dist
         uses: actions/download-artifact@v4
         with:
-          name: lambda-cur-processor-dist
-          path: lambda/cur-processor/dist/
-
-      - name: Download lambda-dynamodb-cleanup dist
-        uses: actions/download-artifact@v4
-        with:
-          name: lambda-dynamodb-cleanup-dist
-          path: lambda/dynamodb-cleanup/dist/
-
-      - name: Download lambda-email-sender dist
-        uses: actions/download-artifact@v4
-        with:
-          name: lambda-email-sender-dist
-          path: lambda/email-sender/dist/
-
-      - name: Download lambda-cur-processor dist
-        uses: actions/download-artifact@v4
-        with:
-          name: lambda-cur-processor-dist
-          path: lambda/cur-processor/dist/
+          name: lambda-social-poster-dist
+          path: lambda/social-poster/dist/
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -287,13 +273,21 @@ jobs:
             -var="google_oauth_client_id=${{ secrets.TF_VAR_google_oauth_client_id }}" \
             -var="google_oauth_client_secret=${{ secrets.TF_VAR_google_oauth_client_secret }}" \
             -var="supabase_url=${{ secrets.TF_VAR_SUPABASE_URL }}" \
-            -var="supabase_service_role_key=${{ secrets.TF_VAR_SUPABASE_SERVICE_ROLE_KEY }}"
+            -var="supabase_service_role_key=${{ secrets.TF_VAR_SUPABASE_SERVICE_ROLE_KEY }}" \
+            -var="linkedin_client_id=${{ secrets.TF_VAR_linkedin_client_id }}" \
+            -var="linkedin_client_secret=${{ secrets.TF_VAR_linkedin_client_secret }}" \
+            -var="facebook_client_id=${{ secrets.TF_VAR_facebook_client_id }}" \
+            -var="facebook_client_secret=${{ secrets.TF_VAR_facebook_client_secret }}"
         env:
           TF_VAR_route53_zone_id:              ${{ secrets.TF_VAR_route53_zone_id }}
           TF_VAR_acm_certificate_arn:          ${{ secrets.TF_VAR_acm_certificate_arn }}
           TF_VAR_bedrock_model_id:             ${{ secrets.TF_VAR_bedrock_model_id }}
           TF_VAR_google_oauth_client_id:       ${{ secrets.TF_VAR_google_oauth_client_id }}
           TF_VAR_google_oauth_client_secret:   ${{ secrets.TF_VAR_google_oauth_client_secret }}
+          TF_VAR_linkedin_client_id:           ${{ secrets.TF_VAR_linkedin_client_id }}
+          TF_VAR_linkedin_client_secret:       ${{ secrets.TF_VAR_linkedin_client_secret }}
+          TF_VAR_facebook_client_id:           ${{ secrets.TF_VAR_facebook_client_id }}
+          TF_VAR_facebook_client_secret:       ${{ secrets.TF_VAR_facebook_client_secret }}
 
       - name: Terraform apply
         working-directory: ${{ env.TF_DIR }}
