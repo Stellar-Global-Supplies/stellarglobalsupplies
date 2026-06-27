@@ -1,8 +1,7 @@
-import { useState, useCallback, useEffect } from 'react';
-import { Facebook, Upload, Send, Loader2, XCircle, Link } from 'lucide-react';
+import { useState, useCallback } from 'react';
+import { Facebook, Upload, Send, Loader2, XCircle } from 'lucide-react';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { supabase } from '@/lib/supabase';
-import { getFacebookConnectUrl, getFacebookStatus, disconnectFacebook, postToFacebook } from '@/api/client';
+import { getFacebookStatus, postToFacebook } from '@/api/client';
 
 type FacebookPostData = {
   message: string;
@@ -13,36 +12,13 @@ export default function FacebookPostWidget() {
   const [message, setMessage] = useState('');
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [userId, setUserId] = useState<string>('');
   const [uploadedImageUrl, setUploadedImageUrl] = useState<string | undefined>(undefined);
 
-  // Get current user
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user?.id) setUserId(session.user.id);
-    });
-  }, []);
-
-  // Check Facebook connection status
+  // Check Facebook connection status (static token - no OAuth)
   const { data: connectionStatus, refetch: refetchStatus } = useQuery({
-    queryKey: ['facebook-status', userId],
-    queryFn: () => getFacebookStatus(userId),
-    enabled: !!userId,
+    queryKey: ['facebook-status'],
+    queryFn: () => getFacebookStatus(),
   });
-
-  // Handle OAuth redirect
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('social') === 'facebook') {
-      if (params.get('connected') === 'true') {
-        refetchStatus();
-        window.history.replaceState({}, '', window.location.pathname);
-      } else if (params.get('error')) {
-        alert(`Facebook connection failed: ${params.get('error')}`);
-        window.history.replaceState({}, '', window.location.pathname);
-      }
-    }
-  }, [refetchStatus]);
 
   const handleImageUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -68,8 +44,7 @@ export default function FacebookPostWidget() {
 
   const postMutation = useMutation({
     mutationFn: async (data: FacebookPostData) => {
-      if (!userId) throw new Error('Not authenticated');
-      return postToFacebook(userId, data.message, data.imageUrl);
+      return postToFacebook(data.message, data.imageUrl);
     },
     onSuccess: () => {
       setMessage('');
@@ -106,35 +81,16 @@ export default function FacebookPostWidget() {
       </h2>
 
       {/* Connection Status */}
-      {userId && connectionStatus?.connected ? (
-        <div className="flex items-center justify-between p-2 bg-emerald-900/30 border border-emerald-700/50 rounded-lg mb-4">
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-emerald-400" />
-            <span className="text-xs text-emerald-300">
-              Connected: {connectionStatus.facebook_page_name || 'Facebook Page'}
-            </span>
-          </div>
-          <button
-            type="button"
-            onClick={async () => {
-              await disconnectFacebook(userId);
-              refetchStatus();
-            }}
-            className="text-xs text-red-400 hover:text-red-300"
-          >
-            Disconnect
-          </button>
+      {connectionStatus?.connected ? (
+        <div className="flex items-center p-2 bg-emerald-900/30 border border-emerald-700/50 rounded-lg mb-4">
+          <div className="w-2 h-2 rounded-full bg-emerald-400 mr-2" />
+          <span className="text-xs text-emerald-300">
+            Connected: {connectionStatus.facebook_page_name || 'Facebook Page'}
+          </span>
         </div>
-      ) : userId ? (
-        <div className="flex items-center justify-between p-2 bg-slate-800/50 border border-slate-700 rounded-lg mb-4">
-          <span className="text-xs text-slate-400">Not connected to Facebook</span>
-          <a
-            href={getFacebookConnectUrl(userId)}
-            className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300"
-          >
-            <Link size={12} />
-            Connect Facebook
-          </a>
+      ) : connectionStatus ? (
+        <div className="p-2 bg-amber-900/30 border border-amber-700/50 rounded-lg mb-4">
+          <span className="text-xs text-amber-300">Facebook not configured. Add page token to proceed.</span>
         </div>
       ) : null}
 

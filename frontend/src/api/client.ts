@@ -273,7 +273,7 @@ export interface FacebookConnectionStatus {
   connected: boolean;
   facebook_page_id?: string;
   facebook_page_name?: string;
-  connected_at?: string;
+  error?: string;
 }
 
 export function getLinkedInConnectUrl(userId: string): string {
@@ -300,27 +300,23 @@ export async function postToLinkedIn(userId: string, content: string, imageUrl?:
   });
 }
 
-export function getFacebookConnectUrl(userId: string): string {
-  return `${BASE_URL}/social/facebook/url?user_id=${encodeURIComponent(userId)}`;
+// Facebook (static token - no OAuth needed)
+export async function getFacebookStatus(): Promise<FacebookConnectionStatus> {
+  return request<FacebookConnectionStatus>('/social/facebook/status');
 }
 
-export async function getFacebookStatus(userId: string): Promise<FacebookConnectionStatus> {
-  return request<FacebookConnectionStatus>(
-    `/social/facebook/status?user_id=${encodeURIComponent(userId)}`,
-  );
-}
-
-export async function disconnectFacebook(userId: string): Promise<{ success: boolean }> {
-  return request<{ success: boolean }>('/social/facebook/disconnect', {
+export async function postToFacebook(message: string, imageUrl?: string): Promise<{ success: boolean; postId?: string; platform: string }> {
+  return request<{ success: boolean; postId?: string; platform: string }>('/social/facebook/post', {
     method: 'POST',
-    body: JSON.stringify({ user_id: userId }),
+    body: JSON.stringify({ message, image_url: imageUrl }),
   });
 }
 
-export async function postToFacebook(userId: string, message: string, imageUrl?: string): Promise<{ success: boolean; postId?: string; platform: string }> {
-  return request<{ success: boolean; postId?: string; platform: string }>('/social/facebook/post', {
+// Instagram (via Facebook Graph API with same token)
+export async function postToInstagram(caption: string, imageUrl: string): Promise<{ success: boolean; postId?: string; platform: string }> {
+  return request<{ success: boolean; postId?: string; platform: string }>('/social/instagram/post', {
     method: 'POST',
-    body: JSON.stringify({ user_id: userId, message, image_url: imageUrl }),
+    body: JSON.stringify({ caption, image_url: imageUrl }),
   });
 }
 

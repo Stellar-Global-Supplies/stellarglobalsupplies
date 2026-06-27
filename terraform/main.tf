@@ -440,19 +440,19 @@ resource "aws_ssm_parameter" "linkedin_client_secret" {
   tags        = var.tags
 }
 
-resource "aws_ssm_parameter" "facebook_client_id" {
-  name        = "/${local.prefix}/facebook-client-id"
-  description = "Facebook App Client ID for Page posting"
+resource "aws_ssm_parameter" "facebook_page_token" {
+  name        = "/${local.prefix}/facebook-page-token"
+  description = "Facebook Page Access Token (long-lived) for posting"
   type        = "SecureString"
-  value       = var.facebook_client_id
+  value       = var.facebook_page_token
   tags        = var.tags
 }
 
-resource "aws_ssm_parameter" "facebook_client_secret" {
-  name        = "/${local.prefix}/facebook-client-secret"
-  description = "Facebook App Client Secret for Page posting"
-  type        = "SecureString"
-  value       = var.facebook_client_secret
+resource "aws_ssm_parameter" "facebook_page_id" {
+  name        = "/${local.prefix}/facebook-page-id"
+  description = "Facebook Page ID for posting"
+  type        = "String"
+  value       = var.facebook_page_id
   tags        = var.tags
 }
 # ────────────────────────────────────────────────────────────────────────────────
@@ -707,8 +707,8 @@ resource "aws_iam_role_policy" "social_poster" {
         Resource = [
           aws_ssm_parameter.linkedin_client_id.arn,
           aws_ssm_parameter.linkedin_client_secret.arn,
-          aws_ssm_parameter.facebook_client_id.arn,
-          aws_ssm_parameter.facebook_client_secret.arn,
+          aws_ssm_parameter.facebook_page_token.arn,
+          aws_ssm_parameter.facebook_page_id.arn,
         ]
       },
       {
@@ -755,9 +755,8 @@ resource "aws_lambda_function" "social_poster" {
       LINKEDIN_CLIENT_ID_PARAM    = aws_ssm_parameter.linkedin_client_id.name
       LINKEDIN_CLIENT_SECRET_PARAM = aws_ssm_parameter.linkedin_client_secret.name
       LINKEDIN_REDIRECT_URI       = "${aws_apigatewayv2_api.ops.api_endpoint}/social/linkedin/callback"
-      FACEBOOK_CLIENT_ID_PARAM    = aws_ssm_parameter.facebook_client_id.name
-      FACEBOOK_CLIENT_SECRET_PARAM = aws_ssm_parameter.facebook_client_secret.name
-      FACEBOOK_REDIRECT_URI       = "${aws_apigatewayv2_api.ops.api_endpoint}/social/facebook/callback"
+      FACEBOOK_PAGE_TOKEN_PARAM  = aws_ssm_parameter.facebook_page_token.name
+      FACEBOOK_PAGE_ID_PARAM      = aws_ssm_parameter.facebook_page_id.name
       FRONTEND_URL                = "https://${local.fqdn}"
       ALLOWED_ORIGIN              = "https://${local.fqdn}"
       ENVIRONMENT                 = var.environment
@@ -1327,34 +1326,23 @@ resource "aws_apigatewayv2_route" "linkedin_post" {
   target    = "integrations/${aws_apigatewayv2_integration.social_poster.id}"
 }
 
-# Facebook routes
-resource "aws_apigatewayv2_route" "facebook_url" {
-  api_id    = aws_apigatewayv2_api.ops.id
-  route_key = "GET /social/facebook/url"
-  target    = "integrations/${aws_apigatewayv2_integration.social_poster.id}"
-}
-
-resource "aws_apigatewayv2_route" "facebook_callback" {
-  api_id    = aws_apigatewayv2_api.ops.id
-  route_key = "GET /social/facebook/callback"
-  target    = "integrations/${aws_apigatewayv2_integration.social_poster.id}"
-}
-
+# Facebook routes (static token - configured at deploy time)
 resource "aws_apigatewayv2_route" "facebook_status" {
   api_id    = aws_apigatewayv2_api.ops.id
   route_key = "GET /social/facebook/status"
   target    = "integrations/${aws_apigatewayv2_integration.social_poster.id}"
 }
 
-resource "aws_apigatewayv2_route" "facebook_disconnect" {
-  api_id    = aws_apigatewayv2_api.ops.id
-  route_key = "POST /social/facebook/disconnect"
-  target    = "integrations/${aws_apigatewayv2_integration.social_poster.id}"
-}
-
 resource "aws_apigatewayv2_route" "facebook_post" {
   api_id    = aws_apigatewayv2_api.ops.id
   route_key = "POST /social/facebook/post"
+  target    = "integrations/${aws_apigatewayv2_integration.social_poster.id}"
+}
+
+# Instagram route (via Facebook Graph API)
+resource "aws_apigatewayv2_route" "instagram_post" {
+  api_id    = aws_apigatewayv2_api.ops.id
+  route_key = "POST /social/instagram/post"
   target    = "integrations/${aws_apigatewayv2_integration.social_poster.id}"
 }
 

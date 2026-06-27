@@ -5,13 +5,11 @@ import {
   DynamoDBDocumentClient,
   GetCommand,
   PutCommand,
-  QueryCommand,
   DeleteCommand,
 } from '@aws-sdk/lib-dynamodb';
 import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
-import { S3Client, GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
 import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda';
-import { randomUUID } from 'crypto';
 
 // ────────────────────────────────────────────────────────────────────────────
 // Config
@@ -23,9 +21,8 @@ const ATTACHMENTS_BUCKET  = process.env.ATTACHMENTS_BUCKET!;
 const LINKEDIN_CLIENT_ID_PARAM      = process.env.LINKEDIN_CLIENT_ID_PARAM!;
 const LINKEDIN_CLIENT_SECRET_PARAM  = process.env.LINKEDIN_CLIENT_SECRET_PARAM!;
 const LINKEDIN_REDIRECT_URI         = process.env.LINKEDIN_REDIRECT_URI!;
-const FACEBOOK_CLIENT_ID_PARAM      = process.env.FACEBOOK_CLIENT_ID_PARAM!;
-const FACEBOOK_CLIENT_SECRET_PARAM  = process.env.FACEBOOK_CLIENT_SECRET_PARAM!;
-const FACEBOOK_REDIRECT_URI         = process.env.FACEBOOK_REDIRECT_URI!;
+const FACEBOOK_PAGE_TOKEN_PARAM     = process.env.FACEBOOK_PAGE_TOKEN_PARAM!;
+const FACEBOOK_PAGE_ID_PARAM        = process.env.FACEBOOK_PAGE_ID_PARAM!;
 const FRONTEND_URL                  = process.env.FRONTEND_URL!;
 
 const ddbClient = new DynamoDBClient({ region: REGION });
@@ -66,22 +63,15 @@ function clientError(msg: string): APIGatewayProxyResultV2 {
   return { statusCode: 400, headers: corsHeaders(), body: JSON.stringify({ error: msg }) };
 }
 
-interface SocialTokenRecord {
-  PK: string;                    // "USER#<user_id>"
-  SK: string;                    // "LINKEDIN_TOKEN#v0" | "FACEBOOK_TOKEN#v0"
-  entityType: string;            // "LINKEDIN_TOKEN" | "FACEBOOK_TOKEN"
+interface LinkedInTokenRecord {
+  PK: string;
+  SK: string;
+  entityType: string;
   access_token: string;
   refresh_token?: string;
   expires_at: number;
-  token_type?: string;
-  scope?: string;
-  // LinkedIn-specific
-  linkedin_urn?: string;         // "urn:li:organization:xxxxx"
+  linkedin_urn?: string;
   linkedin_page_name?: string;
-  // Facebook-specific
-  facebook_page_id?: string;
-  facebook_page_name?: string;
-  facebook_page_access_token?: string;
   connected_at: string;
 }
 
@@ -126,7 +116,6 @@ async function handleLinkedinCallback(event: APIGatewayProxyEventV2): Promise<AP
   const clientId     = await getSsmParam(LINKEDIN_CLIENT_ID_PARAM);
   const clientSecret = await getSsmParam(LINKEDIN_CLIENT_SECRET_PARAM);
 
-  // Exchange code for access token
   const tokenResp = await fetch('https://www.linkedin.com/oauth/v2/accessToken', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -165,9 +154,8 @@ async function handleLinkedinCallback(event: APIGatewayProxyEventV2): Promise<AP
     console.error('Failed to fetch LinkedIn organization:', e);
   }
 
-  // Store token in DynamoDB
   const now = new Date().toISOString();
-  const expiresAt = Math.floor(Date.now() / 1000) + (tokenData.expires_in || 5184000); // default 60 days
+  const expiresAt = Math.floor(Date.now() / 1000) + (tokenData.expires_in || 5184000);
 
   await ddb.send(new PutCommand({
     TableName: DYNAMODB_TABLE,
@@ -178,8 +166,6 @@ async function handleLinkedinCallback(event: APIGatewayProxyEventV2): Promise<AP
       access_token: tokenData.access_token,
       refresh_token: tokenData.refresh_token || '',
       expires_at: expiresAt,
-      token_type: tokenData.token_type || '',
-      scope: tokenData.scope || '',
       linkedin_urn: orgUrn,
       linkedin_page_name: orgName,
       connected_at: now,
@@ -199,7 +185,7 @@ async function handleLinkedinStatus(event: APIGatewayProxyEventV2): Promise<APIG
       Key: { PK: `USER#${userId}`, SK: 'LINKEDIN_TOKEN#v0' },
     }));
 
-    const item = result.Item as SocialTokenRecord | undefined;
+    const item = result.Item as LinkedInTokenRecord | undefined;
     if (!item) {
       return success({ connected: false });
     }
@@ -209,10 +195,8 @@ async function handleLinkedinStatus(event: APIGatewayProxyEventV2): Promise<APIG
       linkedin_page_name: item.linkedin_page_name,
       linkedin_urn: item.linkedin_urn,
       connected_at: item.connected_at,
-      scope: item.scope,
     });
-  } catch (err) {
-    console.error('LinkedIn status error:', err);
+  } catch {
     return success({ connected: false });
   }
 }
@@ -231,148 +215,161 @@ async function handleLinkedinDisconnect(event: APIGatewayProxyEventV2): Promise<
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// Facebook OAuth
+// Facebook/Instagram — Static Token (configured at deploy time via SSM)
 // ────────────────────────────────────────────────────────────────────────────
 
-async function handleFacebookConnectUrl(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyResultV2> {
-  const userId = event.queryStringParameters?.user_id;
-  if (!userId) return clientError('Missing user_id');
+async function handleFacebookStatus(_event: APIGatewayProxyEventV2): Promise<APIGatewayProxyResultV2> {
+  const pageToken = await getSsmParam(FACEBOOK_PAGE_TOKEN_PARAM);
+  const pageId = await getSsmParam(FACEBOOK_PAGE_ID_PARAM);
 
-  const clientId = await getSsmParam(FACEBOOK_CLIENT_ID_PARAM);
-  const state = Buffer.from(JSON.stringify({ userId, platform: 'facebook', ts: Date.now() })).toString('base64');
-
-  const authUrl = new URL('https://www.facebook.com/v20.0/dialog/oauth');
-  authUrl.searchParams.set('client_id', clientId);
-  authUrl.searchParams.set('redirect_uri', FACEBOOK_REDIRECT_URI);
-  authUrl.searchParams.set('state', state);
-  authUrl.searchParams.set('scope', 'pages_manage_posts pages_show_list pages_read_engagement business_management');
-
-  return success({ url: authUrl.toString() });
-}
-
-async function handleFacebookCallback(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyResultV2> {
-  const params = event.queryStringParameters || {};
-  const { code, state, error } = params;
-
-  if (error) {
-    return redirect(`${FRONTEND_URL}/tasks?social=facebook&error=${encodeURIComponent(error)}`);
-  }
-  if (!code || !state) return clientError('Missing authorization code or state');
-
-  let userId: string;
-  try {
-    const decoded = JSON.parse(Buffer.from(state, 'base64').toString());
-    userId = decoded.userId;
-  } catch {
-    return clientError('Invalid state parameter');
-  }
-
-  const clientId     = await getSsmParam(FACEBOOK_CLIENT_ID_PARAM);
-  const clientSecret = await getSsmParam(FACEBOOK_CLIENT_SECRET_PARAM);
-
-  // Exchange code for access token
-  const tokenResp = await fetch('https://graph.facebook.com/v20.0/oauth/access_token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      client_id: clientId,
-      client_secret: clientSecret,
-      redirect_uri: FACEBOOK_REDIRECT_URI,
-      code,
-    }),
-  });
-
-  if (!tokenResp.ok) {
-    const errBody = await tokenResp.text();
-    console.error('Facebook token exchange failed:', errBody);
-    return redirect(`${FRONTEND_URL}/tasks?social=facebook&error=token_exchange_failed`);
-  }
-
-  const tokenData: any = await tokenResp.json();
-
-  // Get user's pages
-  let pageId = '';
-  let pageName = '';
-  let pageAccessToken = '';
-  try {
-    const pagesResp = await fetch(`https://graph.facebook.com/v20.0/me/accounts?access_token=${tokenData.access_token}`);
-    if (pagesResp.ok) {
-      const pagesData: any = await pagesResp.json();
-      if (pagesData.data?.[0]) {
-        pageId = pagesData.data[0].id;
-        pageName = pagesData.data[0].name;
-        pageAccessToken = pagesData.data[0].access_token;
-      }
-    }
-  } catch (e) {
-    console.error('Failed to fetch Facebook pages:', e);
-  }
-
-  const now = new Date().toISOString();
-  const expiresAt = Math.floor(Date.now() / 1000) + (tokenData.expires_in || 5184000);
-
-  await ddb.send(new PutCommand({
-    TableName: DYNAMODB_TABLE,
-    Item: {
-      PK: `USER#${userId}`,
-      SK: 'FACEBOOK_TOKEN#v0',
-      entityType: 'FACEBOOK_TOKEN',
-      access_token: tokenData.access_token,
-      refresh_token: '',
-      expires_at: expiresAt,
-      scope: 'pages_manage_posts pages_show_list',
-      facebook_page_id: pageId,
-      facebook_page_name: pageName,
-      facebook_page_access_token: pageAccessToken,
-      connected_at: now,
-    },
-  }));
-
-  return redirect(`${FRONTEND_URL}/tasks?social=facebook&connected=true`);
-}
-
-async function handleFacebookStatus(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyResultV2> {
-  const userId = event.queryStringParameters?.user_id;
-  if (!userId) return clientError('Missing user_id');
-
-  try {
-    const result = await ddb.send(new GetCommand({
-      TableName: DYNAMODB_TABLE,
-      Key: { PK: `USER#${userId}`, SK: 'FACEBOOK_TOKEN#v0' },
-    }));
-
-    const item = result.Item as SocialTokenRecord | undefined;
-    if (!item) {
-      return success({ connected: false });
-    }
-
-    return success({
-      connected: true,
-      facebook_page_id: item.facebook_page_id,
-      facebook_page_name: item.facebook_page_name,
-      connected_at: item.connected_at,
-    });
-  } catch (err) {
-    console.error('Facebook status error:', err);
+  if (!pageToken || !pageId) {
     return success({ connected: false });
   }
+
+  try {
+    const verifyResp = await fetch(`https://graph.facebook.com/v20.0/${pageId}?fields=name&access_token=${pageToken}`);
+    if (!verifyResp.ok) {
+      return success({ connected: false, error: 'Token invalid or expired' });
+    }
+    const pageData: any = await verifyResp.json();
+    return success({
+      connected: true,
+      facebook_page_id: pageId,
+      facebook_page_name: pageData.name || 'Facebook Page',
+    });
+  } catch {
+    return success({ connected: false, error: 'Failed to verify token' });
+  }
 }
 
-async function handleFacebookDisconnect(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyResultV2> {
+async function handlePostToFacebook(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyResultV2> {
   const body: any = event.body ? JSON.parse(event.body) : {};
-  const { user_id } = body;
-  if (!user_id) return clientError('Missing user_id');
+  const { message, image_url } = body;
+  if (!message) return clientError('Missing message');
 
-  await ddb.send(new DeleteCommand({
-    TableName: DYNAMODB_TABLE,
-    Key: { PK: `USER#${user_id}`, SK: 'FACEBOOK_TOKEN#v0' },
-  }));
+  const pageToken = await getSsmParam(FACEBOOK_PAGE_TOKEN_PARAM);
+  const pageId = await getSsmParam(FACEBOOK_PAGE_ID_PARAM);
 
-  return success({ success: true });
+  if (!pageToken) return clientError('Facebook not configured - no page token');
+  if (!pageId) return clientError('Facebook not configured - no page ID');
+
+  let postId: string;
+
+  if (image_url) {
+    try {
+      const s3Image = await s3.send(new GetObjectCommand({
+        Bucket: ATTACHMENTS_BUCKET,
+        Key: image_url.replace(/^.*\/attachments\//, 'attachments/'),
+      }));
+      const imageBuffer = await s3Image.Body?.transformToByteArray();
+
+      if (imageBuffer) {
+        const formData = new FormData();
+        formData.append('access_token', pageToken);
+        formData.append('message', message);
+        formData.append('source', new Blob([imageBuffer]));
+        formData.append('published', 'true');
+
+        const photoResp = await fetch(`https://graph.facebook.com/v20.0/${pageId}/photos`, {
+          method: 'POST',
+          body: formData,
+        });
+
+        if (!photoResp.ok) {
+          const errBody = await photoResp.text();
+          throw new Error(errBody);
+        }
+
+        const photoData: any = await photoResp.json();
+        postId = photoData.id;
+      } else {
+        throw new Error('Failed to read image from S3');
+      }
+    } catch (e) {
+      console.error('Facebook photo post failed, falling back to text:', e);
+      const feedResp = await fetch(`https://graph.facebook.com/v20.0/${pageId}/feed`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message, access_token: pageToken }),
+      });
+      const feedData: any = await feedResp.json();
+      postId = feedData.id;
+    }
+  } else {
+    const feedResp = await fetch(`https://graph.facebook.com/v20.0/${pageId}/feed`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message, access_token: pageToken }),
+    });
+
+    if (!feedResp.ok) {
+      const errBody = await feedResp.text();
+      console.error('Facebook post failed:', errBody);
+      return clientError(`Facebook post failed: ${errBody}`);
+    }
+
+    const feedData: any = await feedResp.json();
+    postId = feedData.id;
+  }
+
+  return success({ success: true, postId, platform: 'facebook' });
+}
+
+async function handlePostToInstagram(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyResultV2> {
+  const body: any = event.body ? JSON.parse(event.body) : {};
+  const { caption, image_url } = body;
+  if (!caption || !image_url) return clientError('Missing caption or image_url');
+
+  const pageToken = await getSsmParam(FACEBOOK_PAGE_TOKEN_PARAM);
+  const pageId = await getSsmParam(FACEBOOK_PAGE_ID_PARAM);
+
+  if (!pageToken || !pageId) return clientError('Facebook/Instagram not configured');
+
+  try {
+    // Step 1: Upload image as media container
+    const mediaResp = await fetch(`https://graph.facebook.com/v20.0/${pageId}/media`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        image_url,
+        caption,
+        access_token: pageToken,
+      }),
+    });
+
+    if (!mediaResp.ok) {
+      const errBody = await mediaResp.text();
+      throw new Error(errBody);
+    }
+
+    const mediaData: any = await mediaResp.json();
+    const containerId = mediaData.id;
+
+    // Step 2: Publish the media container
+    const publishResp = await fetch(`https://graph.facebook.com/v20.0/${pageId}/media_publish`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        creation_id: containerId,
+        access_token: pageToken,
+      }),
+    });
+
+    if (!publishResp.ok) {
+      const errBody = await publishResp.text();
+      throw new Error(errBody);
+    }
+
+    const publishData: any = await publishResp.json();
+    return success({ success: true, postId: publishData.id, platform: 'instagram' });
+  } catch (e: any) {
+    console.error('Instagram post failed:', e);
+    return clientError(`Instagram post failed: ${e.message || e}`);
+  }
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// Posting
+// LinkedIn Posting
 // ────────────────────────────────────────────────────────────────────────────
 
 async function handlePostToLinkedIn(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyResultV2> {
@@ -380,31 +377,22 @@ async function handlePostToLinkedIn(event: APIGatewayProxyEventV2): Promise<APIG
   const { user_id, content, image_url } = body;
   if (!user_id || !content) return clientError('Missing user_id or content');
 
-  // Get stored token
   const result = await ddb.send(new GetCommand({
     TableName: DYNAMODB_TABLE,
     Key: { PK: `USER#${user_id}`, SK: 'LINKEDIN_TOKEN#v0' },
   }));
 
-  const token = result.Item as SocialTokenRecord | undefined;
+  const token = result.Item as LinkedInTokenRecord | undefined;
   if (!token?.access_token) return clientError('LinkedIn not connected');
+  if (!token.linkedin_urn) return clientError('No LinkedIn organization found');
+  if (Date.now() / 1000 > token.expires_at) return clientError('LinkedIn token expired. Please reconnect.');
 
-  if (!token.linkedin_urn) return clientError('No LinkedIn organization found. Ensure you have admin access to a Company Page.');
-
-  // Check if token is expired
-  if (Date.now() / 1000 > token.expires_at) {
-    return clientError('LinkedIn token expired. Please reconnect.');
-  }
-
-  // Build the post
   const postBody: any = {
     author: token.linkedin_urn,
     lifecycleState: 'PUBLISHED',
     specificContent: {
       'com.linkedin.ugc.ShareContent': {
-        shareCommentary: {
-          text: content,
-        },
+        shareCommentary: { text: content },
         shareMediaCategory: 'NONE',
       },
     },
@@ -413,10 +401,8 @@ async function handlePostToLinkedIn(event: APIGatewayProxyEventV2): Promise<APIG
     },
   };
 
-  // If there's an image, upload it first
   if (image_url) {
     try {
-      // Register image upload
       const registerResp = await fetch('https://api.linkedin.com/v2/assets?action=registerUpload', {
         method: 'POST',
         headers: {
@@ -428,10 +414,7 @@ async function handlePostToLinkedIn(event: APIGatewayProxyEventV2): Promise<APIG
           registerUploadRequest: {
             recipes: ['urn:li:digitalmediaRecipe:feedshare-image'],
             owner: token.linkedin_urn,
-            serviceRelationships: [{
-              relationshipType: 'OWNER',
-              identifier: 'urn:li:userGeneratedContent',
-            }],
+            serviceRelationships: [{ relationshipType: 'OWNER', identifier: 'urn:li:userGeneratedContent' }],
           },
         }),
       });
@@ -441,34 +424,23 @@ async function handlePostToLinkedIn(event: APIGatewayProxyEventV2): Promise<APIG
       const assetUrn = registerData.value?.asset;
 
       if (uploadUrl && assetUrn) {
-        // Download image from S3 and upload to LinkedIn
         const s3Image = await s3.send(new GetObjectCommand({
           Bucket: ATTACHMENTS_BUCKET,
           Key: image_url.replace(/^.*\/attachments\//, 'attachments/'),
         }));
         const imageBuffer = await s3Image.Body?.transformToByteArray();
-        
-        if (imageBuffer) {
-          await fetch(uploadUrl, {
-            method: 'POST',
-            body: new Uint8Array(imageBuffer),
-          });
 
+        if (imageBuffer) {
+          await fetch(uploadUrl, { method: 'POST', body: new Uint8Array(imageBuffer) });
           postBody.specificContent['com.linkedin.ugc.ShareContent'].shareMediaCategory = 'IMAGE';
-          postBody.specificContent['com.linkedin.ugc.ShareContent'].media = [{
-            status: 'READY',
-            description: { text: 'Image' },
-            media: assetUrn,
-          }];
+          postBody.specificContent['com.linkedin.ugc.ShareContent'].media = [{ status: 'READY', description: { text: 'Image' }, media: assetUrn }];
         }
       }
     } catch (e) {
       console.error('LinkedIn image upload failed:', e);
-      // Continue with text-only post
     }
   }
 
-  // Post to LinkedIn
   const postResp = await fetch('https://api.linkedin.com/v2/ugcPosts', {
     method: 'POST',
     headers: {
@@ -486,102 +458,7 @@ async function handlePostToLinkedIn(event: APIGatewayProxyEventV2): Promise<APIG
   }
 
   const postData: any = await postResp.json();
-  return success({
-    success: true,
-    postId: postData.id || `urn:li:ugcPost:${Date.now()}`,
-    platform: 'linkedin',
-  });
-}
-
-async function handlePostToFacebook(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyResultV2> {
-  const body: any = event.body ? JSON.parse(event.body) : {};
-  const { user_id, message, image_url } = body;
-  if (!user_id || !message) return clientError('Missing user_id or message');
-
-  // Get stored token
-  const result = await ddb.send(new GetCommand({
-    TableName: DYNAMODB_TABLE,
-    Key: { PK: `USER#${user_id}`, SK: 'FACEBOOK_TOKEN#v0' },
-  }));
-
-  const token = result.Item as SocialTokenRecord | undefined;
-  if (!token?.facebook_page_access_token) return clientError('Facebook not connected');
-  if (!token.facebook_page_id) return clientError('No Facebook Page found');
-
-  let postId: string;
-
-  if (image_url) {
-    // Post with photo
-    try {
-      const s3Image = await s3.send(new GetObjectCommand({
-        Bucket: ATTACHMENTS_BUCKET,
-        Key: image_url.replace(/^.*\/attachments\//, 'attachments/'),
-      }));
-      const imageBuffer = await s3Image.Body?.transformToByteArray();
-      
-      if (imageBuffer) {
-        // Upload photo first
-        const formData = new FormData();
-        formData.append('access_token', token.facebook_page_access_token);
-        formData.append('message', message);
-        formData.append('source', new Blob([imageBuffer]));
-        formData.append('published', 'true');
-
-        const photoResp = await fetch(`https://graph.facebook.com/v20.0/${token.facebook_page_id}/photos`, {
-          method: 'POST',
-          body: formData,
-        });
-
-        if (!photoResp.ok) {
-          const errBody = await photoResp.text();
-          throw new Error(errBody);
-        }
-
-        const photoData: any = await photoResp.json();
-        postId = photoData.id;
-      } else {
-        throw new Error('Failed to read image from S3');
-      }
-    } catch (e) {
-      console.error('Facebook photo post failed, falling back to text:', e);
-      // Fall through to text-only post
-      const feedResp = await fetch(`https://graph.facebook.com/v20.0/${token.facebook_page_id}/feed`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message,
-          access_token: token.facebook_page_access_token,
-        }),
-      });
-      const feedData: any = await feedResp.json();
-      postId = feedData.id;
-    }
-  } else {
-    // Text-only post
-    const feedResp = await fetch(`https://graph.facebook.com/v20.0/${token.facebook_page_id}/feed`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        message,
-        access_token: token.facebook_page_access_token,
-      }),
-    });
-
-    if (!feedResp.ok) {
-      const errBody = await feedResp.text();
-      console.error('Facebook post failed:', errBody);
-      return clientError(`Facebook post failed: ${errBody}`);
-    }
-
-    const feedData: any = await feedResp.json();
-    postId = feedData.id;
-  }
-
-  return success({
-    success: true,
-    postId,
-    platform: 'facebook',
-  });
+  return success({ success: true, postId: postData.id || `urn:li:ugcPost:${Date.now()}`, platform: 'linkedin' });
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -606,17 +483,15 @@ export const handler = async (event: APIGatewayProxyEventV2): Promise<APIGateway
       case 'POST /social/linkedin/post':
         return await handlePostToLinkedIn(event);
 
-      // Facebook
-      case 'GET /social/facebook/url':
-        return await handleFacebookConnectUrl(event);
-      case 'GET /social/facebook/callback':
-        return await handleFacebookCallback(event);
+      // Facebook (static token)
       case 'GET /social/facebook/status':
         return await handleFacebookStatus(event);
-      case 'POST /social/facebook/disconnect':
-        return await handleFacebookDisconnect(event);
       case 'POST /social/facebook/post':
         return await handlePostToFacebook(event);
+
+      // Instagram (via Facebook Graph API)
+      case 'POST /social/instagram/post':
+        return await handlePostToInstagram(event);
 
       default:
         return clientError(`Unknown route: ${routeKey}`);

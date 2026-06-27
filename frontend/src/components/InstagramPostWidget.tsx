@@ -1,16 +1,24 @@
 import { useState, useCallback } from 'react';
 import { Instagram, Upload, Send, Loader2, XCircle } from 'lucide-react';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { getFacebookStatus, postToInstagram } from '@/api/client';
 
 type InstagramPostData = {
   caption: string;
-  imageFile?: File;
+  imageUrl: string;
 };
 
 export default function InstagramPostWidget() {
   const [caption, setCaption] = useState('');
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [uploadedImageUrl, setUploadedImageUrl] = useState<string | undefined>(undefined);
+
+  // Check Facebook/Instagram connection status
+  const { data: connectionStatus } = useQuery({
+    queryKey: ['facebook-status'],
+    queryFn: () => getFacebookStatus(),
+  });
 
   const handleImageUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -36,28 +44,13 @@ export default function InstagramPostWidget() {
 
   const postMutation = useMutation({
     mutationFn: async (data: InstagramPostData) => {
-      // TODO: Implement Instagram API call
-      // This will require:
-      // 1. Instagram Basic Display API or Instagram Graph API
-      // 2. Facebook Developer account
-      // 3. Instagram Business/Creator account
-      // 4. Store access tokens in DynamoDB
-      // 5. Upload image and create post
-      
-      console.log('Posting to Instagram:', data);
-      
-      // Mock success for now
-      return new Promise((resolve) => {
-        setTimeout(() => {
-          resolve({ success: true, postId: 'mock-instagram-post-id' });
-        }, 1000);
-      });
+      return postToInstagram(data.caption, data.imageUrl);
     },
     onSuccess: () => {
-      alert('Instagram post published successfully!');
       setCaption('');
       setImageFile(null);
       setImagePreview(null);
+      setUploadedImageUrl(undefined);
     },
     onError: (error: any) => {
       alert(`Failed to post: ${error?.message ?? 'Unknown error'}`);
@@ -78,7 +71,7 @@ export default function InstagramPostWidget() {
 
     postMutation.mutate({
       caption: caption.trim(),
-      imageFile: imageFile,
+      imageUrl: uploadedImageUrl || '',
     });
   };
 
@@ -90,6 +83,20 @@ export default function InstagramPostWidget() {
         <Instagram size={18} className="text-pink-400" />
         Instagram Post
       </h2>
+
+      {/* Connection Status */}
+      {connectionStatus?.connected ? (
+        <div className="flex items-center p-2 bg-emerald-900/30 border border-emerald-700/50 rounded-lg mb-4">
+          <div className="w-2 h-2 rounded-full bg-emerald-400 mr-2" />
+          <span className="text-xs text-emerald-300">
+            Connected: {connectionStatus.facebook_page_name || 'Instagram via Facebook'}
+          </span>
+        </div>
+      ) : connectionStatus ? (
+        <div className="p-2 bg-amber-900/30 border border-amber-700/50 rounded-lg mb-4">
+          <span className="text-xs text-amber-300">Instagram not configured. Add Facebook page token to proceed.</span>
+        </div>
+      ) : null}
 
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* Caption */}

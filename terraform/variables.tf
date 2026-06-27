@@ -158,16 +158,15 @@ variable "linkedin_client_secret" {
 }
 
 # ─────────────────────────────────────────────────────────────────────────
-# Facebook OAuth 2.0 — for Facebook Page posting
+# Facebook & Instagram — Static Page Access Token
 # ─────────────────────────────────────────────────────────────────────────
-variable "facebook_client_id" {
-  description = "Facebook App Client ID for Page posting"
+variable "facebook_page_token" {
+  description = "Facebook Page Access Token (long-lived) for Facebook & Instagram posting"
   type        = string
   sensitive   = true
 }
 
-variable "facebook_client_secret" {
-  description = "Facebook App Client Secret"
+variable "facebook_page_id" {
+  description = "Facebook Page ID for posting (also used for Instagram via Graph API)"
   type        = string
-  sensitive   = true
 }

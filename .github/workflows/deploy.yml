@@ -34,8 +34,8 @@ concurrency:
 # TF_VAR_google_oauth_client_secret  Google OAuth 2.0 Client Secret
 # TF_VAR_linkedin_client_id          LinkedIn OAuth 2.0 Client ID
 # TF_VAR_linkedin_client_secret      LinkedIn OAuth 2.0 Client Secret
-# TF_VAR_facebook_client_id          Facebook App Client ID
-# TF_VAR_facebook_client_secret      Facebook App Client Secret
+# TF_VAR_facebook_page_token          Facebook App Client ID
+# TF_VAR_facebook_page_id      Facebook App Client Secret
 # ─────────────────────────────────────────────────────────────────────────────
 
 env:
@@ -276,8 +276,8 @@ jobs:
             -var="supabase_service_role_key=${{ secrets.TF_VAR_SUPABASE_SERVICE_ROLE_KEY }}" \
             -var="linkedin_client_id=${{ secrets.TF_VAR_linkedin_client_id }}" \
             -var="linkedin_client_secret=${{ secrets.TF_VAR_linkedin_client_secret }}" \
-            -var="facebook_client_id=${{ secrets.TF_VAR_facebook_client_id }}" \
-            -var="facebook_client_secret=${{ secrets.TF_VAR_facebook_client_secret }}"
+            -var="facebook_page_token=${{ secrets.TF_VAR_facebook_page_token }}" \
+            -var="facebook_page_id=${{ secrets.TF_VAR_facebook_page_id }}"
         env:
           TF_VAR_route53_zone_id:              ${{ secrets.TF_VAR_route53_zone_id }}
           TF_VAR_acm_certificate_arn:          ${{ secrets.TF_VAR_acm_certificate_arn }}
@@ -286,8 +286,8 @@ jobs:
           TF_VAR_google_oauth_client_secret:   ${{ secrets.TF_VAR_google_oauth_client_secret }}
           TF_VAR_linkedin_client_id:           ${{ secrets.TF_VAR_linkedin_client_id }}
           TF_VAR_linkedin_client_secret:       ${{ secrets.TF_VAR_linkedin_client_secret }}
-          TF_VAR_facebook_client_id:           ${{ secrets.TF_VAR_facebook_client_id }}
-          TF_VAR_facebook_client_secret:       ${{ secrets.TF_VAR_facebook_client_secret }}
+          TF_VAR_facebook_page_token:           ${{ secrets.TF_VAR_facebook_page_token }}
+          TF_VAR_facebook_page_id:       ${{ secrets.TF_VAR_facebook_page_id }}
 
       - name: Terraform apply
         working-directory: ${{ env.TF_DIR }}
