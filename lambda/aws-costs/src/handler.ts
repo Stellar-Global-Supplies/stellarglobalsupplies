@@ -94,9 +94,15 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
         const latestSummary = listResponse.Contents
           .filter(obj => obj.Key?.endsWith('summary.json'))
           .sort((a, b) => {
-            // Sort by the date in the path (processed/YYYYMMDD-YYYYMMDD/summary.json)
-            const dateA = (a.Key || '').match(/processed\/(\d{8}-\d{8})/)?.[1] || '';
-            const dateB = (b.Key || '').match(/processed\/(\d{8}-\d{8})/)?.[1] || '';
+            // Sort by the date in the path - handles both formats:
+            // processed/YYYYMMDD-YYYYMMDD/summary.json
+            // processed/YYYYMMDDT000000.000Z-YYYYMMDDT000000.000Z/summary.json
+            const extractDate = (key: string) => {
+              const match = key.match(/processed\/(\d{8})[T-](\d{8})/);
+              return match ? `${match[1]}-${match[2]}` : '';
+            };
+            const dateA = extractDate(a.Key || '');
+            const dateB = extractDate(b.Key || '');
             return dateB.localeCompare(dateA);
           })[0];
 

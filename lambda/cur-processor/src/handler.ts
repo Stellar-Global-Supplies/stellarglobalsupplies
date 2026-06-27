@@ -202,8 +202,13 @@ async function processCURManifest(manifest: CURManifest): Promise<void> {
   const aggregatedArray = Object.values(aggregated);
   console.log(`Aggregated to ${aggregatedArray.length} records`);
 
+  // Format the billing period for the path (remove T and .000Z if present)
+  const startDate = manifest.billingPeriod.start.replace(/T.*$/, '').replace(/\.000Z$/, '');
+  const endDate = manifest.billingPeriod.end.replace(/T.*$/, '').replace(/\.000Z$/, '');
+  const billingPeriodPath = `${startDate}-${endDate}`;
+  
   // Save processed data
-  const outputKey = `processed/${manifest.billingPeriod.start}-${manifest.billingPeriod.end}/costs.json`;
+  const outputKey = `processed/${billingPeriodPath}/costs.json`;
   
   await s3Client.send(
     new PutObjectCommand({
@@ -218,7 +223,7 @@ async function processCURManifest(manifest: CURManifest): Promise<void> {
 
   // Also save monthly summary
   const monthlySummary = aggregateByMonth(aggregatedArray);
-  const summaryKey = `processed/${manifest.billingPeriod.start}-${manifest.billingPeriod.end}/summary.json`;
+  const summaryKey = `processed/${billingPeriodPath}/summary.json`;
   
   await s3Client.send(
     new PutObjectCommand({
