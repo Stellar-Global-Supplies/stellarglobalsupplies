@@ -1,7 +1,8 @@
 import { APIGatewayProxyHandlerV2 } from 'aws-lambda';
+import { S3Client, GetObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
 
-// Cost Explorer API disabled to avoid charges
-// Using mock data instead
+const s3Client = new S3Client({ region: process.env.AWS_REGION ?? 'us-east-1' });
+const PROCESSED_BUCKET = process.env.PROCESSED_CUR_BUCKET!;
 
 /** Aggregate multiple months of cost data into a single service-level breakdown */
 function aggregateByService(results: any[]): { service: string; cost: number }[] {
@@ -74,45 +75,105 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
     const startDate = new Date(year, month - 1, 1).toISOString().slice(0, 10);
     const endDate = new Date(year, month, 0).toISOString().slice(0, 10); // Last day of selected month
 
-    // Use mock data instead of Cost Explorer API (disabled to avoid charges)
-    const mockResults = [{
-      TimePeriod: { Start: startDate, End: endDate },
-      Groups: [
-        { Keys: ['EC2'], Metrics: { UnblendedCost: { Amount: '120.50' } } },
-        { Keys: ['S3'], Metrics: { UnblendedCost: { Amount: '42.30' } } },
-        { Keys: ['RDS'], Metrics: { UnblendedCost: { Amount: '18.90' } } },
-        { Keys: ['CloudFront'], Metrics: { UnblendedCost: { Amount: '6.25' } } },
-        { Keys: ['Lambda'], Metrics: { UnblendedCost: { Amount: '3.10' } } },
-        { Keys: ['API Gateway'], Metrics: { UnblendedCost: { Amount: '1.80' } } },
-      ],
-    }];
+    // Load processed CUR data from S3
+    let aggregated: { service: string; cost: number }[] = [];
+    let contextResults: any[] = [];
 
-    const results = mockResults;
-    const aggregated = aggregateByService(results);
-    
-    // Generate mock context data for the last 6 months
-    const contextResults = [];
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date(year, month - i, 1);
-      const variation = 0.9 + Math.random() * 0.2; // ±10% variation
-      contextResults.push({
-        TimePeriod: { 
-          Start: d.toISOString().slice(0, 10), 
-          End: new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().slice(0, 10) 
-        },
+    try {
+      // Find the most recent processed data
+      const listResponse = await s3Client.send(
+        new ListObjectsV2Command({
+          Bucket: PROCESSED_BUCKET,
+          Prefix: 'processed/',
+          MaxKeys: 10,
+        }),
+      );
+
+      if (listResponse.Contents && listResponse.Contents.length > 0) {
+        // Get the most recent summary file
+        const latestSummary = listResponse.Contents
+          .filter(obj => obj.Key?.endsWith('summary.json'))
+          .sort((a, b) => (b.Key || '').localeCompare(a.Key || ''))[0];
+
+        if (latestSummary.Key) {
+          const summaryObject = await s3Client.send(
+            new GetObjectCommand({
+              Bucket: PROCESSED_BUCKET,
+              Key: latestSummary.Key,
+            }),
+          );
+
+          const summaryText = await summaryObject.Body?.transformToString();
+          const summaryData = JSON.parse(summaryText || '[]');
+          
+          // Find the selected month
+          const selectedMonthKey = `${year}-${String(month).padStart(2, '0')}`;
+          const selectedMonthData = summaryData.find((m: any) => m.month === selectedMonthKey);
+          
+          if (selectedMonthData) {
+            aggregated = selectedMonthData.services.map((s: any) => ({
+              service: s.service,
+              cost: s.cost,
+            }));
+          }
+
+          // Get context data (last 6 months)
+          contextResults = summaryData.slice(-7).map((m: any) => ({
+            TimePeriod: {
+              Start: `${m.month}-01`,
+              End: `${m.month}-28`,
+            },
+            Groups: m.services.map((s: any) => ({
+              Keys: [s.service],
+              Metrics: { UnblendedCost: { Amount: String(s.cost) } },
+            })),
+          }));
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load CUR data from S3:', error);
+    }
+
+    // Fallback to mock data if no CUR data available
+    if (aggregated.length === 0) {
+      const mockResults = [{
+        TimePeriod: { Start: startDate, End: endDate },
         Groups: [
-          { Keys: ['EC2'], Metrics: { UnblendedCost: { Amount: String(120.50 * variation) } } },
-          { Keys: ['S3'], Metrics: { UnblendedCost: { Amount: String(42.30 * variation) } } },
-          { Keys: ['RDS'], Metrics: { UnblendedCost: { Amount: String(18.90 * variation) } } },
-          { Keys: ['CloudFront'], Metrics: { UnblendedCost: { Amount: String(6.25 * variation) } } },
-          { Keys: ['Lambda'], Metrics: { UnblendedCost: { Amount: String(3.10 * variation) } } },
-          { Keys: ['API Gateway'], Metrics: { UnblendedCost: { Amount: String(1.80 * variation) } } },
+          { Keys: ['EC2'], Metrics: { UnblendedCost: { Amount: '120.50' } } },
+          { Keys: ['S3'], Metrics: { UnblendedCost: { Amount: '42.30' } } },
+          { Keys: ['RDS'], Metrics: { UnblendedCost: { Amount: '18.90' } } },
+          { Keys: ['CloudFront'], Metrics: { UnblendedCost: { Amount: '6.25' } } },
+          { Keys: ['Lambda'], Metrics: { UnblendedCost: { Amount: '3.10' } } },
+          { Keys: ['API Gateway'], Metrics: { UnblendedCost: { Amount: '1.80' } } },
         ],
-      });
+      }];
+
+      aggregated = aggregateByService(mockResults);
+      
+      // Generate mock context data for the last 6 months
+      contextResults = [];
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date(year, month - i, 1);
+        const variation = 0.9 + Math.random() * 0.2; // ±10% variation
+        contextResults.push({
+          TimePeriod: { 
+            Start: d.toISOString().slice(0, 10), 
+            End: new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().slice(0, 10) 
+          },
+          Groups: [
+            { Keys: ['EC2'], Metrics: { UnblendedCost: { Amount: String(120.50 * variation) } } },
+            { Keys: ['S3'], Metrics: { UnblendedCost: { Amount: String(42.30 * variation) } } },
+            { Keys: ['RDS'], Metrics: { UnblendedCost: { Amount: String(18.90 * variation) } } },
+            { Keys: ['CloudFront'], Metrics: { UnblendedCost: { Amount: String(6.25 * variation) } } },
+            { Keys: ['Lambda'], Metrics: { UnblendedCost: { Amount: String(3.10 * variation) } } },
+            { Keys: ['API Gateway'], Metrics: { UnblendedCost: { Amount: String(1.80 * variation) } } },
+          ],
+        });
+      }
     }
 
     // Monthly totals for trend/forecast
-    const monthlyTotals = results.map((r: any) => ({
+    const monthlyTotals = contextResults.map((r: any) => ({
       month: r.TimePeriod?.Start?.slice(0, 7) ?? 'unknown',
       total: (r.Groups ?? []).reduce(
         (sum: number, g: any) => sum + Number(g.Metrics?.UnblendedCost?.Amount ?? 0),

@@ -125,6 +125,44 @@ resource "aws_s3_bucket_lifecycle_configuration" "attachments" {
 }
 
 
+# ────────────────────────────────────────────────────────────────────────────────
+# S3 — CUR (Cost and Usage Report) BUCKETS
+# ────────────────────────────────────────────────────────────────────────────────
+resource "aws_s3_bucket" "cur_raw" {
+  bucket_prefix = "${local.prefix}-cur-raw-"
+  force_destroy = true
+}
+
+resource "aws_s3_bucket_lifecycle_configuration" "cur_raw" {
+  bucket = aws_s3_bucket.cur_raw.id
+  rule {
+    id     = "expire-old-cur"
+    status = "Enabled"
+    expiration {
+      days = 90
+    }
+  }
+}
+
+resource "aws_s3_bucket" "cur_processed" {
+  bucket_prefix = "${local.prefix}-cur-processed-"
+  force_destroy = true
+}
+
+resource "aws_s3_bucket_lifecycle_configuration" "cur_processed" {
+  bucket = aws_s3_bucket.cur_processed.id
+  rule {
+    id     = "expire-old-processed"
+    status = "Enabled"
+    expiration {
+      days = 365
+    }
+  }
+}
+
+
+
+
 
 resource "aws_s3_bucket_versioning" "data" {
   bucket = aws_s3_bucket.data.id
@@ -640,6 +678,100 @@ resource "aws_lambda_function" "email_sender" {
 
   depends_on = [aws_cloudwatch_log_group.email_sender]
 }
+
+
+# ---- cur-processor Lambda role ----
+resource "aws_iam_role" "cur_processor" {
+  name               = "${local.prefix}-cur-processor-role"
+  assume_role_policy = data.aws_iam_policy_document.lambda_trust.json
+}
+
+resource "aws_iam_role_policy" "cur_processor" {
+  name = "${local.prefix}-cur-processor-policy"
+  role = aws_iam_role.cur_processor.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid      = "S3RawAccess"
+        Effect   = "Allow"
+        Action   = ["s3:GetObject", "s3:ListBucket"]
+        Resource = [
+          aws_s3_bucket.cur_raw.arn,
+          "${aws_s3_bucket.cur_raw.arn}/*"
+        ]
+      },
+      {
+        Sid      = "S3ProcessedAccess"
+        Effect   = "Allow"
+        Action   = ["s3:PutObject", "s3:GetObject"]
+        Resource = "${aws_s3_bucket.cur_processed.arn}/*"
+      },
+      {
+        Sid      = "Logs"
+        Effect   = "Allow"
+        Action   = ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"]
+        Resource = "arn:aws:logs:*:*:*"
+      }
+    ]
+  })
+}
+
+resource "aws_cloudwatch_log_group" "cur_processor" {
+  name              = "/aws/lambda/${local.prefix}-cur-processor"
+  retention_in_days = var.log_retention_days
+}
+
+data "archive_file" "cur_processor" {
+  type        = "zip"
+  source_dir  = "${local.lambda_dir}/cur-processor/dist"
+  output_path = "${path.module}/.terraform-build/cur-processor.zip"
+}
+
+resource "aws_lambda_function" "cur_processor" {
+  function_name    = "${local.prefix}-cur-processor"
+  role             = aws_iam_role.cur_processor.arn
+  handler          = "handler.handler"
+  runtime          = var.lambda_runtime
+  filename         = data.archive_file.cur_processor.output_path
+  source_code_hash = data.archive_file.cur_processor.output_base64sha256
+  memory_size      = 512
+  timeout          = 300
+
+  environment {
+    variables = {
+      RAW_CUR_BUCKET       = aws_s3_bucket.cur_raw.id
+      PROCESSED_CUR_BUCKET = aws_s3_bucket.cur_processed.id
+      ENVIRONMENT          = var.environment
+    }
+  }
+
+  depends_on = [aws_cloudwatch_log_group.cur_processor]
+}
+
+# S3 event notification for manifest.json
+resource "aws_lambda_permission" "s3_cur_manifest" {
+  statement_id  = "AllowS3InvokeCURProcessor"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.cur_processor.function_name
+  principal     = "s3.amazonaws.com"
+  source_arn    = aws_s3_bucket.cur_raw.arn
+}
+
+resource "aws_s3_bucket_notification" "cur_manifest" {
+  bucket = aws_s3_bucket.cur_raw.id
+
+  lambda_function {
+    lambda_function_arn = aws_lambda_function.cur_processor.arn
+    events              = ["s3:ObjectCreated:*"]
+    filter_prefix       = "awscost/"
+    filter_suffix       = "manifest.json"
+  }
+
+  depends_on = [aws_lambda_permission.s3_cur_manifest]
+}
+
+
 
 resource "aws_iam_role" "google_auth" {
   name               = "${local.prefix}-google-auth-role"
