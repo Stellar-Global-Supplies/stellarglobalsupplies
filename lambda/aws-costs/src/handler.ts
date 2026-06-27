@@ -85,15 +85,20 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
         new ListObjectsV2Command({
           Bucket: PROCESSED_BUCKET,
           Prefix: 'processed/',
-          MaxKeys: 10,
+          MaxKeys: 100,
         }),
       );
 
       if (listResponse.Contents && listResponse.Contents.length > 0) {
-        // Get the most recent summary file
+        // Get the most recent summary file (search in subdirectories)
         const latestSummary = listResponse.Contents
           .filter(obj => obj.Key?.endsWith('summary.json'))
-          .sort((a, b) => (b.Key || '').localeCompare(a.Key || ''))[0];
+          .sort((a, b) => {
+            // Sort by the date in the path (processed/YYYYMMDD-YYYYMMDD/summary.json)
+            const dateA = (a.Key || '').match(/processed\/(\d{8}-\d{8})/)?.[1] || '';
+            const dateB = (b.Key || '').match(/processed\/(\d{8}-\d{8})/)?.[1] || '';
+            return dateB.localeCompare(dateA);
+          })[0];
 
         if (latestSummary.Key) {
           const summaryObject = await s3Client.send(
