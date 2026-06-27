@@ -14,32 +14,7 @@ type Attachment = {
   preview?: string;
 };
 
-type EncodedAttachment = {
-  name: string;
-  type: string;
-  data: string; // base64 data-URI
-};
-
-/** Encode a File to a base64 data-URI so it survives JSON serialisation. */
-function fileToBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload  = () => resolve(reader.result as string);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-}
-
-interface EmailCampaignWidgetProps {
-  /**
-   * The current user's ID — used to look up their Gmail OAuth tokens on the server.
-   * Pass this from your auth context / parent component, e.g.:
-   *   <EmailCampaignWidget userId={session.user.id} />
-   */
-  userId: string;
-}
-
-export default function EmailCampaignWidget({ userId }: EmailCampaignWidgetProps) {
+export default function EmailCampaignWidget() {
   const [recipients,     setRecipients]     = useState<Recipient[]>([]);
   const [emailBody,      setEmailBody]      = useState('');
   const [subject,        setSubject]        = useState('');
@@ -50,7 +25,7 @@ export default function EmailCampaignWidget({ userId }: EmailCampaignWidgetProps
     mutationFn: sendBulkEmail,
     onSuccess: (data) => {
       const errLines = data.errors?.length
-        ? `\n\nErrors:\n${data.errors.map((e: { email: string; error: string }) => `${e.email}: ${e.error}`).join('\n')}`
+        ? `\n\nErrors:\n${data.errors.map((e) => `${e.email}: ${e.error}`).join('\n')}`
         : '';
       alert(`Campaign sent!\n\nTotal: ${data.total}\nSuccess: ${data.success}\nFailed: ${data.failed}${errLines}`);
       setRecipients([]);
@@ -137,13 +112,9 @@ export default function EmailCampaignWidget({ userId }: EmailCampaignWidgetProps
   }, []);
 
   // ── Submit ──────────────────────────────────────────────────────────────────
-  const handleSubmit = useCallback(async (e: React.FormEvent) => {
+  const handleSubmit = useCallback((e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!userId?.trim()) {
-      alert('No user session found. Please log in again.');
-      return;
-    }
     if (recipients.length === 0) {
       alert('Please upload recipients first.');
       return;
@@ -157,31 +128,15 @@ export default function EmailCampaignWidget({ userId }: EmailCampaignWidgetProps
       return;
     }
 
-    // Encode attachments as base64 data-URIs — File objects cannot be JSON-serialised.
-    let encodedAttachments: EncodedAttachment[] = [];
-    if (attachments.length > 0) {
-      try {
-        encodedAttachments = await Promise.all(
-          attachments.map(async (a): Promise<EncodedAttachment> => ({
-            name: a.file.name,
-            type: a.file.type || 'application/octet-stream',
-            data: await fileToBase64(a.file),
-          })),
-        );
-      } catch {
-        alert('Failed to encode attachments. Please try again.');
-        return;
-      }
-    }
-
+    // Pass raw File objects — sendBulkEmail in client.ts encodes them to
+    // base64 and adds user_id from the Supabase session before sending.
     sendEmailMutation.mutate({
       recipients:  recipients.map(r => r.email),
       subject:     subject.trim(),
       body:        emailBody.trim(),
-      user_id:     userId,
-      attachments: encodedAttachments,
+      attachments: attachments.map(a => a.file),
     });
-  }, [userId, recipients, subject, emailBody, attachments, sendEmailMutation]);
+  }, [recipients, subject, emailBody, attachments, sendEmailMutation]);
 
   const isValid = recipients.length > 0 && subject.trim() && emailBody.trim();
 

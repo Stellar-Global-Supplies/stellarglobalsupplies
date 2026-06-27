@@ -177,45 +177,76 @@ export async function fetchWebAnalytics(period: AnalyticsPeriod = 'weekly'): Pro
 // Bulk Email Campaigns
 // ────────────────────────────────────────────────────────────────────────────
 
+/** An attachment encoded as a base64 data-URI, safe for JSON transport. */
+export interface EncodedAttachment {
+  name: string;
+  type: string;
+  data: string; // "data:<mime>;base64,<b64>"
+}
+
 export interface BulkEmailRequest {
-  recipients: string[];
-  subject: string;
-  body: string;
+  recipients:  string[];
+  subject:     string;
+  body:        string;
+  /** Pass File objects — sendBulkEmail encodes them to base64 before sending. */
   attachments?: File[];
 }
 
 export interface BulkEmailResponse {
-  total: number;
-  success: number;
-  failed: number;
-  errors?: Array<{ email: string; error: string }>;
+  total:    number;
+  success:  number;
+  failed:   number;
+  errors?:  Array<{ email: string; error: string }>;
+}
+
+/** Encode a File to a base64 data-URI string. */
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload  = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
 }
 
 export async function sendBulkEmail(payload: BulkEmailRequest): Promise<BulkEmailResponse> {
   const base = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, '') ?? '';
-  
-  // Get current user ID from Supabase session
+
+  // Resolve user_id from Supabase session
   const { data: { session } } = await supabase.auth.getSession();
   if (!session?.user?.id) {
     throw new Error('User not authenticated');
   }
 
+  // Encode File attachments to base64 — File objects are not JSON-serialisable.
+  let encodedAttachments: EncodedAttachment[] = [];
+  if (payload.attachments && payload.attachments.length > 0) {
+    encodedAttachments = await Promise.all(
+      payload.attachments.map(async (file): Promise<EncodedAttachment> => ({
+        name: file.name,
+        type: file.type || 'application/octet-stream',
+        data: await fileToBase64(file),
+      })),
+    );
+  }
+
   const endpoint = `${base}/email/send`;
-  
+
   try {
     const res = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        ...payload,
-        user_id: session.user.id,
+        recipients:  payload.recipients,
+        subject:     payload.subject,
+        body:        payload.body,
+        user_id:     session.user.id,
+        attachments: encodedAttachments,
       }),
     });
 
     if (!res.ok) {
-      const error = await res.json();
+      const error = await res.json().catch(() => ({}));
       throw new Error(error?.error || error?.message || `HTTP ${res.status}`);
     }
 
