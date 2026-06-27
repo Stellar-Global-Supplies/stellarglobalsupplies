@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { Mail, Upload, Paperclip, Send, CheckCircle, XCircle, Loader2, FileSpreadsheet, Image as ImageIcon, FileText, Trash2 } from 'lucide-react';
+import { Mail, Upload, Paperclip, Send, CheckCircle, XCircle, Loader2, FileSpreadsheet, FileText, Trash2 } from 'lucide-react';
 import { useMutation } from '@tanstack/react-query';
 import { sendBulkEmail } from '@/api/client';
 
