@@ -749,28 +749,30 @@ resource "aws_lambda_function" "cur_processor" {
   depends_on = [aws_cloudwatch_log_group.cur_processor]
 }
 
-# S3 event notification for manifest.json
-resource "aws_lambda_permission" "s3_cur_manifest" {
-  statement_id  = "AllowS3InvokeCURProcessor"
+
+
+
+
+
+# EventBridge rule to trigger CUR processing daily at 7 AM IST (1:30 AM UTC)
+resource "aws_cloudwatch_event_rule" "cur_daily_processing" {
+  name                = "${local.prefix}-cur-daily-processing"
+  description         = "Triggers cur-processor Lambda daily at 7 AM IST"
+  schedule_expression = "cron(30 1 * * ? *)"
+}
+
+resource "aws_cloudwatch_event_target" "cur_daily_processing" {
+  rule      = aws_cloudwatch_event_rule.cur_daily_processing.name
+  arn       = aws_lambda_function.cur_processor.arn
+}
+
+resource "aws_lambda_permission" "eventbridge_cur_processor" {
+  statement_id  = "AllowEventBridgeInvokeCURProcessor"
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.cur_processor.function_name
-  principal     = "s3.amazonaws.com"
-  source_arn    = aws_s3_bucket.cur_raw.arn
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.cur_daily_processing.arn
 }
-
-resource "aws_s3_bucket_notification" "cur_manifest" {
-  bucket = aws_s3_bucket.cur_raw.id
-
-  lambda_function {
-    lambda_function_arn = aws_lambda_function.cur_processor.arn
-    events              = ["s3:ObjectCreated:*"]
-    filter_prefix       = "awscost/"
-    filter_suffix       = "manifest.json"
-  }
-
-  depends_on = [aws_lambda_permission.s3_cur_manifest]
-}
-
 
 
 resource "aws_iam_role" "google_auth" {

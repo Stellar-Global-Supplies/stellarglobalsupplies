@@ -1,4 +1,4 @@
-import { S3Client, GetObjectCommand, PutObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, GetObjectCommand, PutObjectCommand, HeadObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
 import { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda';
 import * as zlib from 'zlib';
 import * as csv from 'csv-parser';
@@ -268,43 +268,106 @@ function aggregateByMonth(records: any[]): any[] {
 }
 
 /**
- * Main handler
+ * Find and process the latest manifest file
  */
-export const handler = async (event: APIGatewayProxyEventV2): Promise<APIGatewayProxyResultV2> => {
+async function processLatestCUR(): Promise<void> {
+  console.log('Starting scheduled CUR processing...');
+
+  // List all manifest files
+  const listResponse = await s3Client.send(
+    new ListObjectsV2Command({
+      Bucket: RAW_BUCKET,
+      Prefix: 'awscost/',
+      MaxKeys: 100,
+    }),
+  );
+
+  if (!listResponse.Contents || listResponse.Contents.length === 0) {
+    console.log('No manifest files found');
+    return;
+  }
+
+  // Filter for manifest.json files and sort by last modified
+  const manifestFiles = listResponse.Contents
+    .filter(obj => obj.Key?.endsWith('manifest.json'))
+    .sort((a, b) => (b.LastModified?.getTime() || 0) - (a.LastModified?.getTime() || 0));
+
+  if (manifestFiles.length === 0) {
+    console.log('No manifest files found');
+    return;
+  }
+
+  // Get the latest manifest
+  const latestManifestKey = manifestFiles[0].Key;
+  console.log('Processing latest manifest:', latestManifestKey);
+
+  // Download and parse manifest
+  const manifestObject = await s3Client.send(
+    new GetObjectCommand({
+      Bucket: RAW_BUCKET,
+      Key: latestManifestKey,
+    }),
+  );
+
+  const manifestText = await manifestObject.Body?.transformToString();
+  const manifest: CURManifest = JSON.parse(manifestText || '{}');
+  
+  await processCURManifest(manifest);
+  
+  console.log('CUR processing completed successfully');
+}
+
+/**
+ * Main handler - supports both scheduled and manual invocation
+ */
+export const handler = async (event: any): Promise<any> => {
   try {
     console.log('Event:', JSON.stringify(event, null, 2));
 
-    // Handle S3 event (manifest.json uploaded)
-    if (event.body && event.requestContext.http.method === 'POST') {
-      const body = JSON.parse(event.body);
+    // Check if this is a scheduled EventBridge event
+    if (event.source === 'aws.events' && event['detail-type'] === 'Scheduled Event') {
+      console.log('Scheduled trigger detected');
+      await processLatestCUR();
       
-      // If it's a manifest file
-      if (body.manifest || body.reportName === 'awscost') {
-        const manifest: CURManifest = body;
-        await processCURManifest(manifest);
+      return {
+        statusCode: 200,
+        body: JSON.stringify({ success: true, message: 'CUR processed successfully' }),
+      };
+    }
+
+    // Handle manual invocation (for testing)
+    if (event.body) {
+      try {
+        const body = JSON.parse(event.body);
         
-        return {
-          statusCode: 200,
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ success: true, message: 'CUR processed successfully' }),
-        };
+        // If it's a manifest file
+        if (body.reportName === 'awscost' || body.assemblyId) {
+          const manifest: CURManifest = body;
+          await processCURManifest(manifest);
+          
+          return {
+            statusCode: 200,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ success: true, message: 'CUR processed successfully' }),
+          };
+        }
+      } catch (e) {
+        // Not JSON, continue to S3 event handling
       }
     }
 
-    // Handle S3 event notification
-    if (event.body && event.requestContext.http.method === 'POST') {
-      const snsMessage = JSON.parse(event.body);
-      const s3Record = JSON.parse(snsMessage.Message).Records?.[0];
+    // Handle S3 event notification (backward compatibility)
+    if (event.Records && event.Records[0]?.eventSource === 'aws:s3') {
+      const s3Record = event.Records[0].s3;
+      const objectKey = s3Record.object.key;
       
-      if (s3Record?.s3?.object?.key?.endsWith('manifest.json')) {
-        const manifestKey = s3Record.s3.object.key;
-        console.log('Processing manifest:', manifestKey);
+      if (objectKey?.endsWith('manifest.json')) {
+        console.log('Processing manifest from S3 event:', objectKey);
 
-        // Download manifest
         const manifestObject = await s3Client.send(
           new GetObjectCommand({
             Bucket: RAW_BUCKET,
-            Key: manifestKey,
+            Key: objectKey,
           }),
         );
 
@@ -321,16 +384,17 @@ export const handler = async (event: APIGatewayProxyEventV2): Promise<APIGateway
       }
     }
 
+    // Default: process latest CUR
+    await processLatestCUR();
+
     return {
-      statusCode: 400,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ error: 'Invalid request' }),
+      statusCode: 200,
+      body: JSON.stringify({ success: true, message: 'CUR processed successfully' }),
     };
   } catch (error) {
     console.error('CUR processor error:', error);
     return {
       statusCode: 500,
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         error: 'Failed to process CUR',
         detail: error instanceof Error ? error.message : 'Unknown error',
