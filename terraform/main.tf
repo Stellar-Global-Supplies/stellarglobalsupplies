@@ -638,9 +638,11 @@ resource "aws_lambda_function" "email_sender" {
 
   environment {
     variables = {
-      DYNAMODB_TABLE    = aws_dynamodb_table.ops.name
-      ATTACHMENTS_BUCKET = aws_s3_bucket.attachments.bucket
-      ENVIRONMENT       = var.environment
+      DYNAMODB_TABLE       = aws_dynamodb_table.ops.name
+      ATTACHMENTS_BUCKET   = aws_s3_bucket.attachments.bucket
+      GOOGLE_CLIENT_ID     = var.google_oauth_client_id
+      GOOGLE_CLIENT_SECRET = var.google_oauth_client_secret
+      ENVIRONMENT          = var.environment
     }
   }
 
@@ -1171,6 +1173,13 @@ resource "aws_apigatewayv2_integration" "email_sender" {
   payload_format_version = "2.0"
 }
 
+resource "aws_lambda_permission" "apigw_email_sender" {
+  statement_id  = "AllowAPIGWInvokeEmailSender"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.email_sender.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_apigatewayv2_api.ops.execution_arn}/*/*"
+}
 
 
 resource "aws_lambda_permission" "apigw_agent_router" {
