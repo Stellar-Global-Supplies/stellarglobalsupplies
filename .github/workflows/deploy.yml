@@ -34,8 +34,8 @@ concurrency:
 # TF_VAR_google_oauth_client_secret  Google OAuth 2.0 Client Secret
 # TF_VAR_linkedin_client_id          LinkedIn OAuth 2.0 Client ID
 # TF_VAR_linkedin_client_secret      LinkedIn OAuth 2.0 Client Secret
-# TF_VAR_facebook_page_token          Facebook App Client ID
-# TF_VAR_facebook_page_id      Facebook App Client Secret
+# TF_VAR_facebook_page_token          Facebook Page Access Token (long-lived)
+# TF_VAR_facebook_page_id             Facebook Page ID
 # ─────────────────────────────────────────────────────────────────────────────
 
 env:
