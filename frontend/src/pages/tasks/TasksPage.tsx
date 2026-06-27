@@ -1,4 +1,5 @@
 import EmailCampaignWidget from '@/components/EmailCampaignWidget';
+import LinkedInPostWidget from '@/components/LinkedInPostWidget';
 
 export default function TasksPage() {
   return (
@@ -14,9 +15,12 @@ export default function TasksPage() {
       </div>
 
       {/* Task Widgets Grid */}
-      <div className="grid grid-cols-1 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Email Campaign Widget */}
         <EmailCampaignWidget />
+
+        {/* LinkedIn Post Widget */}
+        <LinkedInPostWidget />
 
         {/* Future widgets will be added here */}
         {/* Example: <DataSyncWidget /> */}

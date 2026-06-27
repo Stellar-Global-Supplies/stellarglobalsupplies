@@ -143,6 +143,9 @@ export default function EmailCampaignWidget() {
           <label className="block text-sm font-medium text-slate-300 mb-2">
             Recipients (CSV)
           </label>
+          <p className="text-2xs text-slate-500 mb-2">
+            Required: CSV file with "email" column (e.g., email,name,company)
+          </p>
           <label className="flex items-center gap-2 px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg cursor-pointer hover:border-emerald-400/50 transition-colors">
             <Upload size={14} className="text-slate-400" />
             <span className="text-xs text-slate-300">Upload CSV file</span>
