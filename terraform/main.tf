@@ -118,6 +118,9 @@ resource "aws_s3_bucket_lifecycle_configuration" "attachments" {
   rule {
     id     = "expire-old-attachments"
     status = "Enabled"
+    filter {
+      prefix = "email-attachments/"
+    }
     expiration {
       days = 30
     }
@@ -662,15 +665,15 @@ resource "aws_iam_role_policy" "cur_processor" {
         Effect   = "Allow"
         Action   = ["s3:GetObject", "s3:ListBucket"]
         Resource = [
-          aws_s3_bucket.cur_raw.arn,
-          "${aws_s3_bucket.cur_raw.arn}/*"
+          "arn:aws:s3:::stellarglobal-costing-bucket",
+          "arn:aws:s3:::stellarglobal-costing-bucket/*"
         ]
       },
       {
         Sid      = "S3ProcessedAccess"
         Effect   = "Allow"
-        Action   = ["s3:PutObject", "s3:GetObject"]
-        Resource = "${aws_s3_bucket.cur_processed.arn}/*"
+        Action   = ["s3:PutObject", "s3:GetObject", "s3:DeleteObject"]
+        Resource = "arn:aws:s3:::stellarglobal-costing-bucket/processed/*"
       },
       {
         Sid      = "Logs"
