@@ -1,4 +1,8 @@
-export type AwsCost = { service: string; cost: number };
+export type AwsCost = {
+  service: string;
+  serviceName?: string;   // added: human-readable name from CUR (e.g. "Amazon Route 53")
+  cost: number;
+};
 export type MonthlyTotal = { month: string; total: number };
 export type Forecast = { forecastMonth: string; forecastCost: number };
 export type AwsCostResponse = {
@@ -20,7 +24,7 @@ export type AwsCostResponse = {
 export async function fetchAwsCosts(year?: number, month?: number): Promise<AwsCostResponse> {
   const base = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, '') ?? '';
   const params = new URLSearchParams();
-  if (year) params.set('year', String(year));
+  if (year)  params.set('year',  String(year));
   if (month) params.set('month', String(month));
   const endpoint = `${base}/aws-costs?${params.toString()}`;
 
@@ -38,22 +42,18 @@ export async function fetchAwsCosts(year?: number, month?: number): Promise<AwsC
   }
 }
 
+// ── Mock data (used when the API is unreachable) ─────────────────────────────
 const mockServices: AwsCost[] = [
-  { service: 'EC2', cost: 120.5 },
-  { service: 'S3', cost: 42.3 },
-  { service: 'RDS', cost: 18.9 },
-  { service: 'CloudFront', cost: 6.25 },
-  { service: 'Lambda', cost: 3.1 },
-  { service: 'API Gateway', cost: 1.8 },
+  { service: 'AWSCostExplorer',  serviceName: 'AWS Cost Explorer',              cost: 0.61   },
+  { service: 'AmazonRoute53',    serviceName: 'Amazon Route 53',                cost: 0.594  },
+  { service: 'AmazonS3',        serviceName: 'Amazon Simple Storage Service',   cost: 0.046  },
+  { service: 'AmazonBedrock',   serviceName: 'Amazon Bedrock',                  cost: 0.034  },
+  { service: 'AmazonDynamoDB',  serviceName: 'Amazon DynamoDB',                 cost: 0.002  },
+  { service: 'AmazonApiGateway',serviceName: 'Amazon API Gateway',              cost: 0.001  },
 ];
 
 const mockTotals: MonthlyTotal[] = [
-  { month: '2026-01', total: 180.0 },
-  { month: '2026-02', total: 185.0 },
-  { month: '2026-03', total: 192.0 },
-  { month: '2026-04', total: 190.0 },
-  { month: '2026-05', total: 198.0 },
-  { month: '2026-06', total: 195.0 },
+  { month: '2026-06', total: 1.29 },
 ];
 
 const mockResponse: AwsCostResponse = {
@@ -61,33 +61,22 @@ const mockResponse: AwsCostResponse = {
   selected_period: '2026-06',
   monthly_totals: mockTotals,
   forecasts: {
-    next_month: [{ forecastMonth: '2026-07', forecastCost: 200.0 }],
-    three_months: [
-      { forecastMonth: '2026-07', forecastCost: 200.0 },
-      { forecastMonth: '2026-08', forecastCost: 205.0 },
-      { forecastMonth: '2026-09', forecastCost: 210.0 },
+    next_month:    [{ forecastMonth: '2026-07', forecastCost: 1.49 }],
+    three_months:  [
+      { forecastMonth: '2026-07', forecastCost: 1.49 },
+      { forecastMonth: '2026-08', forecastCost: 1.49 },
+      { forecastMonth: '2026-09', forecastCost: 1.49 },
     ],
-    six_months: [
-      { forecastMonth: '2026-07', forecastCost: 200.0 },
-      { forecastMonth: '2026-08', forecastCost: 205.0 },
-      { forecastMonth: '2026-09', forecastCost: 210.0 },
-      { forecastMonth: '2026-10', forecastCost: 215.0 },
-      { forecastMonth: '2026-11', forecastCost: 220.0 },
-      { forecastMonth: '2026-12', forecastCost: 225.0 },
-    ],
-    twelve_months: [
-      { forecastMonth: '2026-07', forecastCost: 200.0 },
-      { forecastMonth: '2026-08', forecastCost: 205.0 },
-      { forecastMonth: '2026-09', forecastCost: 210.0 },
-      { forecastMonth: '2026-10', forecastCost: 215.0 },
-      { forecastMonth: '2026-11', forecastCost: 220.0 },
-      { forecastMonth: '2026-12', forecastCost: 225.0 },
-      { forecastMonth: '2027-01', forecastCost: 230.0 },
-      { forecastMonth: '2027-02', forecastCost: 235.0 },
-      { forecastMonth: '2027-03', forecastCost: 240.0 },
-      { forecastMonth: '2027-04', forecastCost: 245.0 },
-      { forecastMonth: '2027-05', forecastCost: 250.0 },
-      { forecastMonth: '2027-06', forecastCost: 255.0 },
-    ],
+    six_months:    Array.from({ length: 6 }, (_, i) => ({
+      forecastMonth: `2026-${String(7 + i).padStart(2, '0')}`,
+      forecastCost: 1.49,
+    })),
+    twelve_months: Array.from({ length: 12 }, (_, i) => {
+      const d = new Date(2026, 6 + i, 1);
+      return {
+        forecastMonth: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`,
+        forecastCost: 1.49,
+      };
+    }),
   },
 };
