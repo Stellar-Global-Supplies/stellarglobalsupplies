@@ -588,16 +588,16 @@ resource "aws_iam_role_policy" "email_sender" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid      = "SESEmail"
+        Sid      = "DynamoDBTokens"
         Effect   = "Allow"
-        Action   = ["ses:SendEmail", "ses:SendRawEmail"]
-        Resource = "*"
+        Action   = ["dynamodb:Query", "dynamodb:GetItem"]
+        Resource = aws_dynamodb_table.ops.arn
       },
       {
         Sid      = "S3Attachments"
         Effect   = "Allow"
         Action   = ["s3:PutObject", "s3:GetObject"]
-        Resource = "arn:aws:s3:::*/*"
+        Resource = "${aws_s3_bucket.attachments.arn}/*"
       },
       {
         Sid      = "Logs"
@@ -632,9 +632,9 @@ resource "aws_lambda_function" "email_sender" {
 
   environment {
     variables = {
-      SENDER_EMAIL       = var.sender_email
+      DYNAMODB_TABLE    = aws_dynamodb_table.ops.name
       ATTACHMENTS_BUCKET = aws_s3_bucket.attachments.bucket
-      ENVIRONMENT        = var.environment
+      ENVIRONMENT       = var.environment
     }
   }
 

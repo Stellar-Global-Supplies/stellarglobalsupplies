@@ -1,7 +1,8 @@
 import { APIGatewayProxyHandlerV2 } from 'aws-lambda';
-import { CostExplorerClient, GetCostAndUsageCommand } from '@aws-sdk/client-cost-explorer';
 
-const client = new CostExplorerClient({ region: process.env.AWS_REGION ?? 'us-east-1' });
+// Cost Explorer API disabled to avoid charges
+// Using mock data instead
+// const client = new CostExplorerClient({ region: process.env.AWS_REGION ?? 'us-east-1' });
 
 /** Fetch AWS costs for a given number of months back, grouped by service */
 async function fetchCostsForPeriod(monthsBack: number) {
@@ -91,29 +92,42 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
     const startDate = new Date(year, month - 1, 1).toISOString().slice(0, 10);
     const endDate = new Date(year, month, 0).toISOString().slice(0, 10); // Last day of selected month
 
-    // Fetch data for the selected month
-    const cmd = new GetCostAndUsageCommand({
+    // Use mock data instead of Cost Explorer API (disabled to avoid charges)
+    const mockResults = [{
       TimePeriod: { Start: startDate, End: endDate },
-      Granularity: 'MONTHLY',
-      Metrics: ['UnblendedCost'],
-      GroupBy: [{ Type: 'DIMENSION', Key: 'SERVICE' }],
-    });
+      Groups: [
+        { Keys: ['EC2'], Metrics: { UnblendedCost: { Amount: '120.50' } } },
+        { Keys: ['S3'], Metrics: { UnblendedCost: { Amount: '42.30' } } },
+        { Keys: ['RDS'], Metrics: { UnblendedCost: { Amount: '18.90' } } },
+        { Keys: ['CloudFront'], Metrics: { UnblendedCost: { Amount: '6.25' } } },
+        { Keys: ['Lambda'], Metrics: { UnblendedCost: { Amount: '3.10' } } },
+        { Keys: ['API Gateway'], Metrics: { UnblendedCost: { Amount: '1.80' } } },
+      ],
+    }];
 
-    const resp = await client.send(cmd);
-    const results = [resp.ResultsByTime?.[0] ?? {}];
-    
-    // Also fetch last 6 months for trend/forecast context
-    const contextMonths = 6;
-    const contextStart = new Date(year, month - contextMonths, 1).toISOString().slice(0, 10);
-    const contextCmd = new GetCostAndUsageCommand({
-      TimePeriod: { Start: contextStart, End: endDate },
-      Granularity: 'MONTHLY',
-      Metrics: ['UnblendedCost'],
-      GroupBy: [{ Type: 'DIMENSION', Key: 'SERVICE' }],
-    });
-    const contextResp = await client.send(contextCmd);
-    const contextResults = contextResp.ResultsByTime ?? [];
+    const results = mockResults;
     const aggregated = aggregateByService(results);
+    
+    // Generate mock context data for the last 6 months
+    const contextResults = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(year, month - i, 1);
+      const variation = 0.9 + Math.random() * 0.2; // ±10% variation
+      contextResults.push({
+        TimePeriod: { 
+          Start: d.toISOString().slice(0, 10), 
+          End: new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().slice(0, 10) 
+        },
+        Groups: [
+          { Keys: ['EC2'], Metrics: { UnblendedCost: { Amount: String(120.50 * variation) } } },
+          { Keys: ['S3'], Metrics: { UnblendedCost: { Amount: String(42.30 * variation) } } },
+          { Keys: ['RDS'], Metrics: { UnblendedCost: { Amount: String(18.90 * variation) } } },
+          { Keys: ['CloudFront'], Metrics: { UnblendedCost: { Amount: String(6.25 * variation) } } },
+          { Keys: ['Lambda'], Metrics: { UnblendedCost: { Amount: String(3.10 * variation) } } },
+          { Keys: ['API Gateway'], Metrics: { UnblendedCost: { Amount: String(1.80 * variation) } } },
+        ],
+      });
+    }
 
     // Monthly totals for trend/forecast
     const monthlyTotals = results.map((r: any) => ({

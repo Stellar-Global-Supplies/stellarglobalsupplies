@@ -1,19 +1,24 @@
 import { APIGatewayProxyHandlerV2 } from 'aws-lambda';
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
-import { SESClient, SendEmailCommand, SendRawEmailCommand } from '@aws-sdk/client-ses';
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { DynamoDBDocumentClient, GetCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
+import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 
 const REGION = process.env.AWS_REGION ?? 'us-east-1';
-const SENDER_EMAIL = process.env.SENDER_EMAIL ?? 'noreply@stellarglobalsupplies.com';
+const DYNAMODB_TABLE = process.env.DYNAMODB_TABLE!;
 const ATTACHMENTS_BUCKET = process.env.ATTACHMENTS_BUCKET;
 
+const ddbClient = new DynamoDBClient({ region: REGION });
+const ddb = DynamoDBDocumentClient.from(ddbClient, {
+  marshallOptions: { removeUndefinedValues: true },
+});
 const s3Client = new S3Client({ region: REGION });
-const sesClient = new SESClient({ region: REGION });
 
 interface EmailRequest {
   recipients: string[];
   subject: string;
   body: string;
-  attachments?: File[];
+  user_id: string;
+  attachment_keys?: string[]; // S3 keys for attachments
 }
 
 interface EmailResponse {
@@ -24,62 +29,172 @@ interface EmailResponse {
 }
 
 /**
- * Upload attachment to S3 and return presigned URL
+ * Get Google OAuth tokens for a user from DynamoDB
  */
-async function uploadAttachment(file: Buffer, filename: string): Promise<string> {
-  if (!ATTACHMENTS_BUCKET) {
-    throw new Error('ATTACHMENTS_BUCKET not configured');
+async function getGoogleTokens(userId: string): Promise<{ access_token: string; refresh_token: string } | null> {
+  try {
+    const result = await ddb.send(
+      new QueryCommand({
+        TableName: DYNAMODB_TABLE,
+        KeyConditionExpression: 'PK = :pk AND begins_with(SK, :sk)',
+        ExpressionAttributeValues: {
+          ':pk': `USER#${userId}`,
+          ':sk': 'GOOGLE_TOKEN#',
+        },
+      }),
+    );
+
+    const token = result.Items?.[0];
+    if (!token?.refresh_token) {
+      return null;
+    }
+
+    return {
+      access_token: '', // Will be refreshed
+      refresh_token: token.refresh_token,
+    };
+  } catch (error) {
+    console.error('Failed to get Google tokens:', error);
+    return null;
   }
-
-  const key = `email-attachments/${Date.now()}-${filename}`;
-  
-  await s3Client.send(
-    new PutObjectCommand({
-      Bucket: ATTACHMENTS_BUCKET,
-      Key: key,
-      Body: file,
-      ContentType: 'application/octet-stream',
-    }),
-  );
-
-  // Return S3 URL (in production, use presigned URL)
-  return `https://${ATTACHMENTS_BUCKET}.s3.${REGION}.amazonaws.com/${key}`;
 }
 
 /**
- * Send email using SES
+ * Refresh Google access token using refresh token
  */
-async function sendEmail(
+async function refreshAccessToken(refreshToken: string): Promise<string> {
+  // Note: In production, store client_id and client_secret in SSM Parameter Store
+  // For now, we'll need to get them from environment or SSM
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+
+  if (!clientId || !clientSecret) {
+    throw new Error('Google OAuth credentials not configured');
+  }
+
+  const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      refresh_token: refreshToken,
+      client_id: clientId,
+      client_secret: clientSecret,
+      grant_type: 'refresh_token',
+    }),
+  });
+
+  const tokenJson = await tokenRes.json();
+  
+  if (!tokenRes.ok || tokenJson.error) {
+    throw new Error(tokenJson.error_description || 'Failed to refresh access token');
+  }
+
+  return tokenJson.access_token;
+}
+
+/**
+ * Send email using Gmail API
+ */
+async function sendEmailViaGmail(
+  accessToken: string,
   to: string,
   subject: string,
   body: string,
-  attachmentUrls?: string[],
+  attachmentKeys?: string[],
 ): Promise<void> {
-  const params: any = {
-    Source: SENDER_EMAIL,
-    Destination: { ToAddresses: [to] },
-    Message: {
-      Subject: { Data: subject, Charset: 'UTF-8' },
-      Body: {
-        Html: { Data: body, Charset: 'UTF-8' },
-      },
-    },
-  };
+  // Build MIME message
+  const boundary = 'boundary_' + Date.now();
+  let mimeMessage = [
+    `From: me`,
+    `To: ${to}`,
+    `Subject: ${subject}`,
+    `MIME-Version: 1.0`,
+    `Content-Type: multipart/mixed; boundary="${boundary}"`,
+    '',
+    `--${boundary}`,
+    `Content-Type: text/html; charset=UTF-8`,
+    '',
+    body,
+  ];
 
-  // If there are attachments, use SendRawEmail
-  if (attachmentUrls && attachmentUrls.length > 0) {
-    // For simplicity, we'll use SendEmail without attachments for now
-    // In production, you'd construct a MIME message with attachments
-    await sesClient.send(new SendEmailCommand(params));
-  } else {
-    await sesClient.send(new SendEmailCommand(params));
+  // Add attachments if any
+  if (attachmentKeys && attachmentKeys.length > 0 && ATTACHMENTS_BUCKET) {
+    for (const key of attachmentKeys) {
+      try {
+        const s3Response = await s3Client.send(
+          new GetObjectCommand({
+            Bucket: ATTACHMENTS_BUCKET,
+            Key: key,
+          }),
+        );
+
+        const buffer = await streamToBuffer(s3Response.Body);
+        const base64Content = buffer.toString('base64');
+        const filename = key.split('/').pop() || 'attachment';
+
+        mimeMessage = [
+          ...mimeMessage,
+          '',
+          `--${boundary}`,
+          `Content-Type: application/octet-stream`,
+          `Content-Disposition: attachment; filename="${filename}"`,
+          `Content-Transfer-Encoding: base64`,
+          '',
+          base64Content,
+        ];
+      } catch (error) {
+        console.error(`Failed to fetch attachment ${key}:`, error);
+      }
+    }
   }
+
+  mimeMessage = [...mimeMessage, '', `--${boundary}--`, ''];
+
+  const encodedMessage = Buffer.from(mimeMessage.join('\n')).toString('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+
+  const response = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      raw: encodedMessage,
+    }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error?.message || 'Failed to send email via Gmail');
+  }
+}
+
+/**
+ * Convert stream to buffer
+ */
+async function streamToBuffer(stream: any): Promise<Buffer> {
+  const chunks: Uint8Array[] = [];
+  for await (const chunk of stream) {
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks);
 }
 
 export const handler: APIGatewayProxyHandlerV2 = async (event) => {
   try {
     const body = JSON.parse(event.body ?? '{}') as EmailRequest;
-    const { recipients, subject, body: emailBody, attachments } = body;
+    const { recipients, subject, body: emailBody, user_id, attachment_keys } = body;
+
+    if (!user_id) {
+      return {
+        statusCode: 400,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ error: 'user_id is required' }),
+      };
+    }
 
     if (!recipients || !Array.isArray(recipients) || recipients.length === 0) {
       return {
@@ -97,14 +212,26 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
       };
     }
 
-    // Upload attachments if any
-    let attachmentUrls: string[] = [];
-    if (attachments && attachments.length > 0 && ATTACHMENTS_BUCKET) {
-      for (const attachment of attachments) {
-        // Note: In a real implementation, you'd receive the file data
-        // For now, we'll skip actual upload
-        console.log('Attachment:', attachment);
-      }
+    // Get Google OAuth tokens for the user
+    const tokens = await getGoogleTokens(user_id);
+    if (!tokens) {
+      return {
+        statusCode: 401,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ error: 'Google account not connected. Please connect your Gmail account first.' }),
+      };
+    }
+
+    // Refresh access token
+    let accessToken: string;
+    try {
+      accessToken = await refreshAccessToken(tokens.refresh_token);
+    } catch (error) {
+      return {
+        statusCode: 401,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ error: 'Failed to authenticate with Google. Please reconnect your account.' }),
+      };
     }
 
     // Send emails
@@ -112,7 +239,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
     let successCount = 0;
     let failedCount = 0;
 
-    // SES has a rate limit, so we'll send in batches
+    // Gmail API has rate limits, send in batches
     const batchSize = 10;
     for (let i = 0; i < recipients.length; i += batchSize) {
       const batch = recipients.slice(i, i + batchSize);
@@ -120,7 +247,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
       await Promise.allSettled(
         batch.map(async (email) => {
           try {
-            await sendEmail(email, subject, emailBody, attachmentUrls);
+            await sendEmailViaGmail(accessToken, email, subject, emailBody, attachment_keys);
             successCount++;
           } catch (error) {
             failedCount++;
@@ -132,7 +259,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
         }),
       );
 
-      // Add delay between batches to respect SES rate limits
+      // Add delay between batches to respect Gmail rate limits
       if (i + batchSize < recipients.length) {
         await new Promise(resolve => setTimeout(resolve, 1000));
       }

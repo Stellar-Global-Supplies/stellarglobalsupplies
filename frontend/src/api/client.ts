@@ -7,6 +7,7 @@ import type {
   PresignRequest,
   PresignResponse,
 } from '@/types';
+import { supabase } from '@/lib/supabase';
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, '') ?? '';
 
@@ -191,15 +192,38 @@ export interface BulkEmailResponse {
 }
 
 export async function sendBulkEmail(payload: BulkEmailRequest): Promise<BulkEmailResponse> {
-  // For now, return mock success
-  // In production, this would upload attachments to S3 and call a Lambda
-  console.log('Sending bulk email:', payload);
+  const base = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, '') ?? '';
   
-  return {
-    total: payload.recipients.length,
-    success: payload.recipients.length,
-    failed: 0,
-  };
+  // Get current user ID from Supabase session
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.user?.id) {
+    throw new Error('User not authenticated');
+  }
+
+  const endpoint = `${base}/email/send`;
+  
+  try {
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        ...payload,
+        user_id: session.user.id,
+      }),
+    });
+
+    if (!res.ok) {
+      const error = await res.json();
+      throw new Error(error?.error || error?.message || `HTTP ${res.status}`);
+    }
+
+    return await res.json() as BulkEmailResponse;
+  } catch (err) {
+    console.error('sendBulkEmail error', err);
+    throw err;
+  }
 }
 
 export async function fetchMetaAnalytics(period: AnalyticsPeriod = 'weekly'): Promise<MetaAnalyticsData> {
