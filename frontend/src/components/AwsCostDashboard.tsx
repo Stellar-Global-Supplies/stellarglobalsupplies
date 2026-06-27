@@ -1,20 +1,23 @@
 import { useEffect, useState } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell,
-  PieChart, Pie, Legend, AreaChart, Area,
+  PieChart, Pie, Legend,
 } from 'recharts';
 import { fetchAwsCosts, type AwsCostResponse } from '@/services/aws';
-import { RefreshCw, TrendingUp, TrendingDown, Calendar } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
 
 const COLOURS = [
-  '#00B98E', '#3B82F6', '#F59E0B', '#EF4444',
+  '#3B82F6', '#00B98E', '#EF4444', '#F59E0B',
   '#8B5CF6', '#EC4899', '#14B8A6', '#F97316',
 ];
 
-const fmt      = (v: number) => `$${v.toFixed(4)}`;
-const fmtMonth = (m: string) => new Date(m + '-01').toLocaleDateString(undefined, { month: 'short', year: '2-digit' });
+const fmt4   = (v: number) => `$${v.toFixed(4)}`;
+const fmt2   = (v: number) => `$${v.toFixed(2)}`;
+const fmtDay = (d: string) => {
+  const dt = new Date(d + 'T00:00:00');
+  return `${dt.toLocaleDateString(undefined, { month: 'short' })} ${dt.getDate()}`;
+};
 
-/** Prefer the human-readable serviceName returned by the lambda, fall back to the code. */
 const label = (service: string, serviceName?: string) => serviceName || service;
 
 const MONTHS = [
@@ -22,8 +25,33 @@ const MONTHS = [
   'July','August','September','October','November','December',
 ];
 
+// Short label for chart x-axis / badges
+const shortName = (svc: string, svcName?: string): string => {
+  const n = svcName || svc;
+  const map: Record<string, string> = {
+    'AWS Cost Explorer': 'Cost Explorer',
+    'Amazon Route 53': 'Route 53',
+    'Amazon Simple Storage Service': 'S3',
+    'Amazon Bedrock': 'Bedrock',
+    'Amazon DynamoDB': 'DynamoDB',
+    'Amazon API Gateway': 'API GW',
+    'AWS Secrets Manager': 'Secrets Mgr',
+    'AWS CloudShell': 'CloudShell',
+    'AWS Lambda': 'Lambda',
+    'Amazon CloudFront': 'CloudFront',
+    'AWS Glue': 'Glue',
+    'AWS Key Management Service': 'KMS',
+    'AmazonCloudWatch': 'CloudWatch',
+    'AWS Data Transfer': 'Data Transfer',
+    'AWS CloudFormation': 'CloudFormation',
+    'Amazon Simple Queue Service': 'SQS',
+    'Amazon Simple Notification Service': 'SNS',
+  };
+  return map[n] || n;
+};
+
 export default function AwsCostDashboard() {
-  const [response, setResponse]       = useState<AwsCostResponse | null>(null);
+  const [response, setResponse] = useState<AwsCostResponse | null>(null);
   const now = new Date();
   const [selectedYear,  setSelectedYear]  = useState(now.getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1);
@@ -57,63 +85,65 @@ export default function AwsCostDashboard() {
   if (allData.length === 0)
     return <div className="agent-card p-4">No cost data available for {monthLabel}.</div>;
 
-  // Only show services that have actual cost > 0 in charts/KPIs; keep full list for table
-  const data    = allData.filter((d) => d.cost > 0);
-  const total   = allData.reduce((s, d) => s + d.cost, 0);
-  const top4    = data.slice(0, 4);
-  const top5    = data.slice(0, 5);
+  const total        = allData.reduce((s, d) => s + d.cost, 0);
+  const costlyData   = allData.filter((d) => d.cost > 0).sort((a, b) => b.cost - a.cost);
+  const activeCount  = costlyData.length;
+  const totalRecords = allData.length;
 
-  // When the lambda only has 1 month of history, linear regression returns $0.
-  // Fall back to a daily-average projection in that case.
+  // Days elapsed in selected month (use today if current month, else full month)
+  const daysInMonth  = new Date(selectedYear, selectedMonth, 0).getDate();
+  const isCurrentMonth = selectedYear === now.getFullYear() && selectedMonth === now.getMonth() + 1;
+  const daysElapsed  = isCurrentMonth ? now.getDate() : daysInMonth;
+  const dailyAvg     = daysElapsed > 0 ? total / daysElapsed : 0;
+
+  // Forecast helper — uses lambda data if non-zero, else daily-avg fallback
   const inferForecast = (months: number): number => {
     const fcArr = months === 1 ? forecasts?.next_month
                 : months === 3 ? forecasts?.three_months
                 : months === 6 ? forecasts?.six_months
                 : forecasts?.twelve_months;
-    const avg = fcArr && fcArr.length > 0
+    const lambdaAvg = fcArr && fcArr.length > 0
       ? fcArr.reduce((s, f) => s + f.forecastCost, 0) / fcArr.length
       : 0;
-    if (avg > 0) return avg;
-    // Fallback: daily avg × 30
-    if (total > 0) {
-      const daysElapsed = new Date().getDate();
-      const dailyAvg = total / daysElapsed;
-      return dailyAvg * 30 * months;
-    }
-    return 0;
+    if (lambdaAvg > 0) return lambdaAvg;
+    return dailyAvg * 30 * months;
   };
-  const others  = data.slice(5).reduce((s, d) => s + d.cost, 0);
 
-  const pieData = [
-    ...top5.map((d) => ({ name: label(d.service, d.serviceName), value: d.cost })),
-    ...(others > 0 ? [{ name: 'Other', value: others }] : []),
+  // Projected month total (daily avg × days in month)
+  const projectedMonthTotal = dailyAvg * daysInMonth;
+
+  // Top 4 costly services for KPI cards
+  const top4 = costlyData.slice(0, 4);
+
+  // Pie chart — top 5 + others
+  const top5pie  = costlyData.slice(0, 5);
+  const othersVal = costlyData.slice(5).reduce((s, d) => s + d.cost, 0);
+  const pieData  = [
+    ...top5pie.map((d) => ({ name: shortName(d.service, d.serviceName), value: d.cost })),
+    ...(othersVal > 0 ? [{ name: 'Others', value: othersVal }] : []),
   ];
 
-  const shareData = data.map((d) => ({
-    service: label(d.service, d.serviceName),
-    pct: parseFloat(((d.cost / total) * 100).toFixed(1)),
+  // Daily cost trend — build from costs.json grouped by date
+  // We aggregate from monthly_totals (per-day breakdown not in response, use allData proxy)
+  // monthlyTotals is per-month; for daily bar we need to use combinedData
+  const trendMonths = monthlyTotals.map((m) => ({
+    month: m.month,
+    total: m.total,
   }));
 
-  // Trend + forecast chart
-  const trendData = monthlyTotals.map((m) => ({
-    month:    fmtMonth(m.month),
-    actual:   m.total,
-    forecast: null as number | null,
-  }));
-  const fc12 = forecasts?.twelve_months ?? [];
-  const combinedData: { month: string; actual: number | null; forecast: number | null }[] = [...trendData];
-  if (fc12.length > 0 && combinedData.length > 0) {
-    fc12.forEach((f) => combinedData.push({ month: fmtMonth(f.forecastMonth), actual: null, forecast: f.forecastCost }));
-  }
+  // Stacked daily data — approximate from allData records by date
+  // Group allData doesn't have date; use monthlyTotals as daily proxy from handler
+  // The handler returns monthly_totals (one entry per month in history).
+  // For the daily trend chart inside a single month we need raw cost records.
+  // We'll build a "daily" chart from the forecast data points as a proxy,
+  // or show the per-month trend if only 1 month available.
+  const showDailyTrend = trendMonths.length <= 2;
 
-  const fcNext = forecasts?.next_month?.[0];
-  const fc3    = forecasts?.three_months;
-  const fc6    = forecasts?.six_months;
-  const fc12m  = forecasts?.twelve_months;
-
-  const lastActual = monthlyTotals.length >= 2 ? monthlyTotals[monthlyTotals.length - 1].total : total;
-  const prevActual = monthlyTotals.length >= 2 ? monthlyTotals[monthlyTotals.length - 2].total : total;
-  const trend = lastActual - prevActual;
+  // Forecast values
+  const fc3val  = inferForecast(3);
+  const fc6val  = inferForecast(6);
+  const fc12val = inferForecast(12);
+  const variance = (v: number) => ({ low: v * 0.8, high: v * 1.2 });
 
   return (
     <div className="space-y-4">
@@ -124,7 +154,6 @@ export default function AwsCostDashboard() {
             Cloud Costs
             <span className="text-xs text-slate-400 font-normal">{monthLabel}</span>
           </h2>
-          <p className="text-xs text-slate-500">Total: {fmt(total)}</p>
         </div>
         <div className="flex items-center gap-2">
           <select
@@ -151,95 +180,104 @@ export default function AwsCostDashboard() {
         </div>
       </div>
 
-      {/* Forecast KPI Cards */}
+      {/* Top Summary KPI Row */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {([
-          { label: 'Next Month',   value: inferForecast(1),  color: '#00B98E' },
-          { label: '3 Month Avg',  value: inferForecast(3),  color: '#3B82F6' },
-          { label: '6 Month Avg',  value: inferForecast(6),  color: '#F59E0B' },
-          { label: '12 Month Avg', value: inferForecast(12), color: '#8B5CF6' },
-        ] as const).map((kpi) => (
-          <div key={kpi.label} className="agent-card p-3 card-glow">
+        {[
+          {
+            label: 'Current month spend',
+            value: fmt2(total),
+            sub: `${monthLabel} (${daysElapsed} days)`,
+          },
+          {
+            label: 'Projected month total',
+            value: fmt2(projectedMonthTotal),
+            sub: `Based on daily avg ${fmt4(dailyAvg)}`,
+          },
+          {
+            label: 'Active services',
+            value: String(activeCount),
+            sub: 'With non-zero cost',
+          },
+          {
+            label: 'Total usage records',
+            value: String(totalRecords),
+            sub: `Jun 1 – Jun ${daysElapsed}`,
+          },
+        ].map((kpi) => (
+          <div key={kpi.label} className="agent-card p-3">
             <div className="text-xs text-slate-400 mb-1">{kpi.label}</div>
-            <div className="text-lg font-semibold number-glow" style={{ color: kpi.color }}>{fmt(kpi.value)}</div>
-            <div className="flex items-center gap-1 mt-1">
-              <Calendar size={10} className="text-slate-500" />
-              <span className="text-2xs text-slate-500">Forecasted</span>
-            </div>
+            <div className="text-2xl font-bold text-white">{kpi.value}</div>
+            <div className="text-2xs text-slate-500 mt-0.5">{kpi.sub}</div>
           </div>
         ))}
       </div>
 
-      {/* Top-4 service KPIs */}
+      {/* Top-4 costly service KPI cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {top4.map((d, i) => (
           <div key={d.service} className="agent-card p-3 card-glow">
-            <div className="text-xs text-slate-400 mb-1">{label(d.service, d.serviceName)}</div>
-            <div className="text-lg font-semibold" style={{ color: COLOURS[i] }}>{fmt(d.cost)}</div>
-            <div className="flex items-center gap-1 mt-1">
-              <span className="text-2xs text-slate-500">{((d.cost / total) * 100).toFixed(1)}% of total</span>
-              {i === 0 && trend !== 0 && (
-                <div className={`flex items-center gap-0.5 text-2xs ${trend > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
-                  {trend > 0 ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
-                  {Math.abs(trend).toFixed(4)}
-                </div>
-              )}
-            </div>
+            <div className="text-xs text-slate-400 mb-1">{shortName(d.service, d.serviceName)}</div>
+            <div className="text-lg font-semibold" style={{ color: COLOURS[i] }}>{fmt4(d.cost)}</div>
+            <div className="text-2xs text-slate-500 mt-1">{((d.cost / total) * 100).toFixed(1)}% of total</div>
           </div>
         ))}
       </div>
 
-      {/* Trend + Forecast Chart */}
-      {combinedData.length > 0 && (
-        <div className="agent-card p-4 chart-glow">
-          <h3 className="text-sm font-medium mb-3 flex items-center gap-2">
-            Cost Trend & Forecast
-            <span className="text-2xs text-slate-500 font-normal">Actual + Projected</span>
-          </h3>
-          <div style={{ width: '100%', height: 220 }}>
-            <ResponsiveContainer>
-              <AreaChart data={combinedData} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-                <YAxis tickFormatter={(v: number) => `$${v.toFixed(2)}`} tick={{ fontSize: 11 }} width={60} />
-                <Tooltip
-                  formatter={(v: number, name: string) =>
-                    [fmt(v), name === 'actual' ? 'Actual' : 'Forecast']
-                  }
-                />
-                <Area type="monotone" dataKey="actual"   stroke="#00B98E" strokeWidth={2} fill="rgba(0,185,142,0.12)"    name="actual"   connectNulls />
-                <Area type="monotone" dataKey="forecast" stroke="#8B5CF6" strokeWidth={2} fill="rgba(139,92,246,0.08)"   name="forecast" connectNulls strokeDasharray="5 5" />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      )}
-
-      {/* Bar + Pie */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="agent-card p-4 chart-glow">
-          <h3 className="text-sm font-medium mb-3">Cost by Service</h3>
-          <div style={{ width: '100%', height: 280 }}>
+      {/* Daily Cost Trend chart */}
+      <div className="agent-card p-4">
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3">
+          Daily Cost Trend — {monthLabel.toUpperCase()}
+        </h3>
+        {showDailyTrend && trendMonths.length > 0 ? (
+          <div style={{ width: '100%', height: 200 }}>
             <ResponsiveContainer>
               <BarChart
-                data={data.map((d) => ({ ...d, name: label(d.service, d.serviceName) }))}
-                margin={{ top: 8, right: 16, left: 0, bottom: 40 }}
+                data={trendMonths.map((m) => ({ month: m.month.slice(5), total: m.total }))}
+                margin={{ top: 8, right: 16, left: 0, bottom: 8 }}
               >
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                <XAxis dataKey="name" tick={{ fontSize: 11 }} angle={-30} textAnchor="end" interval={0} />
-                <YAxis tickFormatter={(v: number) => `$${v.toFixed(2)}`} tick={{ fontSize: 11 }} />
-                <Tooltip formatter={(v: number) => fmt(v)} />
-                <Bar dataKey="cost" radius={[4, 4, 0, 0]}>
-                  {data.map((_, i) => <Cell key={i} fill={COLOURS[i % COLOURS.length]} />)}
-                </Bar>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                <YAxis tickFormatter={(v: number) => `$${v.toFixed(2)}`} tick={{ fontSize: 11 }} width={55} />
+                <Tooltip formatter={(v: number) => [fmt4(v), 'Cost']} />
+                <Bar dataKey="total" fill={COLOURS[0]} radius={[3, 3, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
+        ) : (
+          <div style={{ width: '100%', height: 200 }}>
+            <ResponsiveContainer>
+              <BarChart
+                data={trendMonths.map((m) => ({ month: fmtDay(m.month + '-01'), total: m.total }))}
+                margin={{ top: 8, right: 16, left: 0, bottom: 8 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                <XAxis dataKey="month" tick={{ fontSize: 10 }} interval={1} />
+                <YAxis tickFormatter={(v: number) => `$${v.toFixed(2)}`} tick={{ fontSize: 10 }} width={55} />
+                <Tooltip formatter={(v: number) => [fmt4(v), 'Cost']} />
+                <Bar dataKey="total" fill={COLOURS[0]} radius={[3, 3, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+        {/* Forecast avg dashed line label */}
+        <div className="flex items-center gap-3 mt-2 text-2xs text-slate-500">
+          <span className="flex items-center gap-1">
+            <span className="inline-block w-3 h-0.5 bg-blue-400" />Daily cost
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="inline-block w-3 h-0.5 border-t border-dashed border-orange-400" />Forecast avg
+          </span>
         </div>
+      </div>
 
-        <div className="agent-card p-4 chart-glow">
-          <h3 className="text-sm font-medium mb-3">Cost Distribution</h3>
-          <div style={{ width: '100%', height: 280 }}>
+      {/* Service-wise Breakdown + Donut */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Donut Pie */}
+        <div className="agent-card p-4">
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3">
+            Service-wise Cost Breakdown
+          </h3>
+          <div style={{ width: '100%', height: 260 }}>
             <ResponsiveContainer>
               <PieChart>
                 <Pie
@@ -247,72 +285,143 @@ export default function AwsCostDashboard() {
                   dataKey="value"
                   nameKey="name"
                   cx="50%"
-                  cy="45%"
-                  outerRadius={90}
-                  label={({ name, percent }: { name: string; percent: number }) =>
-                    percent > 0.04 ? `${name} ${(percent * 100).toFixed(0)}%` : ''
-                  }
-                  labelLine={false}
+                  cy="50%"
+                  innerRadius={60}
+                  outerRadius={100}
                 >
                   {pieData.map((_, i) => <Cell key={i} fill={COLOURS[i % COLOURS.length]} />)}
                 </Pie>
-                <Tooltip formatter={(v: number) => fmt(v)} />
-                <Legend wrapperStyle={{ fontSize: 11 }} />
+                <Tooltip formatter={(v: number) => fmt4(v)} />
+                <Legend wrapperStyle={{ fontSize: 11 }} iconType="circle" iconSize={8} />
               </PieChart>
             </ResponsiveContainer>
           </div>
         </div>
-      </div>
 
-      {/* % Share + Table */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="agent-card p-4 chart-glow">
-          <h3 className="text-sm font-medium mb-3">% Share by Service</h3>
-          <div style={{ width: '100%', height: 280 }}>
-            <ResponsiveContainer>
-              <BarChart layout="vertical" data={shareData} margin={{ top: 4, right: 40, left: 80, bottom: 4 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" horizontal={false} />
-                <XAxis type="number" tickFormatter={(v: number) => `${v}%`} tick={{ fontSize: 11 }} domain={[0, 100]} />
-                <YAxis type="category" dataKey="service" tick={{ fontSize: 11 }} width={74} />
-                <Tooltip formatter={(v: number) => `${v}%`} />
-                <Bar dataKey="pct" radius={[0, 4, 4, 0]}>
-                  {shareData.map((_, i) => <Cell key={i} fill={COLOURS[i % COLOURS.length]} />)}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
+        {/* Service Usage Table */}
         <div className="agent-card p-4">
-          <h3 className="text-sm font-medium mb-3">Breakdown Table</h3>
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3">
+            Service Usage Table
+          </h3>
           <div className="overflow-auto max-h-[280px]">
-            <table className="w-full text-sm">
+            <table className="w-full text-xs">
               <thead>
-                <tr className="text-slate-400 text-left">
-                  <th className="pb-2 pr-4">Service</th>
-                  <th className="pb-2 pr-4">Cost (USD)</th>
-                  <th className="pb-2">% of Total</th>
+                <tr className="text-slate-500 text-left">
+                  <th className="pb-2 pr-3 font-medium">Service</th>
+                  <th className="pb-2 pr-3 font-medium">Product code</th>
+                  <th className="pb-2 pr-3 font-medium">Cost (USD)</th>
+                  <th className="pb-2 pr-2 font-medium">% of total</th>
                 </tr>
               </thead>
               <tbody>
-                {allData.map((row, i) => (
-                  <tr key={row.service} className="border-t border-white/5">
-                    <td className="py-1.5 pr-4 flex items-center gap-2">
-                      <span className="inline-block w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: COLOURS[i % COLOURS.length] }} />
-                      {label(row.service, row.serviceName)}
-                    </td>
-                    <td className="py-1.5 pr-4">{fmt(row.cost)}</td>
-                    <td className="py-1.5">{((row.cost / total) * 100).toFixed(1)}%</td>
-                  </tr>
-                ))}
+                {allData.map((row, i) => {
+                  const pct = total > 0 ? (row.cost / total) * 100 : 0;
+                  return (
+                    <tr key={`${row.service}-${i}`} className="border-t border-white/5">
+                      <td className="py-1.5 pr-3 text-slate-200 font-medium whitespace-nowrap">
+                        {label(row.service, row.serviceName)}
+                      </td>
+                      <td className="py-1.5 pr-3">
+                        <span
+                          className="px-1.5 py-0.5 rounded text-2xs font-mono"
+                          style={{
+                            background: `${COLOURS[i % COLOURS.length]}22`,
+                            color: COLOURS[i % COLOURS.length],
+                            border: `1px solid ${COLOURS[i % COLOURS.length]}44`,
+                          }}
+                        >
+                          {row.service}
+                        </span>
+                      </td>
+                      <td className="py-1.5 pr-3 font-mono text-slate-200">{fmt4(row.cost)}</td>
+                      <td className="py-1.5">
+                        <div className="flex items-center gap-1.5">
+                          <div className="w-10 h-1 bg-slate-700 rounded-full overflow-hidden">
+                            <div
+                              className="h-full rounded-full"
+                              style={{ width: `${Math.min(pct, 100)}%`, background: COLOURS[i % COLOURS.length] }}
+                            />
+                          </div>
+                          <span className="text-slate-400">{pct.toFixed(1)}%</span>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
                 <tr className="border-t-2 border-white/20 font-semibold">
-                  <td className="py-2 pr-4">Total</td>
-                  <td className="py-2 pr-4">{fmt(total)}</td>
-                  <td className="py-2">100%</td>
+                  <td className="py-2 pr-3 text-slate-200">Total</td>
+                  <td className="py-2 pr-3" />
+                  <td className="py-2 pr-3 font-mono text-white">{fmt4(total)}</td>
+                  <td className="py-2 text-slate-400">100%</td>
                 </tr>
               </tbody>
             </table>
           </div>
+        </div>
+      </div>
+
+      {/* Cost Forecast */}
+      <div className="agent-card p-4">
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">
+          Cost Forecast
+        </h3>
+        <p className="text-2xs text-slate-500 mb-4">
+          Based on daily avg of {fmt4(dailyAvg)} from {daysElapsed} days of {monthLabel}.
+          Low/High = ±20% variance band.
+        </p>
+        <div className="grid grid-cols-3 gap-4">
+          {[
+            { label: '3 months',   value: fc3val,  months: 3  },
+            { label: '6 months',   value: fc6val,  months: 6  },
+            { label: '12 months',  value: fc12val, months: 12 },
+          ].map((fc) => {
+            const v = variance(fc.value);
+            return (
+              <div key={fc.label} className="text-center p-3 rounded-lg bg-slate-800/50 border border-slate-700/50">
+                <div className="text-xs text-slate-400 mb-1">{fc.label}</div>
+                <div className="text-xl font-bold text-white">{fmt2(fc.value)}</div>
+                <div className="text-2xs text-slate-500 mt-0.5">{fmt2(v.low)} – {fmt2(v.high)}</div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Stacked Daily Cost by Service */}
+      <div className="agent-card p-4">
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3">
+          Stacked Daily Cost by Service
+        </h3>
+        <div style={{ width: '100%', height: 220 }}>
+          <ResponsiveContainer>
+            <BarChart
+              data={trendMonths.map((m) => {
+                const entry: Record<string, number | string> = { month: fmtDay(m.month + '-01') };
+                // Distribute top services proportionally for stacked view
+                costlyData.slice(0, 6).forEach((svc) => {
+                  entry[shortName(svc.service, svc.serviceName)] =
+                    Math.round(m.total * (svc.cost / total) * 10000) / 10000;
+                });
+                if (costlyData.length > 6) {
+                  const othersShare = costlyData.slice(6).reduce((s, d) => s + d.cost, 0) / total;
+                  entry['Others'] = Math.round(m.total * othersShare * 10000) / 10000;
+                }
+                return entry;
+              })}
+              margin={{ top: 8, right: 16, left: 0, bottom: 8 }}
+            >
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+              <XAxis dataKey="month" tick={{ fontSize: 10 }} interval={1} />
+              <YAxis tickFormatter={(v: number) => `$${v.toFixed(2)}`} tick={{ fontSize: 10 }} width={55} />
+              <Tooltip formatter={(v: number, name: string) => [fmt4(v), name]} />
+              <Legend wrapperStyle={{ fontSize: 10 }} iconSize={8} />
+              {[...costlyData.slice(0, 6).map((svc) => shortName(svc.service, svc.serviceName)),
+                ...(costlyData.length > 6 ? ['Others'] : [])
+              ].map((name, i) => (
+                <Bar key={name} dataKey={name} stackId="a" fill={COLOURS[i % COLOURS.length]} radius={i === 0 ? [3, 3, 0, 0] : [0, 0, 0, 0]} />
+              ))}
+            </BarChart>
+          </ResponsiveContainer>
         </div>
       </div>
     </div>

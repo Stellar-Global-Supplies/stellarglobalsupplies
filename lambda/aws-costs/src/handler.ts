@@ -2,7 +2,7 @@ import { APIGatewayProxyHandlerV2 } from 'aws-lambda';
 import { S3Client, GetObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
 
 const s3Client = new S3Client({ region: process.env.AWS_REGION ?? 'us-east-1' });
-const PROCESSED_BUCKET = process.env.PROCESSED_CUR_BUCKET!;
+const PROCESSED_BUCKET = 'stellarglobal-costing-bucket';
 
 /** Aggregate multiple months of cost data into a single service-level breakdown */
 function aggregateByService(results: any[]): { service: string; serviceName?: string; cost: number }[] {
