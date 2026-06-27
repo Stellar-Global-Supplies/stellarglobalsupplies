@@ -17,7 +17,7 @@ import {
   Package,
   FileText,
   Cloud,
-  Mail,
+  CheckSquare,
 } from 'lucide-react';
 import type { Session } from '@supabase/supabase-js';
 import type { LucideIcon } from 'lucide-react';
@@ -49,7 +49,7 @@ const NAV_ITEMS: { section: NavSection; label: string; Icon: LucideIcon }[] = [
   { section: 'web',       label: 'Web Traffic',      Icon: Globe            },
   { section: 'meta',      label: 'Meta Marketing',   Icon: Megaphone        },
   { section: 'cloud',     label: 'Cloud Costs',      Icon: Cloud            },
-  { section: 'tasks',     label: 'Email Campaigns',  Icon: Mail             },
+  { section: 'tasks',     label: 'Tasks',            Icon: CheckSquare      },
 ];
 
 // ────────────────────────────────────────────────────────────────[...]
