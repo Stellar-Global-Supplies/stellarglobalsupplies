@@ -1,14 +1,14 @@
 import { useState, useCallback } from 'react';
-import { Linkedin, Upload, Send, Loader2, XCircle } from 'lucide-react';
+import { Instagram, Upload, Send, Loader2, XCircle } from 'lucide-react';
 import { useMutation } from '@tanstack/react-query';
 
-type LinkedInPostData = {
-  content: string;
+type InstagramPostData = {
+  caption: string;
   imageFile?: File;
 };
 
-export default function LinkedInPostWidget() {
-  const [content, setContent] = useState('');
+export default function InstagramPostWidget() {
+  const [caption, setCaption] = useState('');
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
 
@@ -35,26 +35,27 @@ export default function LinkedInPostWidget() {
   }, [imagePreview]);
 
   const postMutation = useMutation({
-    mutationFn: async (data: LinkedInPostData) => {
-      // TODO: Implement LinkedIn API call
+    mutationFn: async (data: InstagramPostData) => {
+      // TODO: Implement Instagram API call
       // This will require:
-      // 1. LinkedIn OAuth integration (similar to Google OAuth)
-      // 2. Store LinkedIn access tokens in DynamoDB
-      // 3. Upload image to LinkedIn (if provided)
-      // 4. Call LinkedIn UGC API to create post
+      // 1. Instagram Basic Display API or Instagram Graph API
+      // 2. Facebook Developer account
+      // 3. Instagram Business/Creator account
+      // 4. Store access tokens in DynamoDB
+      // 5. Upload image and create post
       
-      console.log('Posting to LinkedIn:', data);
+      console.log('Posting to Instagram:', data);
       
       // Mock success for now
       return new Promise((resolve) => {
         setTimeout(() => {
-          resolve({ success: true, postId: 'mock-post-id' });
+          resolve({ success: true, postId: 'mock-instagram-post-id' });
         }, 1000);
       });
     },
     onSuccess: () => {
-      alert('LinkedIn post published successfully!');
-      setContent('');
+      alert('Instagram post published successfully!');
+      setCaption('');
       setImageFile(null);
       setImagePreview(null);
     },
@@ -66,50 +67,54 @@ export default function LinkedInPostWidget() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!content.trim()) {
-      alert('Please enter post content');
+    if (!caption.trim()) {
+      alert('Please enter a caption');
+      return;
+    }
+    if (!imageFile) {
+      alert('Please upload an image (required for Instagram)');
       return;
     }
 
     postMutation.mutate({
-      content: content.trim(),
-      imageFile: imageFile || undefined,
+      caption: caption.trim(),
+      imageFile: imageFile,
     });
   };
 
-  const isValid = content.trim().length > 0;
+  const isValid = caption.trim().length > 0 && imageFile !== null;
 
   return (
     <div className="agent-card p-6">
       <h2 className="text-lg font-semibold text-slate-200 mb-4 flex items-center gap-2">
-        <Linkedin size={18} className="text-blue-400" />
-        LinkedIn Post
+        <Instagram size={18} className="text-pink-400" />
+        Instagram Post
       </h2>
 
       <form onSubmit={handleSubmit} className="space-y-4">
-        {/* Post Content */}
+        {/* Caption */}
         <div>
           <label className="block text-sm font-medium text-slate-300 mb-2">
-            Post Content
+            Caption
           </label>
           <textarea
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            placeholder="What do you want to share?&#10;&#10;Supports hashtags like #B2B #Steel #Manufacturing"
-            rows={6}
-            maxLength={3000}
+            value={caption}
+            onChange={(e) => setCaption(e.target.value)}
+            placeholder="Write your caption...&#10;&#10;Add hashtags like #B2B #Steel #Manufacturing"
+            rows={4}
+            maxLength={2200}
             className="w-full px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-sm text-slate-200 placeholder-slate-500 focus:border-emerald-400/60 focus:outline-none transition-colors"
             required
           />
           <p className="text-2xs text-slate-500 mt-1">
-            {content.length}/3000 characters
+            {caption.length}/2200 characters
           </p>
         </div>
 
-        {/* Image Upload (optional) */}
+        {/* Image Upload (required) */}
         <div>
           <label className="block text-sm font-medium text-slate-300 mb-2">
-            Image (Optional)
+            Image (Required)
           </label>
           {!imageFile ? (
             <label className="flex items-center gap-2 px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg cursor-pointer hover:border-emerald-400/50 transition-colors">
@@ -120,6 +125,7 @@ export default function LinkedInPostWidget() {
                 accept="image/*"
                 onChange={handleImageUpload}
                 className="hidden"
+                required
               />
             </label>
           ) : (
@@ -139,7 +145,7 @@ export default function LinkedInPostWidget() {
             </div>
           )}
           <p className="text-2xs text-slate-500 mt-1">
-            Add an image to make your post more engaging
+            Image is required for Instagram posts
           </p>
         </div>
 
@@ -147,7 +153,7 @@ export default function LinkedInPostWidget() {
         <button
           type="submit"
           disabled={!isValid || postMutation.isPending}
-          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-700 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition-colors text-sm"
+          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 disabled:from-slate-700 disabled:to-slate-700 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition-colors text-sm"
         >
           {postMutation.isPending ? (
             <>

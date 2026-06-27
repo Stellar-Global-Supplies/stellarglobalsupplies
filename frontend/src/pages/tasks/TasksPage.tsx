@@ -1,9 +1,11 @@
 import EmailCampaignWidget from '@/components/EmailCampaignWidget';
 import LinkedInPostWidget from '@/components/LinkedInPostWidget';
+import InstagramPostWidget from '@/components/InstagramPostWidget';
+import FacebookPostWidget from '@/components/FacebookPostWidget';
 
 export default function TasksPage() {
   return (
-    <div className="max-w-5xl mx-auto space-y-6">
+    <div className="max-w-7xl mx-auto space-y-6">
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-slate-100 flex items-center gap-2">
@@ -19,8 +21,10 @@ export default function TasksPage() {
         {/* Email Campaign Widget */}
         <EmailCampaignWidget />
 
-        {/* LinkedIn Post Widget */}
+        {/* Social Media Widgets */}
         <LinkedInPostWidget />
+        <InstagramPostWidget />
+        <FacebookPostWidget />
 
         {/* Future widgets will be added here */}
         {/* Example: <DataSyncWidget /> */}

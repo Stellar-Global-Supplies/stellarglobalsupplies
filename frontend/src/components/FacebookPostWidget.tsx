@@ -1,14 +1,14 @@
 import { useState, useCallback } from 'react';
-import { Linkedin, Upload, Send, Loader2, XCircle } from 'lucide-react';
+import { Facebook, Upload, Send, Loader2, XCircle } from 'lucide-react';
 import { useMutation } from '@tanstack/react-query';
 
-type LinkedInPostData = {
-  content: string;
+type FacebookPostData = {
+  message: string;
   imageFile?: File;
 };
 
-export default function LinkedInPostWidget() {
-  const [content, setContent] = useState('');
+export default function FacebookPostWidget() {
+  const [message, setMessage] = useState('');
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
 
@@ -35,26 +35,27 @@ export default function LinkedInPostWidget() {
   }, [imagePreview]);
 
   const postMutation = useMutation({
-    mutationFn: async (data: LinkedInPostData) => {
-      // TODO: Implement LinkedIn API call
+    mutationFn: async (data: FacebookPostData) => {
+      // TODO: Implement Facebook API call
       // This will require:
-      // 1. LinkedIn OAuth integration (similar to Google OAuth)
-      // 2. Store LinkedIn access tokens in DynamoDB
-      // 3. Upload image to LinkedIn (if provided)
-      // 4. Call LinkedIn UGC API to create post
+      // 1. Facebook Developer account
+      // 2. Facebook App with pages_manage_posts permission
+      // 3. Page access token (not user token)
+      // 4. Store tokens in DynamoDB
+      // 5. Upload image and create post via Graph API
       
-      console.log('Posting to LinkedIn:', data);
+      console.log('Posting to Facebook:', data);
       
       // Mock success for now
       return new Promise((resolve) => {
         setTimeout(() => {
-          resolve({ success: true, postId: 'mock-post-id' });
+          resolve({ success: true, postId: 'mock-facebook-post-id' });
         }, 1000);
       });
     },
     onSuccess: () => {
-      alert('LinkedIn post published successfully!');
-      setContent('');
+      alert('Facebook post published successfully!');
+      setMessage('');
       setImageFile(null);
       setImagePreview(null);
     },
@@ -66,43 +67,43 @@ export default function LinkedInPostWidget() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!content.trim()) {
-      alert('Please enter post content');
+    if (!message.trim()) {
+      alert('Please enter a message');
       return;
     }
 
     postMutation.mutate({
-      content: content.trim(),
+      message: message.trim(),
       imageFile: imageFile || undefined,
     });
   };
 
-  const isValid = content.trim().length > 0;
+  const isValid = message.trim().length > 0;
 
   return (
     <div className="agent-card p-6">
       <h2 className="text-lg font-semibold text-slate-200 mb-4 flex items-center gap-2">
-        <Linkedin size={18} className="text-blue-400" />
-        LinkedIn Post
+        <Facebook size={18} className="text-blue-500" />
+        Facebook Post
       </h2>
 
       <form onSubmit={handleSubmit} className="space-y-4">
-        {/* Post Content */}
+        {/* Message */}
         <div>
           <label className="block text-sm font-medium text-slate-300 mb-2">
-            Post Content
+            Message
           </label>
           <textarea
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            placeholder="What do you want to share?&#10;&#10;Supports hashtags like #B2B #Steel #Manufacturing"
-            rows={6}
-            maxLength={3000}
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            placeholder="What's on your mind?&#10;&#10;Share updates about your business..."
+            rows={5}
+            maxLength={63206}
             className="w-full px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-sm text-slate-200 placeholder-slate-500 focus:border-emerald-400/60 focus:outline-none transition-colors"
             required
           />
           <p className="text-2xs text-slate-500 mt-1">
-            {content.length}/3000 characters
+            {message.length}/63206 characters
           </p>
         </div>
 
