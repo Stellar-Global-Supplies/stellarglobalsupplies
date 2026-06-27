@@ -1,11 +1,12 @@
-import { S3Client, GetObjectCommand, PutObjectCommand, HeadObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
+import { S3Client, GetObjectCommand, PutObjectCommand, DeleteObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
 import { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda';
 import * as zlib from 'zlib';
 import * as csv from 'csv-parser';
 
 const REGION = process.env.AWS_REGION ?? 'us-east-1';
-const RAW_BUCKET = process.env.RAW_CUR_BUCKET!;
-const PROCESSED_BUCKET = process.env.PROCESSED_CUR_BUCKET!;
+// Use existing bucket provided by user
+const RAW_BUCKET = process.env.RAW_CUR_BUCKET ?? 'stellarglobal-costing-bucket';
+const PROCESSED_BUCKET = process.env.PROCESSED_CUR_BUCKET ?? 'stellarglobal-costing-bucket';
 
 const s3Client = new S3Client({ region: REGION });
 
@@ -268,16 +269,70 @@ function aggregateByMonth(records: any[]): any[] {
 }
 
 /**
+ * Delete processed files older than specified days
+ */
+async function cleanupOldProcessedFiles(daysOld: number = 2): Promise<void> {
+  console.log(`Cleaning up processed files older than ${daysOld} days...`);
+
+  try {
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - daysOld);
+
+    // List all processed files
+    const listResponse = await s3Client.send(
+      new ListObjectsV2Command({
+        Bucket: PROCESSED_BUCKET,
+        Prefix: 'processed/',
+        MaxKeys: 1000,
+      }),
+    );
+
+    if (!listResponse.Contents || listResponse.Contents.length === 0) {
+      console.log('No processed files to clean up');
+      return;
+    }
+
+    const oldFiles = listResponse.Contents.filter(obj => 
+      obj.LastModified && obj.LastModified < cutoffDate
+    );
+
+    if (oldFiles.length === 0) {
+      console.log('No old files found to delete');
+      return;
+    }
+
+    console.log(`Found ${oldFiles.length} files older than ${daysOld} days`);
+
+    // Delete old files
+    for (const file of oldFiles) {
+      if (file.Key) {
+        await s3Client.send(
+          new DeleteObjectCommand({
+            Bucket: PROCESSED_BUCKET,
+            Key: file.Key,
+          }),
+        );
+        console.log(`Deleted: ${file.Key}`);
+      }
+    }
+
+    console.log(`Cleanup completed. Deleted ${oldFiles.length} files.`);
+  } catch (error) {
+    console.error('Cleanup error:', error);
+  }
+}
+
+/**
  * Find and process the latest manifest file
  */
 async function processLatestCUR(): Promise<void> {
   console.log('Starting scheduled CUR processing...');
 
-  // List all manifest files
+  // List all manifest files in the correct path
   const listResponse = await s3Client.send(
     new ListObjectsV2Command({
       Bucket: RAW_BUCKET,
-      Prefix: 'awscost/',
+      Prefix: 'awscost/awscost/',
       MaxKeys: 100,
     }),
   );
@@ -287,9 +342,9 @@ async function processLatestCUR(): Promise<void> {
     return;
   }
 
-  // Filter for manifest.json files and sort by last modified
+  // Filter for manifest.json files (case-insensitive) and sort by last modified
   const manifestFiles = listResponse.Contents
-    .filter(obj => obj.Key?.endsWith('manifest.json'))
+    .filter(obj => obj.Key?.toLowerCase().endsWith('manifest.json'))
     .sort((a, b) => (b.LastModified?.getTime() || 0) - (a.LastModified?.getTime() || 0));
 
   if (manifestFiles.length === 0) {
@@ -327,11 +382,16 @@ export const handler = async (event: any): Promise<any> => {
     // Check if this is a scheduled EventBridge event
     if (event.source === 'aws.events' && event['detail-type'] === 'Scheduled Event') {
       console.log('Scheduled trigger detected');
+      
+      // First, cleanup old processed files
+      await cleanupOldProcessedFiles(2);
+      
+      // Then process latest CUR
       await processLatestCUR();
       
       return {
         statusCode: 200,
-        body: JSON.stringify({ success: true, message: 'CUR processed successfully' }),
+        body: JSON.stringify({ success: true, message: 'CUR processed and cleanup completed' }),
       };
     }
 

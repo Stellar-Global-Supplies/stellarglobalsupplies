@@ -125,41 +125,6 @@ resource "aws_s3_bucket_lifecycle_configuration" "attachments" {
 }
 
 
-# ────────────────────────────────────────────────────────────────────────────────
-# S3 — CUR (Cost and Usage Report) BUCKETS
-# ────────────────────────────────────────────────────────────────────────────────
-resource "aws_s3_bucket" "cur_raw" {
-  bucket_prefix = "${local.prefix}-cur-raw-"
-  force_destroy = true
-}
-
-resource "aws_s3_bucket_lifecycle_configuration" "cur_raw" {
-  bucket = aws_s3_bucket.cur_raw.id
-  rule {
-    id     = "expire-old-cur"
-    status = "Enabled"
-    expiration {
-      days = 90
-    }
-  }
-}
-
-resource "aws_s3_bucket" "cur_processed" {
-  bucket_prefix = "${local.prefix}-cur-processed-"
-  force_destroy = true
-}
-
-resource "aws_s3_bucket_lifecycle_configuration" "cur_processed" {
-  bucket = aws_s3_bucket.cur_processed.id
-  rule {
-    id     = "expire-old-processed"
-    status = "Enabled"
-    expiration {
-      days = 365
-    }
-  }
-}
-
 
 
 
@@ -740,8 +705,8 @@ resource "aws_lambda_function" "cur_processor" {
 
   environment {
     variables = {
-      RAW_CUR_BUCKET       = aws_s3_bucket.cur_raw.id
-      PROCESSED_CUR_BUCKET = aws_s3_bucket.cur_processed.id
+      RAW_CUR_BUCKET       = "stellarglobal-costing-bucket"
+      PROCESSED_CUR_BUCKET = "stellarglobal-costing-bucket"
       ENVIRONMENT          = var.environment
     }
   }
