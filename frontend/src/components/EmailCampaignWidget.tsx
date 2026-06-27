@@ -3,6 +3,11 @@ import { Mail, Upload, Paperclip, Send, XCircle, Loader2 } from 'lucide-react';
 import { useMutation } from '@tanstack/react-query';
 import { sendBulkEmail } from '@/api/client';
 
+// ── Pull user_id from wherever your app stores it ────────────────────────────
+// Replace this import / hook with your actual auth solution (e.g. useAuth, Cognito, JWT decode).
+// The value just needs to be a non-empty string that matches what's stored in DynamoDB.
+import { useAuth } from '@/hooks/useAuth';   // ← adjust path to your auth hook
+
 type Recipient = {
   email: string;
   name?: string;
@@ -14,17 +19,32 @@ type Attachment = {
   preview?: string;
 };
 
+// Encode a File to a base64 data-URI string so it survives JSON serialisation.
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload  = () => resolve(reader.result as string); // "data:<mime>;base64,<data>"
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
 export default function EmailCampaignWidget() {
-  const [recipients, setRecipients] = useState<Recipient[]>([]);
-  const [emailBody, setEmailBody] = useState('');
-  const [subject, setSubject] = useState('');
-  const [attachments, setAttachments] = useState<Attachment[]>([]);
-  const [uploadProgress, setUploadProgress] = useState<string | null>(null);
+  const { userId } = useAuth();   // ← replace with your actual user-id source
+
+  const [recipients,      setRecipients]      = useState<Recipient[]>([]);
+  const [emailBody,       setEmailBody]       = useState('');
+  const [subject,         setSubject]         = useState('');
+  const [attachments,     setAttachments]     = useState<Attachment[]>([]);
+  const [uploadProgress,  setUploadProgress]  = useState<string | null>(null);
 
   const sendEmailMutation = useMutation({
     mutationFn: sendBulkEmail,
     onSuccess: (data) => {
-      alert(`Email campaign sent successfully!\n\nTotal: ${data.total}\nSuccess: ${data.success}\nFailed: ${data.failed}`);
+      alert(
+        `Email campaign sent!\n\nTotal: ${data.total}\nSuccess: ${data.success}\nFailed: ${data.failed}` +
+        (data.errors?.length ? `\n\nErrors:\n${data.errors.map((e: any) => `${e.email}: ${e.error}`).join('\n')}` : ''),
+      );
       setRecipients([]);
       setEmailBody('');
       setSubject('');
@@ -35,55 +55,58 @@ export default function EmailCampaignWidget() {
     },
   });
 
-  const handleXlsxUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+  // ── CSV Upload ──────────────────────────────────────────────────────────────
+  const handleCsvUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setUploadProgress('Reading file...');
-    
+
     const reader = new FileReader();
     reader.onload = (event) => {
       try {
-        const text = event.target?.result as string;
-        const lines = text.split('\n').filter(line => line.trim());
-        
+        const text    = event.target?.result as string;
+        const lines   = text.split('\n').filter(l => l.trim());
         const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
-        const emailIndex = headers.findIndex(h => h.includes('email'));
-        
-        if (emailIndex === -1) {
-          alert('No "email" column found in the file');
+        const emailIdx = headers.findIndex(h => h.includes('email'));
+
+        if (emailIdx === -1) {
+          alert('No "email" column found in the CSV.');
           setUploadProgress(null);
           return;
         }
 
         const parsed: Recipient[] = lines.slice(1).map(line => {
-          const values = line.split(',');
-          const recipient: Recipient = {
-            email: values[emailIndex]?.trim() || '',
-          };
-          
-          headers.forEach((header, index) => {
-            if (index !== emailIndex && values[index]) {
-              recipient[header] = values[index].trim();
-            }
+          const values: string[] = [];
+          // Handle quoted fields that may contain commas
+          let inQuote = false, cur = '';
+          for (const ch of line) {
+            if (ch === '"') { inQuote = !inQuote; }
+            else if (ch === ',' && !inQuote) { values.push(cur.trim()); cur = ''; }
+            else { cur += ch; }
+          }
+          values.push(cur.trim());
+
+          const recipient: Recipient = { email: values[emailIdx]?.replace(/^"|"$/g, '').trim() ?? '' };
+          headers.forEach((h, i) => {
+            if (i !== emailIdx && values[i]) recipient[h] = values[i].replace(/^"|"$/g, '').trim();
           });
-          
           return recipient;
-        }).filter(r => r.email);
+        }).filter(r => r.email && r.email.includes('@'));
 
         setRecipients(parsed);
         setUploadProgress(null);
         alert(`Loaded ${parsed.length} recipients from ${file.name}`);
-      } catch (error) {
-        alert('Error parsing file. Please ensure it\'s a valid CSV format.');
+      } catch {
+        alert('Error parsing file. Please ensure it\'s a valid CSV.');
         setUploadProgress(null);
       }
     };
-    
     reader.readAsText(file);
     e.target.value = '';
   }, []);
 
+  // ── Attachment Upload ───────────────────────────────────────────────────────
   const handleAttachmentUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     const newAttachments: Attachment[] = files.map(file => ({
@@ -97,36 +120,58 @@ export default function EmailCampaignWidget() {
   const removeAttachment = useCallback((index: number) => {
     setAttachments(prev => {
       const removed = prev[index];
-      if (removed?.preview) {
-        URL.revokeObjectURL(removed.preview);
-      }
+      if (removed?.preview) URL.revokeObjectURL(removed.preview);
       return prev.filter((_, i) => i !== index);
     });
   }, []);
 
-  const handleSubmit = useCallback((e: React.FormEvent) => {
+  // ── Submit ──────────────────────────────────────────────────────────────────
+  const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
+    if (!userId) {
+      alert('You must be logged in to send emails.');
+      return;
+    }
     if (recipients.length === 0) {
-      alert('Please upload recipients first');
+      alert('Please upload recipients first.');
       return;
     }
     if (!subject.trim()) {
-      alert('Please enter a subject');
+      alert('Please enter a subject.');
       return;
     }
     if (!emailBody.trim()) {
-      alert('Please enter an email body');
+      alert('Please enter an email body.');
       return;
     }
 
+    // Encode attachments to base64 so they survive JSON serialisation.
+    // The lambda will decode these and upload them to S3 before sending.
+    let encodedAttachments: { name: string; type: string; data: string }[] = [];
+    if (attachments.length > 0) {
+      try {
+        encodedAttachments = await Promise.all(
+          attachments.map(async (a) => ({
+            name: a.file.name,
+            type: a.file.type || 'application/octet-stream',
+            data: await fileToBase64(a.file), // "data:<mime>;base64,<b64>"
+          })),
+        );
+      } catch {
+        alert('Failed to encode attachments. Please try again.');
+        return;
+      }
+    }
+
     sendEmailMutation.mutate({
-      recipients: recipients.map(r => r.email),
-      subject: subject.trim(),
-      body: emailBody.trim(),
-      attachments: attachments.map(a => a.file),
+      recipients:  recipients.map(r => r.email),
+      subject:     subject.trim(),
+      body:        emailBody.trim(),
+      user_id:     userId,                  // ← now always included
+      attachments: encodedAttachments,      // ← base64-encoded, not raw File objects
     });
-  }, [recipients, subject, emailBody, attachments, sendEmailMutation]);
+  }, [userId, recipients, subject, emailBody, attachments, sendEmailMutation]);
 
   const isValid = recipients.length > 0 && subject.trim() && emailBody.trim();
 
@@ -138,42 +183,30 @@ export default function EmailCampaignWidget() {
       </h2>
 
       <form onSubmit={handleSubmit} className="space-y-4">
-        {/* Recipients Upload */}
+        {/* Recipients */}
         <div>
-          <label className="block text-sm font-medium text-slate-300 mb-2">
-            Recipients (CSV)
-          </label>
+          <label className="block text-sm font-medium text-slate-300 mb-2">Recipients (CSV)</label>
           <p className="text-2xs text-slate-500 mb-2">
-            Required: CSV file with "email" column (e.g., email,name,company)
+            Required: CSV with an "email" column (e.g. email,name,company)
           </p>
           <label className="flex items-center gap-2 px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg cursor-pointer hover:border-emerald-400/50 transition-colors">
             <Upload size={14} className="text-slate-400" />
             <span className="text-xs text-slate-300">Upload CSV file</span>
-            <input
-              type="file"
-              accept=".csv"
-              onChange={handleXlsxUpload}
-              className="hidden"
-            />
+            <input type="file" accept=".csv" onChange={handleCsvUpload} className="hidden" />
           </label>
           {uploadProgress && (
             <p className="text-2xs text-emerald-400 mt-1 flex items-center gap-1">
-              <Loader2 size={10} className="animate-spin" />
-              {uploadProgress}
+              <Loader2 size={10} className="animate-spin" />{uploadProgress}
             </p>
           )}
           {recipients.length > 0 && (
-            <div className="mt-2 text-xs text-slate-400">
-              {recipients.length} recipients loaded
-            </div>
+            <p className="mt-2 text-xs text-slate-400">{recipients.length} recipients loaded</p>
           )}
         </div>
 
         {/* Subject */}
         <div>
-          <label className="block text-sm font-medium text-slate-300 mb-2">
-            Subject
-          </label>
+          <label className="block text-sm font-medium text-slate-300 mb-2">Subject</label>
           <input
             type="text"
             value={subject}
@@ -184,7 +217,7 @@ export default function EmailCampaignWidget() {
           />
         </div>
 
-        {/* Email Body */}
+        {/* Body */}
         <div>
           <label className="block text-sm font-medium text-slate-300 mb-2">
             Email Body (HTML supported)
@@ -220,11 +253,7 @@ export default function EmailCampaignWidget() {
               {attachments.map((att, index) => (
                 <div key={index} className="flex items-center justify-between bg-slate-800/30 rounded px-2 py-1">
                   <span className="text-2xs text-slate-300 truncate">{att.file.name}</span>
-                  <button
-                    type="button"
-                    onClick={() => removeAttachment(index)}
-                    className="text-red-400 hover:text-red-300"
-                  >
+                  <button type="button" onClick={() => removeAttachment(index)} className="text-red-400 hover:text-red-300">
                     <XCircle size={12} />
                   </button>
                 </div>
@@ -240,15 +269,9 @@ export default function EmailCampaignWidget() {
           className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-500 hover:bg-emerald-400 disabled:bg-slate-700 disabled:cursor-not-allowed text-slate-950 font-semibold rounded-lg transition-colors text-sm"
         >
           {sendEmailMutation.isPending ? (
-            <>
-              <Loader2 size={16} className="animate-spin" />
-              Sending...
-            </>
+            <><Loader2 size={16} className="animate-spin" />Sending…</>
           ) : (
-            <>
-              <Send size={16} />
-              Send Campaign
-            </>
+            <><Send size={16} />Send Campaign ({recipients.length} recipients)</>
           )}
         </button>
       </form>

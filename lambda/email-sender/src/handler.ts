@@ -1,37 +1,46 @@
 import { APIGatewayProxyHandlerV2 } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, GetCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 
-const REGION = process.env.AWS_REGION ?? 'us-east-1';
-const DYNAMODB_TABLE = process.env.DYNAMODB_TABLE!;
+const REGION            = process.env.AWS_REGION           ?? 'us-east-1';
+const DYNAMODB_TABLE    = process.env.DYNAMODB_TABLE!;
 const ATTACHMENTS_BUCKET = process.env.ATTACHMENTS_BUCKET;
 
-const ddbClient = new DynamoDBClient({ region: REGION });
-const ddb = DynamoDBDocumentClient.from(ddbClient, {
+const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({ region: REGION }), {
   marshallOptions: { removeUndefinedValues: true },
 });
 const s3Client = new S3Client({ region: REGION });
 
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+/** An attachment encoded by the frontend as a base64 data-URI. */
+interface IncomingAttachment {
+  name: string;   // original filename
+  type: string;   // MIME type
+  data: string;   // "data:<mime>;base64,<b64>" OR just "<b64>"
+}
+
 interface EmailRequest {
-  recipients: string[];
-  subject: string;
-  body: string;
-  user_id: string;
-  attachment_keys?: string[]; // S3 keys for attachments
+  recipients:   string[];
+  subject:      string;
+  body:         string;
+  user_id:      string;
+  attachments?: IncomingAttachment[];   // base64-encoded files from the frontend
+  /** Legacy: direct S3 keys — still supported for server-to-server callers. */
+  attachment_keys?: string[];
 }
 
 interface EmailResponse {
-  total: number;
-  success: number;
-  failed: number;
-  errors?: Array<{ email: string; error: string }>;
+  total:    number;
+  success:  number;
+  failed:   number;
+  errors?:  Array<{ email: string; error: string }>;
 }
 
-/**
- * Get Google OAuth tokens for a user from DynamoDB
- */
-async function getGoogleTokens(userId: string): Promise<{ access_token: string; refresh_token: string } | null> {
+// ── Google OAuth helpers ──────────────────────────────────────────────────────
+
+async function getGoogleTokens(userId: string): Promise<{ refresh_token: string } | null> {
   try {
     const result = await ddb.send(
       new QueryCommand({
@@ -43,68 +52,78 @@ async function getGoogleTokens(userId: string): Promise<{ access_token: string; 
         },
       }),
     );
-
     const token = result.Items?.[0];
-    if (!token?.refresh_token) {
-      return null;
-    }
-
-    return {
-      access_token: '', // Will be refreshed
-      refresh_token: token.refresh_token,
-    };
-  } catch (error) {
-    console.error('Failed to get Google tokens:', error);
+    return token?.refresh_token ? { refresh_token: token.refresh_token } : null;
+  } catch (err) {
+    console.error('getGoogleTokens error:', err);
     return null;
   }
 }
 
-/**
- * Refresh Google access token using refresh token
- */
 async function refreshAccessToken(refreshToken: string): Promise<string> {
-  // Note: In production, store client_id and client_secret in SSM Parameter Store
-  // For now, we'll need to get them from environment or SSM
-  const clientId = process.env.GOOGLE_CLIENT_ID;
+  const clientId     = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  if (!clientId || !clientSecret) throw new Error('Google OAuth credentials not configured');
 
-  if (!clientId || !clientSecret) {
-    throw new Error('Google OAuth credentials not configured');
-  }
-
-  const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
-    method: 'POST',
+  const res  = await fetch('https://oauth2.googleapis.com/token', {
+    method:  'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
+    body:    new URLSearchParams({
       refresh_token: refreshToken,
-      client_id: clientId,
+      client_id:     clientId,
       client_secret: clientSecret,
-      grant_type: 'refresh_token',
+      grant_type:    'refresh_token',
     }),
   });
-
-  const tokenJson = await tokenRes.json();
-  
-  if (!tokenRes.ok || tokenJson.error) {
-    throw new Error(tokenJson.error_description || 'Failed to refresh access token');
-  }
-
-  return tokenJson.access_token;
+  const json = await res.json();
+  if (!res.ok || json.error) throw new Error(json.error_description ?? 'Failed to refresh access token');
+  return json.access_token as string;
 }
 
+// ── Attachment helpers ────────────────────────────────────────────────────────
+
 /**
- * Send email using Gmail API
+ * Upload a base64-encoded attachment to S3 and return its key.
+ * The data field may arrive as a full data-URI ("data:<mime>;base64,<b64>")
+ * or as a raw base64 string — both are handled.
  */
+async function uploadAttachmentToS3(att: IncomingAttachment, userId: string): Promise<string> {
+  if (!ATTACHMENTS_BUCKET) throw new Error('ATTACHMENTS_BUCKET env var not set');
+
+  // Strip the data-URI prefix if present
+  const base64 = att.data.includes(',') ? att.data.split(',')[1] : att.data;
+  const buffer = Buffer.from(base64, 'base64');
+
+  const key = `attachments/${userId}/${Date.now()}-${att.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+  await s3Client.send(
+    new PutObjectCommand({
+      Bucket:      ATTACHMENTS_BUCKET,
+      Key:         key,
+      Body:        buffer,
+      ContentType: att.type || 'application/octet-stream',
+    }),
+  );
+  return key;
+}
+
+async function streamToBuffer(stream: any): Promise<Buffer> {
+  const chunks: Uint8Array[] = [];
+  for await (const chunk of stream) chunks.push(chunk);
+  return Buffer.concat(chunks);
+}
+
+// ── Gmail send ────────────────────────────────────────────────────────────────
+
 async function sendEmailViaGmail(
-  accessToken: string,
-  to: string,
-  subject: string,
-  body: string,
-  attachmentKeys?: string[],
+  accessToken:    string,
+  to:             string,
+  subject:        string,
+  body:           string,
+  attachmentKeys: string[],
 ): Promise<void> {
-  // Build MIME message
-  const boundary = 'boundary_' + Date.now();
-  let mimeMessage = [
+  const boundary = `boundary_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+
+  const parts: string[] = [
     `From: me`,
     `To: ${to}`,
     `Subject: ${subject}`,
@@ -113,106 +132,83 @@ async function sendEmailViaGmail(
     '',
     `--${boundary}`,
     `Content-Type: text/html; charset=UTF-8`,
+    `Content-Transfer-Encoding: quoted-printable`,
     '',
     body,
   ];
 
-  // Add attachments if any
-  if (attachmentKeys && attachmentKeys.length > 0 && ATTACHMENTS_BUCKET) {
+  if (attachmentKeys.length > 0 && ATTACHMENTS_BUCKET) {
     for (const key of attachmentKeys) {
       try {
-        const s3Response = await s3Client.send(
-          new GetObjectCommand({
-            Bucket: ATTACHMENTS_BUCKET,
-            Key: key,
-          }),
-        );
+        const s3Res  = await s3Client.send(new GetObjectCommand({ Bucket: ATTACHMENTS_BUCKET, Key: key }));
+        const buffer = await streamToBuffer(s3Res.Body);
+        const filename = key.split('/').pop() ?? 'attachment';
 
-        const buffer = await streamToBuffer(s3Response.Body);
-        const base64Content = buffer.toString('base64');
-        const filename = key.split('/').pop() || 'attachment';
-
-        mimeMessage = [
-          ...mimeMessage,
+        parts.push(
           '',
           `--${boundary}`,
-          `Content-Type: application/octet-stream`,
+          `Content-Type: ${s3Res.ContentType ?? 'application/octet-stream'}`,
           `Content-Disposition: attachment; filename="${filename}"`,
           `Content-Transfer-Encoding: base64`,
           '',
-          base64Content,
-        ];
-      } catch (error) {
-        console.error(`Failed to fetch attachment ${key}:`, error);
+          buffer.toString('base64'),
+        );
+      } catch (err) {
+        console.error(`Failed to attach ${key}:`, err);
       }
     }
   }
 
-  mimeMessage = [...mimeMessage, '', `--${boundary}--`, ''];
+  parts.push('', `--${boundary}--`, '');
 
-  const encodedMessage = Buffer.from(mimeMessage.join('\n')).toString('base64')
+  const raw = Buffer.from(parts.join('\r\n'))
+    .toString('base64')
     .replace(/\+/g, '-')
     .replace(/\//g, '_')
     .replace(/=+$/, '');
 
-  const response = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      raw: encodedMessage,
-    }),
+  const res = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
+    method:  'POST',
+    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body:    JSON.stringify({ raw }),
   });
 
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error?.message || 'Failed to send email via Gmail');
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.error?.message ?? `Gmail API error ${res.status}`);
   }
 }
 
-/**
- * Convert stream to buffer
- */
-async function streamToBuffer(stream: any): Promise<Buffer> {
-  const chunks: Uint8Array[] = [];
-  for await (const chunk of stream) {
-    chunks.push(chunk);
-  }
-  return Buffer.concat(chunks);
-}
+// ── Handler ───────────────────────────────────────────────────────────────────
 
 export const handler: APIGatewayProxyHandlerV2 = async (event) => {
   try {
-    const body = JSON.parse(event.body ?? '{}') as EmailRequest;
-    const { recipients, subject, body: emailBody, user_id, attachment_keys } = body;
-
-    if (!user_id) {
+    // Parse body — guard against missing / malformed JSON
+    let body: EmailRequest;
+    try {
+      body = JSON.parse(event.body ?? '{}') as EmailRequest;
+    } catch {
       return {
         statusCode: 400,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ error: 'user_id is required' }),
+        body: JSON.stringify({ error: 'Invalid JSON body' }),
       };
     }
 
-    if (!recipients || !Array.isArray(recipients) || recipients.length === 0) {
-      return {
-        statusCode: 400,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ error: 'Invalid recipients list' }),
-      };
+    const { recipients, subject, body: emailBody, user_id, attachments = [], attachment_keys = [] } = body;
+
+    // ── Validate inputs ───────────────────────────────────────────────────────
+    if (!user_id?.trim()) {
+      return { statusCode: 400, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'user_id is required' }) };
+    }
+    if (!Array.isArray(recipients) || recipients.length === 0) {
+      return { statusCode: 400, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'recipients must be a non-empty array' }) };
+    }
+    if (!subject?.trim() || !emailBody?.trim()) {
+      return { statusCode: 400, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'subject and body are required' }) };
     }
 
-    if (!subject || !emailBody) {
-      return {
-        statusCode: 400,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ error: 'Subject and body are required' }),
-      };
-    }
-
-    // Get Google OAuth tokens for the user
+    // ── Auth ──────────────────────────────────────────────────────────────────
     const tokens = await getGoogleTokens(user_id);
     if (!tokens) {
       return {
@@ -222,11 +218,11 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
       };
     }
 
-    // Refresh access token
     let accessToken: string;
     try {
       accessToken = await refreshAccessToken(tokens.refresh_token);
-    } catch (error) {
+    } catch (err) {
+      console.error('Token refresh error:', err);
       return {
         statusCode: 401,
         headers: { 'Content-Type': 'application/json' },
@@ -234,60 +230,69 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
       };
     }
 
-    // Send emails
+    // ── Upload base64 attachments → S3, merge with any pre-existing S3 keys ──
+    let allAttachmentKeys: string[] = [...attachment_keys];
+
+    if (attachments.length > 0 && ATTACHMENTS_BUCKET) {
+      try {
+        const uploadedKeys = await Promise.all(
+          attachments.map((att) => uploadAttachmentToS3(att, user_id)),
+        );
+        allAttachmentKeys = [...allAttachmentKeys, ...uploadedKeys];
+      } catch (err) {
+        console.error('Attachment upload error:', err);
+        return {
+          statusCode: 500,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ error: 'Failed to upload attachments. Please try again.' }),
+        };
+      }
+    }
+
+    // ── Send emails in batches ────────────────────────────────────────────────
     const errors: Array<{ email: string; error: string }> = [];
     let successCount = 0;
-    let failedCount = 0;
+    let failedCount  = 0;
 
-    // Gmail API has rate limits, send in batches
-    const batchSize = 10;
-    for (let i = 0; i < recipients.length; i += batchSize) {
-      const batch = recipients.slice(i, i + batchSize);
-      
+    const BATCH_SIZE  = 10;
+    const BATCH_DELAY = 1000; // ms — respect Gmail rate limits
+
+    for (let i = 0; i < recipients.length; i += BATCH_SIZE) {
+      const batch = recipients.slice(i, i + BATCH_SIZE);
+
       await Promise.allSettled(
         batch.map(async (email) => {
           try {
-            await sendEmailViaGmail(accessToken, email, subject, emailBody, attachment_keys);
+            await sendEmailViaGmail(accessToken, email, subject.trim(), emailBody.trim(), allAttachmentKeys);
             successCount++;
-          } catch (error) {
+          } catch (err) {
             failedCount++;
-            errors.push({
-              email,
-              error: error instanceof Error ? error.message : 'Unknown error',
-            });
+            errors.push({ email, error: err instanceof Error ? err.message : 'Unknown error' });
           }
         }),
       );
 
-      // Add delay between batches to respect Gmail rate limits
-      if (i + batchSize < recipients.length) {
-        await new Promise(resolve => setTimeout(resolve, 1000));
+      if (i + BATCH_SIZE < recipients.length) {
+        await new Promise(resolve => setTimeout(resolve, BATCH_DELAY));
       }
     }
 
-    const response: EmailResponse = {
-      total: recipients.length,
-      success: successCount,
-      failed: failedCount,
-    };
-
-    if (errors.length > 0) {
-      response.errors = errors;
-    }
+    const response: EmailResponse = { total: recipients.length, success: successCount, failed: failedCount };
+    if (errors.length > 0) response.errors = errors;
 
     return {
       statusCode: 200,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(response),
     };
-  } catch (error) {
-    console.error('Email sender error:', error);
+  } catch (err) {
+    console.error('Email sender unhandled error:', err);
     return {
       statusCode: 500,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         error: 'Failed to send emails',
-        detail: error instanceof Error ? error.message : 'Unknown error',
+        detail: err instanceof Error ? err.message : 'Unknown error',
       }),
     };
   }
