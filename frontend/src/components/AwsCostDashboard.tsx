@@ -45,7 +45,7 @@ export default function AwsCostDashboard() {
 
   useEffect(() => { loadData(selectedYear, selectedMonth); }, [selectedYear, selectedMonth]);
 
-  const data          = response?.services      ?? [];
+  const allData       = response?.services      ?? [];
   const monthlyTotals = response?.monthly_totals ?? [];
   const forecasts     = response?.forecasts;
   const monthLabel    = `${MONTHS[selectedMonth - 1]} ${selectedYear}`;
@@ -54,12 +54,34 @@ export default function AwsCostDashboard() {
 
   if (loading) return <div className="agent-card p-4 animate-pulse">Loading cloud cost data…</div>;
   if (error)   return <div className="agent-card p-4 text-red-300">Error: {error}</div>;
-  if (data.length === 0)
+  if (allData.length === 0)
     return <div className="agent-card p-4">No cost data available for {monthLabel}.</div>;
 
-  const total   = data.reduce((s, d) => s + d.cost, 0);
+  // Only show services that have actual cost > 0 in charts/KPIs; keep full list for table
+  const data    = allData.filter((d) => d.cost > 0);
+  const total   = allData.reduce((s, d) => s + d.cost, 0);
   const top4    = data.slice(0, 4);
   const top5    = data.slice(0, 5);
+
+  // When the lambda only has 1 month of history, linear regression returns $0.
+  // Fall back to a daily-average projection in that case.
+  const inferForecast = (months: number): number => {
+    const fcArr = months === 1 ? forecasts?.next_month
+                : months === 3 ? forecasts?.three_months
+                : months === 6 ? forecasts?.six_months
+                : forecasts?.twelve_months;
+    const avg = fcArr && fcArr.length > 0
+      ? fcArr.reduce((s, f) => s + f.forecastCost, 0) / fcArr.length
+      : 0;
+    if (avg > 0) return avg;
+    // Fallback: daily avg × 30
+    if (total > 0) {
+      const daysElapsed = new Date().getDate();
+      const dailyAvg = total / daysElapsed;
+      return dailyAvg * 30 * months;
+    }
+    return 0;
+  };
   const others  = data.slice(5).reduce((s, d) => s + d.cost, 0);
 
   const pieData = [
@@ -132,10 +154,10 @@ export default function AwsCostDashboard() {
       {/* Forecast KPI Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {([
-          { label: 'Next Month',   value: fcNext?.forecastCost ?? 0,                                          color: '#00B98E' },
-          { label: '3 Month Avg',  value: fc3  ? fc3.reduce((s, f) => s + f.forecastCost, 0)  / fc3.length  : 0, color: '#3B82F6' },
-          { label: '6 Month Avg',  value: fc6  ? fc6.reduce((s, f) => s + f.forecastCost, 0)  / fc6.length  : 0, color: '#F59E0B' },
-          { label: '12 Month Avg', value: fc12m ? fc12m.reduce((s, f) => s + f.forecastCost, 0) / fc12m.length : 0, color: '#8B5CF6' },
+          { label: 'Next Month',   value: inferForecast(1),  color: '#00B98E' },
+          { label: '3 Month Avg',  value: inferForecast(3),  color: '#3B82F6' },
+          { label: '6 Month Avg',  value: inferForecast(6),  color: '#F59E0B' },
+          { label: '12 Month Avg', value: inferForecast(12), color: '#8B5CF6' },
         ] as const).map((kpi) => (
           <div key={kpi.label} className="agent-card p-3 card-glow">
             <div className="text-xs text-slate-400 mb-1">{kpi.label}</div>
@@ -273,7 +295,7 @@ export default function AwsCostDashboard() {
                 </tr>
               </thead>
               <tbody>
-                {data.map((row, i) => (
+                {allData.map((row, i) => (
                   <tr key={row.service} className="border-t border-white/5">
                     <td className="py-1.5 pr-4 flex items-center gap-2">
                       <span className="inline-block w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: COLOURS[i % COLOURS.length] }} />
