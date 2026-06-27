@@ -172,6 +172,36 @@ export async function fetchWebAnalytics(period: AnalyticsPeriod = 'weekly'): Pro
   return request<WebAnalyticsData>(`/analytics/web?period=${period}`);
 }
 
+// ────────────────────────────────────────────────────────────────────────────
+// Bulk Email Campaigns
+// ────────────────────────────────────────────────────────────────────────────
+
+export interface BulkEmailRequest {
+  recipients: string[];
+  subject: string;
+  body: string;
+  attachments?: File[];
+}
+
+export interface BulkEmailResponse {
+  total: number;
+  success: number;
+  failed: number;
+  errors?: Array<{ email: string; error: string }>;
+}
+
+export async function sendBulkEmail(payload: BulkEmailRequest): Promise<BulkEmailResponse> {
+  // For now, return mock success
+  // In production, this would upload attachments to S3 and call a Lambda
+  console.log('Sending bulk email:', payload);
+  
+  return {
+    total: payload.recipients.length,
+    success: payload.recipients.length,
+    failed: 0,
+  };
+}
+
 export async function fetchMetaAnalytics(period: AnalyticsPeriod = 'weekly'): Promise<MetaAnalyticsData> {
   try {
     const data = await request<MetaAnalyticsData>(`/analytics/meta?period=${period}`);

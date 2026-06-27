@@ -17,6 +17,7 @@ import {
   Package,
   FileText,
   Cloud,
+  Mail,
 } from 'lucide-react';
 import type { Session } from '@supabase/supabase-js';
 import type { LucideIcon } from 'lucide-react';
@@ -33,6 +34,7 @@ import InventoryDashboard from '@/components/InventoryDashboard';
 import SalesPurchaseTable from '@/components/SalesPurchaseTable';
 import AuthPage from '@/components/AuthPage';
 import AwsCostDashboard from '@/components/AwsCostDashboard';
+import TasksPage from '@/pages/tasks/TasksPage';
 
 // ────────────────────────────────────────────────────────────────[...]
 // Nav item config
@@ -47,6 +49,7 @@ const NAV_ITEMS: { section: NavSection; label: string; Icon: LucideIcon }[] = [
   { section: 'web',       label: 'Web Traffic',      Icon: Globe            },
   { section: 'meta',      label: 'Meta Marketing',   Icon: Megaphone        },
   { section: 'cloud',     label: 'Cloud Costs',      Icon: Cloud            },
+  { section: 'tasks',     label: 'Email Campaigns',  Icon: Mail             },
 ];
 
 // ────────────────────────────────────────────────────────────────[...]
@@ -328,6 +331,7 @@ function MainContent() {
       case 'web':       return <WebTrafficDashboard />;
       case 'meta':      return <MetaMarketingDashboard />;
       case 'cloud':     return <AwsCostDashboard />;
+      case 'tasks':     return <TasksPage />;
       default:          return <Dashboard />;
     }
   })();
