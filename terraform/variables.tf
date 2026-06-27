@@ -135,3 +135,9 @@ variable "supabase_service_role_key" {
   type = string
   sensitive = true
 }
+
+variable "sender_email" {
+  description = "Verified SES sender email address for bulk email campaigns"
+  type        = string
+  default     = "noreply@stellarglobalsupplies.com"
+}

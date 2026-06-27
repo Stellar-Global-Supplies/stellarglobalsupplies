@@ -108,6 +108,24 @@ resource "aws_s3_bucket" "data" {
   force_destroy = false
 }
 
+resource "aws_s3_bucket" "attachments" {
+  bucket_prefix = "${local.prefix}-attachments-"
+  force_destroy = true
+}
+
+resource "aws_s3_bucket_lifecycle_configuration" "attachments" {
+  bucket = aws_s3_bucket.attachments.id
+  rule {
+    id     = "expire-old-attachments"
+    status = "Enabled"
+    expiration {
+      days = 30
+    }
+  }
+}
+
+
+
 resource "aws_s3_bucket_versioning" "data" {
   bucket = aws_s3_bucket.data.id
   versioning_configuration { status = "Enabled" }
@@ -557,6 +575,72 @@ resource "aws_iam_role_policy" "dynamodb_cleanup" {
 }
 
 # ---- google-auth Lambda role ----
+# ---- email-sender Lambda role ----
+resource "aws_iam_role" "email_sender" {
+  name               = "${local.prefix}-email-sender-role"
+  assume_role_policy = data.aws_iam_policy_document.lambda_trust.json
+}
+
+resource "aws_iam_role_policy" "email_sender" {
+  name = "${local.prefix}-email-sender-policy"
+  role = aws_iam_role.email_sender.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid      = "SESEmail"
+        Effect   = "Allow"
+        Action   = ["ses:SendEmail", "ses:SendRawEmail"]
+        Resource = "*"
+      },
+      {
+        Sid      = "S3Attachments"
+        Effect   = "Allow"
+        Action   = ["s3:PutObject", "s3:GetObject"]
+        Resource = "arn:aws:s3:::*/*"
+      },
+      {
+        Sid      = "Logs"
+        Effect   = "Allow"
+        Action   = ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"]
+        Resource = "arn:aws:logs:*:*:*"
+      }
+    ]
+  })
+}
+
+resource "aws_cloudwatch_log_group" "email_sender" {
+  name              = "/aws/lambda/${local.prefix}-email-sender"
+  retention_in_days = var.log_retention_days
+}
+
+data "archive_file" "email_sender" {
+  type        = "zip"
+  source_dir  = "${local.lambda_dir}/email-sender/dist"
+  output_path = "${path.module}/.terraform-build/email-sender.zip"
+}
+
+resource "aws_lambda_function" "email_sender" {
+  function_name    = "${local.prefix}-email-sender"
+  role             = aws_iam_role.email_sender.arn
+  handler          = "handler.handler"
+  runtime          = var.lambda_runtime
+  filename         = data.archive_file.email_sender.output_path
+  source_code_hash = data.archive_file.email_sender.output_base64sha256
+  memory_size      = 256
+  timeout          = 120
+
+  environment {
+    variables = {
+      SENDER_EMAIL       = var.sender_email
+      ATTACHMENTS_BUCKET = aws_s3_bucket.attachments.bucket
+      ENVIRONMENT        = var.environment
+    }
+  }
+
+  depends_on = [aws_cloudwatch_log_group.email_sender]
+}
+
 resource "aws_iam_role" "google_auth" {
   name               = "${local.prefix}-google-auth-role"
   assume_role_policy = data.aws_iam_policy_document.lambda_trust.json
@@ -970,6 +1054,22 @@ resource "aws_lambda_permission" "apigw_presign" {
   principal     = "apigateway.amazonaws.com"
   source_arn    = "${aws_apigatewayv2_api.ops.execution_arn}/*/*"
 }
+
+
+resource "aws_apigatewayv2_route" "email_send" {
+  api_id    = aws_apigatewayv2_api.ops.id
+  route_key = "POST /email/send"
+  target    = "integrations/${aws_apigatewayv2_integration.email_sender.id}"
+}
+
+resource "aws_apigatewayv2_integration" "email_sender" {
+  api_id           = aws_apigatewayv2_api.ops.id
+  integration_type = "AWS_PROXY"
+  integration_uri  = aws_lambda_function.email_sender.arn
+  payload_format_version = "2.0"
+}
+
+
 
 resource "aws_lambda_permission" "apigw_agent_router" {
   statement_id  = "AllowAPIGWInvokeAgentRouter"

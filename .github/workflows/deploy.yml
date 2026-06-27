@@ -114,7 +114,7 @@ jobs:
 
     strategy:
       matrix:
-        lambda: [presign, ingest, agent-router, google-auth, aws-costs, dynamodb-cleanup]
+        lambda: [presign, ingest, agent-router, google-auth, aws-costs, dynamodb-cleanup, email-sender]
       fail-fast: false   # ← one Lambda failure must NOT cancel the others
 
     steps:
@@ -212,11 +212,23 @@ jobs:
           name: lambda-dynamodb-cleanup-dist
           path: lambda/dynamodb-cleanup/dist/
 
+      - name: Download lambda-email-sender dist
+        uses: actions/download-artifact@v4
+        with:
+          name: lambda-email-sender-dist
+          path: lambda/email-sender/dist/
+
       - name: Download lambda-dynamodb-cleanup dist
         uses: actions/download-artifact@v4
         with:
           name: lambda-dynamodb-cleanup-dist
           path: lambda/dynamodb-cleanup/dist/
+
+      - name: Download lambda-email-sender dist
+        uses: actions/download-artifact@v4
+        with:
+          name: lambda-email-sender-dist
+          path: lambda/email-sender/dist/
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
