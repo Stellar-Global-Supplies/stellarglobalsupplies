@@ -36,12 +36,25 @@ export default function ApiMonitoringDashboard() {
     try {
       // Fetch from our API metrics endpoint (uses CloudWatch - free)
       const response = await fetch(`/api/metrics/summary?period=${period}`);
+      
+      if (!response.ok) {
+        if (response.status === 404) {
+          // Endpoint not deployed yet
+          setMetrics([]);
+          setTimeSeries([]);
+          return;
+        }
+        throw new Error(`HTTP ${response.status}`);
+      }
+      
       const data = await response.json();
       
       setMetrics(data.routes || []);
       setTimeSeries(data.timeSeries || []);
     } catch (error) {
       console.error('Failed to fetch API metrics:', error);
+      setMetrics([]);
+      setTimeSeries([]);
     } finally {
       setLoading(false);
     }
@@ -213,11 +226,21 @@ export default function ApiMonitoringDashboard() {
           </table>
         </div>
 
-        {metrics.length === 0 && (
-          <div className="text-center py-8 text-slate-400">
-            No API calls recorded in this period
-          </div>
-        )}
+      {metrics.length === 0 && (
+        <div className="text-center py-8 text-slate-400">
+          No API calls recorded in this period
+        </div>
+      )}
+
+      {/* Deployment Notice */}
+      {metrics.length === 0 && (
+        <div className="mt-4 bg-amber-900/20 border border-amber-700/50 rounded-lg p-4">
+          <p className="text-sm text-amber-300">
+            <strong>Note:</strong> API monitoring requires deployment of the api-metrics Lambda. 
+            Push to main to deploy, or check the deployment status.
+          </p>
+        </div>
+      )}
       </div>
 
       {/* Cost Notice */}
