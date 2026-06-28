@@ -112,6 +112,13 @@ self.addEventListener('fetch', (event: FetchEvent) => {
 
   const isChatPost   = request.method === 'POST' && /\/agents\/[^/]+\/chat$/.test(url.pathname);
   const isIngestPost = request.method === 'POST' && url.pathname === '/upload/presign';
+  const isApiCall    = url.pathname.startsWith('/api/');
+
+  // For API calls, always use network-first (no caching)
+  if (isApiCall) {
+    event.respondWith(fetch(request));
+    return;
+  }
 
   if (!isChatPost && !isIngestPost) {
     return; // let Workbox / network handle everything else

@@ -169,7 +169,7 @@ export interface ApiMetricsSummary {
 export async function fetchApiMetrics(
   period: ApiMetricsPeriod = '24h',
 ): Promise<ApiMetricsSummary> {
-  return request<ApiMetricsSummary>(`/metrics/summary?period=${period}`);
+  return request<ApiMetricsSummary>(`/api/metrics/summary?period=${period}`);
 }
 
 // ────────────────────────────────────────────────────────────────────────────
