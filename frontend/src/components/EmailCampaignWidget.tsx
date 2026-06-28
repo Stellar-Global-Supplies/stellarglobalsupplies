@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
-import { Mail, Upload, Paperclip, Send, XCircle, Loader2, Link } from 'lucide-react';
+import { Mail, Upload, Paperclip, Send, XCircle, Loader2 } from 'lucide-react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { sendBulkEmail, getGoogleConnectUrl, getGoogleConnectionStatus, disconnectGoogleAccount } from '@/api/client';
@@ -206,7 +206,7 @@ export default function EmailCampaignWidget() {
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 rounded-full bg-emerald-400" />
             <span className="text-xs text-emerald-300">
-              Connected: {connectionStatus.email || 'Gmail account'}
+              Connected: Gmail account
             </span>
           </div>
           <button
