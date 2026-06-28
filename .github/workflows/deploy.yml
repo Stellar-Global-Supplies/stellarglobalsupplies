@@ -222,7 +222,12 @@ jobs:
         with:
           name: lambda-email-sender-dist
           path: lambda/email-sender/dist/
-
+      
+      - name: Download lambda-cur-processor dist
+        uses: actions/download-artifact@v4
+        with:
+          name: lambda-cur-processor-dist
+          path: lambda/cur-processor/dist/
       - name: Download lambda-social-poster dist
         uses: actions/download-artifact@v4
         with:
