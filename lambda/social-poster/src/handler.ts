@@ -23,6 +23,7 @@ const LINKEDIN_CLIENT_SECRET_PARAM  = process.env.LINKEDIN_CLIENT_SECRET_PARAM!;
 const LINKEDIN_REDIRECT_URI         = process.env.LINKEDIN_REDIRECT_URI!;
 const FACEBOOK_PAGE_TOKEN_PARAM     = process.env.FACEBOOK_PAGE_TOKEN_PARAM!;
 const FACEBOOK_PAGE_ID_PARAM        = process.env.FACEBOOK_PAGE_ID_PARAM!;
+const INSTAGRAM_BUSINESS_ID_PARAM   = process.env.INSTAGRAM_BUSINESS_ID_PARAM!;
 const FRONTEND_URL                  = process.env.FRONTEND_URL!;
 
 const ddbClient = new DynamoDBClient({ region: REGION });
@@ -321,13 +322,14 @@ async function handlePostToInstagram(event: APIGatewayProxyEventV2): Promise<API
   if (!caption || !image_url) return clientError('Missing caption or image_url');
 
   const pageToken = await getSsmParam(FACEBOOK_PAGE_TOKEN_PARAM);
-  const pageId = await getSsmParam(FACEBOOK_PAGE_ID_PARAM);
+  const instagramBusinessId = await getSsmParam(INSTAGRAM_BUSINESS_ID_PARAM);
 
-  if (!pageToken || !pageId) return clientError('Facebook/Instagram not configured');
+  if (!pageToken) return clientError('Facebook/Instagram not configured - no token');
+  if (!instagramBusinessId) return clientError('Instagram not configured - no Instagram Business ID. You need to find your Instagram Business Account ID (different from Facebook Page ID)');
 
   try {
-    // Step 1: Upload image as media container
-    const mediaResp = await fetch(`https://graph.facebook.com/v20.0/${pageId}/media`, {
+    // Step 1: Create media container on Instagram (using Instagram Business ID, NOT Facebook Page ID)
+    const mediaResp = await fetch(`https://graph.facebook.com/v20.0/${instagramBusinessId}/media`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -346,7 +348,7 @@ async function handlePostToInstagram(event: APIGatewayProxyEventV2): Promise<API
     const containerId = mediaData.id;
 
     // Step 2: Publish the media container
-    const publishResp = await fetch(`https://graph.facebook.com/v20.0/${pageId}/media_publish`, {
+    const publishResp = await fetch(`https://graph.facebook.com/v20.0/${instagramBusinessId}/media_publish`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

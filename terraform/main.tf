@@ -455,6 +455,14 @@ resource "aws_ssm_parameter" "facebook_page_id" {
   value       = var.facebook_page_id
   tags        = var.tags
 }
+
+resource "aws_ssm_parameter" "instagram_business_id" {
+  name        = "/${local.prefix}/instagram-business-id"
+  description = "Instagram Business/Creator Account ID (separate from Facebook Page ID)"
+  type        = "SecureString"
+  value       = var.instagram_business_id
+  tags        = var.tags
+}
 # ────────────────────────────────────────────────────────────────────────────────
 # IAM — SHARED LAMBDA TRUST POLICY
 # ────────────────────────────────────────────────────────────────────────────────
@@ -681,6 +689,8 @@ resource "aws_lambda_function" "email_sender" {
     }
   }
 
+  depends_on = [aws_cloudwatch_log_group.email_sender]
+}
 
 # ---- social-poster Lambda role ----
 resource "aws_iam_role" "social_poster" {
@@ -709,6 +719,7 @@ resource "aws_iam_role_policy" "social_poster" {
           aws_ssm_parameter.linkedin_client_secret.arn,
           aws_ssm_parameter.facebook_page_token.arn,
           aws_ssm_parameter.facebook_page_id.arn,
+          aws_ssm_parameter.instagram_business_id.arn,
         ]
       },
       {
@@ -757,6 +768,7 @@ resource "aws_lambda_function" "social_poster" {
       LINKEDIN_REDIRECT_URI       = "${aws_apigatewayv2_api.ops.api_endpoint}/social/linkedin/callback"
       FACEBOOK_PAGE_TOKEN_PARAM  = aws_ssm_parameter.facebook_page_token.name
       FACEBOOK_PAGE_ID_PARAM      = aws_ssm_parameter.facebook_page_id.name
+      INSTAGRAM_BUSINESS_ID_PARAM = aws_ssm_parameter.instagram_business_id.name
       FRONTEND_URL                = "https://${local.fqdn}"
       ALLOWED_ORIGIN              = "https://${local.fqdn}"
       ENVIRONMENT                 = var.environment
@@ -765,9 +777,6 @@ resource "aws_lambda_function" "social_poster" {
 
   depends_on = [aws_cloudwatch_log_group.social_poster]
 }
-  depends_on = [aws_cloudwatch_log_group.email_sender]
-}
-
 
 # ---- cur-processor Lambda role ----
 resource "aws_iam_role" "cur_processor" {

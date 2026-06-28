@@ -36,6 +36,7 @@ concurrency:
 # TF_VAR_linkedin_client_secret      LinkedIn OAuth 2.0 Client Secret
 # TF_VAR_facebook_page_token          Facebook Page Access Token (long-lived)
 # TF_VAR_facebook_page_id             Facebook Page ID
+# TF_VAR_instagram_business_id        Instagram Business Account ID (separate from Facebook Page ID)
 # ─────────────────────────────────────────────────────────────────────────────
 
 env:
@@ -277,7 +278,8 @@ jobs:
             -var="linkedin_client_id=${{ secrets.TF_VAR_linkedin_client_id }}" \
             -var="linkedin_client_secret=${{ secrets.TF_VAR_linkedin_client_secret }}" \
             -var="facebook_page_token=${{ secrets.TF_VAR_facebook_page_token }}" \
-            -var="facebook_page_id=${{ secrets.TF_VAR_facebook_page_id }}"
+            -var="facebook_page_id=${{ secrets.TF_VAR_facebook_page_id }}" \
+            -var="instagram_business_id=${{ secrets.TF_VAR_instagram_business_id }}"
         env:
           TF_VAR_route53_zone_id:              ${{ secrets.TF_VAR_route53_zone_id }}
           TF_VAR_acm_certificate_arn:          ${{ secrets.TF_VAR_acm_certificate_arn }}
@@ -288,6 +290,7 @@ jobs:
           TF_VAR_linkedin_client_secret:       ${{ secrets.TF_VAR_linkedin_client_secret }}
           TF_VAR_facebook_page_token:           ${{ secrets.TF_VAR_facebook_page_token }}
           TF_VAR_facebook_page_id:       ${{ secrets.TF_VAR_facebook_page_id }}
+          TF_VAR_instagram_business_id: ${{ secrets.TF_VAR_instagram_business_id }}
 
       - name: Terraform apply
         working-directory: ${{ env.TF_DIR }}

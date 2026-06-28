@@ -167,6 +167,15 @@ variable "facebook_page_token" {
 }
 
 variable "facebook_page_id" {
-  description = "Facebook Page ID for posting (also used for Instagram via Graph API)"
+  description = "Facebook Page ID for posting"
   type        = string
+}
+
+# ─────────────────────────────────────────────────────────────────────────
+# Instagram — Separate Business Account ID
+# ─────────────────────────────────────────────────────────────────────────
+variable "instagram_business_id" {
+  description = "Instagram Business/Creator Account ID (separate from Facebook Page ID). Find it in Meta Business Suite -> Instagram account -> settings."
+  type        = string
+  sensitive   = true
 }
