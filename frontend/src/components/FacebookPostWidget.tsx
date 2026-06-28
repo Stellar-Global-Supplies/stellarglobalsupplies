@@ -15,7 +15,7 @@ export default function FacebookPostWidget() {
   const [uploadedImageUrl, setUploadedImageUrl] = useState<string | undefined>(undefined);
 
   // Check Facebook connection status (static token - no OAuth)
-  const { data: connectionStatus, refetch: refetchStatus } = useQuery({
+  const { data: connectionStatus } = useQuery({
     queryKey: ['facebook-status'],
     queryFn: () => getFacebookStatus(),
   });
