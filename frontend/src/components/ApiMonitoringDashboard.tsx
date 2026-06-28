@@ -75,6 +75,67 @@ export default function ApiMonitoringDashboard() {
     );
   }
 
+  // Show placeholder if endpoint not deployed
+  if (metrics.length === 0 && timeSeries.length === 0) {
+    return (
+      <div className="space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="agent-card p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-2xs text-slate-400">Total API Calls</p>
+                <p className="text-2xl font-bold text-slate-200">0</p>
+              </div>
+              <Activity className="text-blue-400" size={24} />
+            </div>
+          </div>
+          <div className="agent-card p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-2xs text-slate-400">Success Rate</p>
+                <p className="text-2xl font-bold text-slate-500">N/A</p>
+              </div>
+              <CheckCircle className="text-slate-600" size={24} />
+            </div>
+          </div>
+          <div className="agent-card p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-2xs text-slate-400">Successful Calls</p>
+                <p className="text-2xl font-bold text-slate-200">0</p>
+              </div>
+              <TrendingUp className="text-slate-600" size={24} />
+            </div>
+          </div>
+          <div className="agent-card p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-2xs text-slate-400">Failed Calls</p>
+                <p className="text-2xl font-bold text-slate-200">0</p>
+              </div>
+              <XCircle className="text-slate-600" size={24} />
+            </div>
+          </div>
+        </div>
+
+        <div className="agent-card p-12">
+          <div className="text-center">
+            <Activity className="mx-auto text-slate-600 mb-4" size={48} />
+            <h3 className="text-lg font-semibold text-slate-400 mb-2">API Monitoring Not Yet Available</h3>
+            <p className="text-sm text-slate-500 max-w-md mx-auto">
+              The API monitoring Lambda is being deployed. This dashboard will automatically show metrics once deployment is complete.
+            </p>
+            <div className="mt-4 p-3 bg-amber-900/20 border border-amber-700/50 rounded-lg inline-block">
+              <p className="text-xs text-amber-300">
+                <strong>Note:</strong> Push to main to trigger deployment of the api-metrics Lambda.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Summary Cards */}
