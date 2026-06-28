@@ -901,6 +901,12 @@ resource "aws_apigatewayv2_route" "api_metrics" {
   target    = "integrations/${aws_apigatewayv2_integration.api_metrics.id}"
 }
 
+resource "aws_apigatewayv2_route" "api_metrics_options" {
+  api_id    = aws_apigatewayv2_api.ops.id
+  route_key = "OPTIONS /api/metrics/summary"
+  target    = "integrations/${aws_apigatewayv2_integration.api_metrics.id}"
+}
+
 resource "aws_lambda_permission" "apigw_api_metrics" {
   statement_id  = "AllowAPIGWInvokeApiMetrics"
   action        = "lambda:InvokeFunction"
