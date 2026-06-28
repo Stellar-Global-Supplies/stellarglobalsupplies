@@ -37,13 +37,16 @@ export default function ApiMonitoringDashboard() {
       // Fetch from our API metrics endpoint (uses CloudWatch - free)
       const response = await fetch(`/api/metrics/summary?period=${period}`);
       
+      // Check if response is JSON
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        // Not JSON (likely 404 HTML page) - endpoint not deployed yet
+        setMetrics([]);
+        setTimeSeries([]);
+        return;
+      }
+      
       if (!response.ok) {
-        if (response.status === 404) {
-          // Endpoint not deployed yet - silent, no error needed
-          setMetrics([]);
-          setTimeSeries([]);
-          return;
-        }
         throw new Error(`HTTP ${response.status}`);
       }
       
@@ -52,10 +55,7 @@ export default function ApiMonitoringDashboard() {
       setMetrics(data.routes || []);
       setTimeSeries(data.timeSeries || []);
     } catch (error) {
-      // Only log unexpected errors, not 404s
-      if (!(error instanceof Error && error.message.includes('HTTP 404'))) {
-        console.error('Failed to fetch API metrics:', error);
-      }
+      // Silently handle all errors - endpoint may not be deployed yet
       setMetrics([]);
       setTimeSeries([]);
     } finally {
