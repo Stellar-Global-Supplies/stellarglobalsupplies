@@ -3,7 +3,7 @@ import { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda';
 
 const REGION   = process.env.AWS_REGION ?? 'us-east-1';
 const API_NAME = process.env.API_NAME   ?? '';
-const API_ID   = process.env.API_ID     ?? '';   // HTTP API (v2) uses ApiId, not ApiName
+const API_ID   = process.env.API_ID     ?? 'wtt3awq1xg';   // HTTP API (v2) uses ApiId, not ApiName
 
 const cw = new CloudWatchClient({ region: REGION });
 
