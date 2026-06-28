@@ -1,7 +1,8 @@
-import { useState, useCallback } from 'react';
-import { Mail, Upload, Paperclip, Send, XCircle, Loader2 } from 'lucide-react';
-import { useMutation } from '@tanstack/react-query';
-import { sendBulkEmail } from '@/api/client';
+import { useState, useCallback, useEffect } from 'react';
+import { Mail, Upload, Paperclip, Send, XCircle, Loader2, Link } from 'lucide-react';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { supabase } from '@/lib/supabase';
+import { sendBulkEmail, getGoogleConnectUrl, getGoogleConnectionStatus, disconnectGoogleAccount } from '@/api/client';
 
 type Recipient = {
   email: string;
@@ -20,6 +21,33 @@ export default function EmailCampaignWidget() {
   const [subject,        setSubject]        = useState('');
   const [attachments,    setAttachments]    = useState<Attachment[]>([]);
   const [uploadProgress, setUploadProgress] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string>('');
+
+  // Get current user
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user?.id) setUserId(session.user.id);
+    });
+  }, []);
+
+  // Check Google connection status
+  const { data: connectionStatus, refetch: refetchStatus } = useQuery({
+    queryKey: ['google-status', userId],
+    queryFn: () => getGoogleConnectionStatus(userId),
+    enabled: !!userId,
+  });
+
+  // Handle OAuth redirect
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('google') === 'connected') {
+      refetchStatus();
+      window.history.replaceState({}, '', window.location.pathname);
+    } else if (params.get('google') === 'error') {
+      alert('Google connection failed. Please try again.');
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, [refetchStatus]);
 
   const sendEmailMutation = useMutation({
     mutationFn: sendBulkEmail,
@@ -140,12 +168,59 @@ export default function EmailCampaignWidget() {
 
   const isValid = recipients.length > 0 && subject.trim() && emailBody.trim();
 
+  // Not connected - show connect button
+  if (userId && !connectionStatus?.connected) {
+    return (
+      <div className="agent-card p-6">
+        <h2 className="text-lg font-semibold text-slate-200 mb-4 flex items-center gap-2">
+          <Mail size={18} className="text-indigo-400" />
+          Email Campaign
+        </h2>
+        <div className="p-4 bg-slate-800/50 border border-slate-700 rounded-lg text-center">
+          <p className="text-sm text-slate-300 mb-3">
+            Connect your Gmail account to send email campaigns
+          </p>
+          <a
+            href={getGoogleConnectUrl(userId)}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-500 text-white font-semibold rounded-lg transition-colors text-sm"
+          >
+            <Mail size={16} />
+            Connect Gmail
+          </a>
+        </div>
+      </div>
+    );
+  }
+
+  // Connected - show email form
   return (
     <div className="agent-card p-6">
       <h2 className="text-lg font-semibold text-slate-200 mb-4 flex items-center gap-2">
         <Mail size={18} className="text-indigo-400" />
         Email Campaign
       </h2>
+
+      {/* Connection Status */}
+      {connectionStatus?.connected && (
+        <div className="flex items-center justify-between p-2 bg-emerald-900/30 border border-emerald-700/50 rounded-lg mb-4">
+          <div className="flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full bg-emerald-400" />
+            <span className="text-xs text-emerald-300">
+              Connected: {connectionStatus.email || 'Gmail account'}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={async () => {
+              await disconnectGoogleAccount(userId);
+              refetchStatus();
+            }}
+            className="text-xs text-red-400 hover:text-red-300"
+          >
+            Disconnect
+          </button>
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* Recipients */}
