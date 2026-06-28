@@ -826,6 +826,89 @@ data "archive_file" "cur_processor" {
   output_path = "${path.module}/.terraform-build/cur-processor.zip"
 }
 
+
+# ---- api-metrics Lambda role ----
+resource "aws_iam_role" "api_metrics" {
+  name               = "${local.prefix}-api-metrics-role"
+  assume_role_policy = data.aws_iam_policy_document.lambda_trust.json
+}
+
+resource "aws_iam_role_policy" "api_metrics" {
+  name = "${local.prefix}-api-metrics-policy"
+  role = aws_iam_role.api_metrics.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid      = "CloudWatchRead"
+        Effect   = "Allow"
+        Action   = ["cloudwatch:GetMetricData", "cloudwatch:ListMetrics"]
+        Resource = "*"
+      },
+      {
+        Sid      = "Logs"
+        Effect   = "Allow"
+        Action   = ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"]
+        Resource = "arn:aws:logs:*:*:*"
+      }
+    ]
+  })
+}
+
+resource "aws_cloudwatch_log_group" "api_metrics" {
+  name              = "/aws/lambda/${local.prefix}-api-metrics"
+  retention_in_days = var.log_retention_days
+}
+
+data "archive_file" "api_metrics" {
+  type        = "zip"
+  source_dir  = "${local.lambda_dir}/api-metrics/dist"
+  output_path = "${path.module}/.terraform-build/api-metrics.zip"
+}
+
+resource "aws_lambda_function" "api_metrics" {
+  function_name    = "${local.prefix}-api-metrics"
+  role             = aws_iam_role.api_metrics.arn
+  handler          = "handler.handler"
+  runtime          = var.lambda_runtime
+  filename         = data.archive_file.api_metrics.output_path
+  source_code_hash = data.archive_file.api_metrics.output_base64sha256
+  memory_size      = 256
+  timeout          = 30
+
+  environment {
+    variables = {
+      API_NAME = aws_apigatewayv2_api.ops.name
+      ENVIRONMENT = var.environment
+    }
+  }
+
+  depends_on = [aws_cloudwatch_log_group.api_metrics]
+}
+
+# ---- api-metrics API Integration ----
+resource "aws_apigatewayv2_integration" "api_metrics" {
+  api_id                 = aws_apigatewayv2_api.ops.id
+  integration_type       = "AWS_PROXY"
+  integration_uri        = aws_lambda_function.api_metrics.invoke_arn
+  payload_format_version = "2.0"
+  timeout_milliseconds   = 10000
+}
+
+resource "aws_apigatewayv2_route" "api_metrics" {
+  api_id    = aws_apigatewayv2_api.ops.id
+  route_key = "GET /api/metrics/summary"
+  target    = "integrations/${aws_apigatewayv2_integration.api_metrics.id}"
+}
+
+resource "aws_lambda_permission" "apigw_api_metrics" {
+  statement_id  = "AllowAPIGWInvokeApiMetrics"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.api_metrics.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_apigatewayv2_api.ops.execution_arn}/*/*"
+}
+
 resource "aws_lambda_function" "cur_processor" {
   function_name    = "${local.prefix}-cur-processor"
   role             = aws_iam_role.cur_processor.arn

@@ -119,7 +119,7 @@ jobs:
 
     strategy:
       matrix:
-        lambda: [presign, ingest, agent-router, google-auth, aws-costs, dynamodb-cleanup, email-sender, cur-processor, social-poster]
+        lambda: [presign, ingest, agent-router, google-auth, aws-costs, dynamodb-cleanup, email-sender, cur-processor, social-poster, api-metrics]
       fail-fast: false   # ← one Lambda failure must NOT cancel the others
 
     steps:
@@ -233,6 +233,12 @@ jobs:
         with:
           name: lambda-social-poster-dist
           path: lambda/social-poster/dist/
+
+      - name: Download lambda-api-metrics dist
+        uses: actions/download-artifact@v4
+        with:
+          name: lambda-api-metrics-dist
+          path: lambda/api-metrics/dist/
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
