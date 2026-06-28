@@ -34,6 +34,7 @@ export default function ApiMonitoringDashboard() {
   const fetchMetrics = async () => {
     try {
       const data = await fetchApiMetrics(period);
+      console.log('API Metrics received:', data);
 
       setMetrics(data.routes ?? []);
       setTimeSeries(
@@ -42,8 +43,9 @@ export default function ApiMonitoringDashboard() {
           label: formatTimestamp(pt.timestamp, period),
         })),
       );
-    } catch {
+    } catch (error) {
       // Silently handle — endpoint may not be deployed yet
+      console.error('Failed to fetch API metrics:', error);
       setMetrics([]);
       setTimeSeries([]);
     } finally {
@@ -68,6 +70,7 @@ export default function ApiMonitoringDashboard() {
 
   // Placeholder when endpoint is not yet deployed / returns no data
   if (metrics.length === 0 && timeSeries.length === 0) {
+    console.log('Showing placeholder - no metrics data');
     return (
       <div className="space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
