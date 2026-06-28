@@ -159,7 +159,26 @@ async function getApiMetrics(period: string): Promise<{ routes: RouteMetric[]; t
     EndTime: endTime,
   });
 
-  const response = await cw.send(command);
+  let response;
+  try {
+    response = await cw.send(command);
+  } catch (error) {
+    console.error('CloudWatch GetMetricData failed:', error);
+    // Return empty metrics if CloudWatch fails
+    return {
+      routes: [{
+        route: API_NAME ? `${API_NAME}/*` : 'all',
+        method: 'ALL',
+        totalCalls: 0,
+        successCount: 0,
+        errorCount: 0,
+        successRate: 0,
+        avgLatency: 0,
+        p99Latency: 0,
+      }],
+      timeSeries: [],
+    };
+  }
 
   // Process results
   const totalCallsSeries = response.MetricDataResults?.find(r => r.Id === 'totalCalls');
@@ -193,6 +212,23 @@ async function getApiMetrics(period: string): Promise<{ routes: RouteMetric[]; t
   const totalErrors = timeSeries.reduce((sum, t) => sum + t.errors, 0);
   const avgLatency = latencySeries?.Values?.reduce((a, b) => a + b, 0) ?? 0;
   const p99Latency = p99LatencySeries?.Values?.[p99LatencySeries.Values.length - 1] ?? 0;
+
+  // If no data, return empty metrics
+  if (totalCalls === 0 && timeSeries.length === 0) {
+    return {
+      routes: [{
+        route: API_NAME ? `${API_NAME}/*` : 'all',
+        method: 'ALL',
+        totalCalls: 0,
+        successCount: 0,
+        errorCount: 0,
+        successRate: 0,
+        avgLatency: 0,
+        p99Latency: 0,
+      }],
+      timeSeries: [],
+    };
+  }
 
   // Since CloudWatch API Gateway metrics don't break down by route without custom metrics,
   // we'll return a single aggregate row
