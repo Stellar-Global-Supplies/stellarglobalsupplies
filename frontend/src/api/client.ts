@@ -320,6 +320,41 @@ export async function postToInstagram(caption: string, imageUrl: string): Promis
   });
 }
 
+// ────────────────────────────────────────────────────────────────────────────
+// API Monitoring
+// ────────────────────────────────────────────────────────────────────────────
+
+export interface ApiMetric {
+  route: string;
+  method: string;
+  totalCalls: number;
+  successCount: number;
+  errorCount: number;
+  successRate: number;
+  avgLatency: number;
+  p99Latency: number;
+}
+
+export interface TimeSeriesData {
+  timestamp: string;
+  calls: number;
+  successes: number;
+  errors: number;
+}
+
+export interface ApiMetricsResponse {
+  routes: ApiMetric[];
+  timeSeries: TimeSeriesData[];
+}
+
+export async function fetchApiMetrics(period: '1h' | '24h' | '7d' = '24h'): Promise<ApiMetricsResponse> {
+  return request<ApiMetricsResponse>(`/api/metrics/summary?period=${period}`);
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Web analytics and Meta marketing (reads from analytics S3 bucket via Lambda)
+// ────────────────────────────────────────────────────────────────────────────
+
 export async function fetchMetaAnalytics(period: AnalyticsPeriod = 'weekly'): Promise<MetaAnalyticsData> {
   try {
     const data = await request<MetaAnalyticsData>(`/analytics/meta?period=${period}`);

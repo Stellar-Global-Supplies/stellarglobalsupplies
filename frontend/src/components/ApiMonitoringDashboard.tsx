@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Activity, TrendingUp, AlertCircle, CheckCircle, XCircle } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { fetchApiMetrics } from '@/api/client';
 
 interface ApiMetric {
   route: string;
@@ -34,28 +35,11 @@ export default function ApiMonitoringDashboard() {
 
   const fetchMetrics = async () => {
     try {
-      // Fetch from our API metrics endpoint (uses CloudWatch - free)
-      const response = await fetch(`/api/metrics/summary?period=${period}`);
-      
-      // Check if response is JSON
-      const contentType = response.headers.get('content-type');
-      if (!contentType || !contentType.includes('application/json')) {
-        // Not JSON (likely 404 HTML page) - endpoint not deployed yet
-        setMetrics([]);
-        setTimeSeries([]);
-        return;
-      }
-      
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-      
-      const data = await response.json();
-      
+      const data = await fetchApiMetrics(period);
       setMetrics(data.routes || []);
       setTimeSeries(data.timeSeries || []);
     } catch (error) {
-      // Silently handle all errors - endpoint may not be deployed yet
+      // Endpoint not deployed yet or other error - show placeholder
       setMetrics([]);
       setTimeSeries([]);
     } finally {
