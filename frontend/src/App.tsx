@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import {
   LayoutDashboard,
   Bot,
@@ -75,12 +75,11 @@ function NotificationToasts() {
     warning: 'border-amber-400/30 bg-amber-950/80 shadow-amber-900/40',
     info:    'border-cyan-400/30 bg-cyan-950/80 shadow-cyan-900/40',
   };
-  const iconMap = { success: '✓', error: '✕', warning: '⚠', info: 'ℹ' };
-  const dotMap  = {
+  const dotMap = {
     success: 'bg-emerald-400',
-    error: 'bg-red-400',
+    error:   'bg-red-400',
     warning: 'bg-amber-400',
-    info: 'bg-cyan-400',
+    info:    'bg-cyan-400',
   };
 
   return (
@@ -300,22 +299,17 @@ function Header() {
         <Menu size={18} />
       </button>
 
-      {/* Breadcrumb */}
       <div className="flex items-center gap-2 flex-1">
         <span className="text-2xs font-mono text-slate-600">SGS</span>
         <ChevronRight size={10} className="text-slate-700" />
         <h1 className="text-sm font-bold text-slate-200">{sectionLabel}</h1>
       </div>
 
-      {/* Right cluster */}
       <div className="flex items-center gap-2">
         <OnlineStatus />
-
         <div className="hidden sm:block w-px h-5 bg-white/8" />
-
         <button
           className="relative p-2 rounded-xl text-slate-500 hover:text-slate-200 transition-colors"
-          style={{ ':hover': { background: 'rgba(255,255,255,0.06)' } } as React.CSSProperties}
           aria-label={`${unread} notifications`}
         >
           <Bell size={17} />
@@ -326,7 +320,6 @@ function Header() {
             </span>
           )}
         </button>
-
         <button
           onClick={() => supabase.auth.signOut()}
           className="p-2 rounded-xl text-slate-500 hover:text-red-400 transition-colors"
@@ -343,22 +336,20 @@ function Header() {
 function OnlineStatus() {
   const [online, setOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
   useEffect(() => {
-    const on = () => setOnline(true);
+    const on  = () => setOnline(true);
     const off = () => setOnline(false);
-    window.addEventListener('online', on);
+    window.addEventListener('online',  on);
     window.addEventListener('offline', off);
     return () => { window.removeEventListener('online', on); window.removeEventListener('offline', off); };
   }, []);
 
   return online ? (
     <div className="hidden sm:flex items-center gap-1.5 header-pill">
-      <Wifi size={10} />
-      <span>Online</span>
+      <Wifi size={10} /><span>Online</span>
     </div>
   ) : (
     <div className="hidden sm:flex items-center gap-1.5 header-pill" style={{ borderColor: 'rgba(245,158,11,0.30)', background: 'rgba(245,158,11,0.08)', color: 'rgba(245,158,11,0.90)' }}>
-      <WifiOff size={10} />
-      <span>Offline</span>
+      <WifiOff size={10} /><span>Offline</span>
     </div>
   );
 }
@@ -406,15 +397,11 @@ function MainContent() {
       `}
     >
       <div className="p-4 md:p-6 animate-fade-in">
-        <div className="mx-auto w-full">
-          {content}
-        </div>
+        <div className="mx-auto w-full">{content}</div>
       </div>
-
-      {/* Mobile FAB */}
       <button
         onClick={toggleSidebar}
-        className="mobile-orbit-menu fixed z-40 lg:hidden h-13 w-13 rounded-2xl shadow-2xl flex items-center justify-center border border-white/10"
+        className="mobile-orbit-menu fixed z-40 lg:hidden rounded-2xl shadow-2xl flex items-center justify-center border border-white/10"
         style={{ width: '52px', height: '52px' }}
         aria-label="Open navigation"
       >
@@ -424,47 +411,21 @@ function MainContent() {
   );
 }
 
-// ─── Ambient background orbs ─────────────────────────────────────────────────
+// ─── Ambient Orbs ────────────────────────────────────────────────────────────
 function AmbientOrbs() {
   return (
     <div className="fixed inset-0 pointer-events-none overflow-hidden z-0" aria-hidden="true">
-      {/* Primary green orb */}
-      <div
-        className="absolute rounded-full animate-orb"
-        style={{
-          width: '600px', height: '600px',
-          top: '-150px', left: '-100px',
-          background: 'radial-gradient(ellipse, rgba(0,185,142,0.18) 0%, transparent 70%)',
-          filter: 'blur(1px)',
-        }}
-      />
-      {/* Cyan orb */}
-      <div
-        className="absolute rounded-full animate-orb delay-2000"
-        style={{
-          width: '500px', height: '500px',
-          top: '30%', right: '-120px',
-          background: 'radial-gradient(ellipse, rgba(0,229,255,0.10) 0%, transparent 70%)',
-          filter: 'blur(1px)',
-          animationDelay: '4s',
-        }}
-      />
-      {/* Violet orb */}
-      <div
-        className="absolute rounded-full animate-orb delay-1000"
-        style={{
-          width: '550px', height: '550px',
-          bottom: '-100px', left: '35%',
-          background: 'radial-gradient(ellipse, rgba(124,58,237,0.10) 0%, transparent 70%)',
-          filter: 'blur(1px)',
-          animationDelay: '8s',
-        }}
-      />
+      <div className="absolute rounded-full animate-orb"
+        style={{ width: '600px', height: '600px', top: '-150px', left: '-100px', background: 'radial-gradient(ellipse, rgba(0,185,142,0.18) 0%, transparent 70%)', filter: 'blur(1px)' }} />
+      <div className="absolute rounded-full animate-orb"
+        style={{ width: '500px', height: '500px', top: '30%', right: '-120px', background: 'radial-gradient(ellipse, rgba(0,229,255,0.10) 0%, transparent 70%)', filter: 'blur(1px)', animationDelay: '4s' }} />
+      <div className="absolute rounded-full animate-orb"
+        style={{ width: '550px', height: '550px', bottom: '-100px', left: '35%', background: 'radial-gradient(ellipse, rgba(124,58,237,0.10) 0%, transparent 70%)', filter: 'blur(1px)', animationDelay: '8s' }} />
     </div>
   );
 }
 
-// ─── Floating particles ───────────────────────────────────────────────────────
+// ─── Floating Particles ───────────────────────────────────────────────────────
 function FloatingParticles() {
   const particles = Array.from({ length: 18 }, (_, i) => ({
     id: i,
@@ -479,18 +440,8 @@ function FloatingParticles() {
   return (
     <div className="fixed inset-0 pointer-events-none overflow-hidden z-0" aria-hidden="true">
       {particles.map((p) => (
-        <div
-          key={p.id}
-          className="absolute rounded-full animate-float"
-          style={{
-            left: p.left, top: p.top,
-            width: p.size, height: p.size,
-            background: p.color,
-            animationDelay: p.delay,
-            animationDuration: p.duration,
-            boxShadow: `0 0 6px ${p.color}`,
-          }}
-        />
+        <div key={p.id} className="absolute rounded-full animate-float"
+          style={{ left: p.left, top: p.top, width: p.size, height: p.size, background: p.color, animationDelay: p.delay, animationDuration: p.duration, boxShadow: `0 0 6px ${p.color}` }} />
       ))}
     </div>
   );
@@ -510,13 +461,10 @@ function LoadingScreen() {
       <FloatingParticles />
       <div className="relative z-10 text-center space-y-6">
         <div className="relative mx-auto w-20 h-20">
-          {/* Outer rotating ring */}
           <div className="absolute inset-0 rounded-full border-2 border-transparent animate-spin-slow"
             style={{ borderTopColor: '#00B98E', borderRightColor: 'rgba(0,185,142,0.20)' }} />
-          {/* Inner ring */}
           <div className="absolute inset-3 rounded-full border border-transparent"
             style={{ borderBottomColor: '#00E5FF', animation: 'spin 2s linear infinite reverse' }} />
-          {/* Core */}
           <div className="absolute inset-6 rounded-full flex items-center justify-center"
             style={{ background: 'rgba(0,185,142,0.15)', border: '1px solid rgba(0,185,142,0.40)' }}>
             <Sparkles size={14} style={{ color: '#00B98E' }} />
@@ -526,10 +474,8 @@ function LoadingScreen() {
           <p className="text-lg font-black tracking-tight gradient-text-green mb-1">SGS AgentVerse</p>
           <p className="text-sm text-slate-500 font-mono">Initialising secure workspace{dots}</p>
         </div>
-        {/* Progress bar */}
         <div className="w-48 mx-auto h-0.5 rounded-full overflow-hidden" style={{ background: 'rgba(0,185,142,0.12)' }}>
-          <div className="h-full rounded-full animate-fill-bar"
-            style={{ background: 'linear-gradient(90deg, #00B98E, #00E5FF)' }} />
+          <div className="h-full rounded-full animate-fill-bar" style={{ background: 'linear-gradient(90deg, #00B98E, #00E5FF)' }} />
         </div>
       </div>
     </div>
