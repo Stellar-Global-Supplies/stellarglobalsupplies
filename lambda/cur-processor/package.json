@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "build": "npx esbuild src/handler.ts --bundle --platform=node --target=node22 --outfile=dist/handler.js --external:@aws-sdk/* --external:zlib",
+    "build": "tsc",
     "prebuild": "rm -rf dist"
   },
   "dependencies": {
