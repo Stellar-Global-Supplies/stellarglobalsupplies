@@ -1,45 +1,49 @@
 import { useState, useEffect } from 'react';
 import { Activity, TrendingUp, AlertCircle, CheckCircle, XCircle } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { fetchApiMetrics } from '@/api/client';
+import { fetchApiMetrics, type ApiMetricsPeriod, type ApiRouteMetric, type ApiTimeSeriesPoint } from '@/api/client';
 
-interface ApiMetric {
-  route: string;
-  method: string;
-  totalCalls: number;
-  successCount: number;
-  errorCount: number;
-  successRate: number;
-  avgLatency: number;
-  p99Latency: number;
+interface TimeSeriesData extends ApiTimeSeriesPoint {
+  label: string; // formatted for display
 }
 
-interface TimeSeriesData {
-  timestamp: string;
-  calls: number;
-  successes: number;
-  errors: number;
+function formatTimestamp(iso: string, period: string): string {
+  const d = new Date(iso);
+  if (period === '1h') {
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+  if (period === '7d') {
+    return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  }
+  // 24h
+  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
 export default function ApiMonitoringDashboard() {
-  const [metrics, setMetrics] = useState<ApiMetric[]>([]);
+  const [metrics, setMetrics] = useState<ApiRouteMetric[]>([]);
   const [timeSeries, setTimeSeries] = useState<TimeSeriesData[]>([]);
   const [loading, setLoading] = useState(true);
-  const [period, setPeriod] = useState<'1h' | '24h' | '7d'>('24h');
+  const [period, setPeriod] = useState<ApiMetricsPeriod>('24h');
 
   useEffect(() => {
     fetchMetrics();
-    const interval = setInterval(fetchMetrics, 60000); // Refresh every minute
+    const interval = setInterval(fetchMetrics, 60_000); // refresh every minute
     return () => clearInterval(interval);
   }, [period]);
 
   const fetchMetrics = async () => {
     try {
       const data = await fetchApiMetrics(period);
-      setMetrics(data.routes || []);
-      setTimeSeries(data.timeSeries || []);
-    } catch (error) {
-      // Endpoint not deployed yet or other error - show placeholder
+
+      setMetrics(data.routes ?? []);
+      setTimeSeries(
+        (data.timeSeries ?? []).map((pt) => ({
+          ...pt,
+          label: formatTimestamp(pt.timestamp, period),
+        })),
+      );
+    } catch {
+      // Silently handle — endpoint may not be deployed yet
       setMetrics([]);
       setTimeSeries([]);
     } finally {
@@ -47,9 +51,9 @@ export default function ApiMonitoringDashboard() {
     }
   };
 
-  const totalCalls = metrics.reduce((sum, m) => sum + m.totalCalls, 0);
-  const totalSuccess = metrics.reduce((sum, m) => sum + m.successCount, 0);
-  const totalErrors = metrics.reduce((sum, m) => sum + m.errorCount, 0);
+  const totalCalls        = metrics.reduce((sum, m) => sum + m.totalCalls, 0);
+  const totalSuccess      = metrics.reduce((sum, m) => sum + m.successCount, 0);
+  const totalErrors       = metrics.reduce((sum, m) => sum + m.errorCount, 0);
   const overallSuccessRate = totalCalls > 0 ? ((totalSuccess / totalCalls) * 100).toFixed(2) : '0.00';
 
   if (loading) {
@@ -62,47 +66,27 @@ export default function ApiMonitoringDashboard() {
     );
   }
 
-  // Show placeholder if endpoint not deployed
+  // Placeholder when endpoint is not yet deployed / returns no data
   if (metrics.length === 0 && timeSeries.length === 0) {
     return (
       <div className="space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="agent-card p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-2xs text-slate-400">Total API Calls</p>
-                <p className="text-2xl font-bold text-slate-200">0</p>
+          {[
+            { label: 'Total API Calls',   value: '0',   icon: <Activity className="text-blue-400" size={24} /> },
+            { label: 'Success Rate',      value: 'N/A', icon: <CheckCircle className="text-slate-600" size={24} /> },
+            { label: 'Successful Calls',  value: '0',   icon: <TrendingUp className="text-slate-600" size={24} /> },
+            { label: 'Failed Calls',      value: '0',   icon: <XCircle className="text-slate-600" size={24} /> },
+          ].map(({ label, value, icon }) => (
+            <div key={label} className="agent-card p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-2xs text-slate-400">{label}</p>
+                  <p className="text-2xl font-bold text-slate-500">{value}</p>
+                </div>
+                {icon}
               </div>
-              <Activity className="text-blue-400" size={24} />
             </div>
-          </div>
-          <div className="agent-card p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-2xs text-slate-400">Success Rate</p>
-                <p className="text-2xl font-bold text-slate-500">N/A</p>
-              </div>
-              <CheckCircle className="text-slate-600" size={24} />
-            </div>
-          </div>
-          <div className="agent-card p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-2xs text-slate-400">Successful Calls</p>
-                <p className="text-2xl font-bold text-slate-200">0</p>
-              </div>
-              <TrendingUp className="text-slate-600" size={24} />
-            </div>
-          </div>
-          <div className="agent-card p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-2xs text-slate-400">Failed Calls</p>
-                <p className="text-2xl font-bold text-slate-200">0</p>
-              </div>
-              <XCircle className="text-slate-600" size={24} />
-            </div>
-          </div>
+          ))}
         </div>
 
         <div className="agent-card p-12">
@@ -110,11 +94,13 @@ export default function ApiMonitoringDashboard() {
             <Activity className="mx-auto text-slate-600 mb-4" size={48} />
             <h3 className="text-lg font-semibold text-slate-400 mb-2">API Monitoring Not Yet Available</h3>
             <p className="text-sm text-slate-500 max-w-md mx-auto">
-              The API monitoring Lambda is being deployed. This dashboard will automatically show metrics once deployment is complete.
+              The API monitoring Lambda is being deployed. This dashboard will automatically show
+              metrics once deployment is complete.
             </p>
             <div className="mt-4 p-3 bg-amber-900/20 border border-amber-700/50 rounded-lg inline-block">
               <p className="text-xs text-amber-300">
                 <strong>Note:</strong> Push to main to trigger deployment of the api-metrics Lambda.
+                Also verify the <code>API_NAME</code> environment variable is set on the Lambda.
               </p>
             </div>
           </div>
@@ -174,37 +160,41 @@ export default function ApiMonitoringDashboard() {
         <ResponsiveContainer width="100%" height={300}>
           <AreaChart data={timeSeries}>
             <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-            <XAxis 
-              dataKey="timestamp" 
+            <XAxis
+              dataKey="label"
               stroke="#94a3b8"
               style={{ fontSize: '12px' }}
+              tick={{ fill: '#94a3b8' }}
             />
-            <YAxis 
+            <YAxis
               stroke="#94a3b8"
               style={{ fontSize: '12px' }}
+              tick={{ fill: '#94a3b8' }}
+              allowDecimals={false}
             />
-            <Tooltip 
-              contentStyle={{ 
-                backgroundColor: '#1e293b', 
+            <Tooltip
+              contentStyle={{
+                backgroundColor: '#1e293b',
                 border: '1px solid #334155',
-                borderRadius: '8px'
+                borderRadius: '8px',
               }}
+              labelStyle={{ color: '#94a3b8' }}
             />
-            <Area 
-              type="monotone" 
-              dataKey="calls" 
+            <Area
+              type="monotone"
+              dataKey="calls"
               stackId="1"
-              stroke="#3b82f6" 
-              fill="#3b82f6" 
+              stroke="#3b82f6"
+              fill="#3b82f6"
               fillOpacity={0.6}
               name="Total Calls"
             />
-            <Area 
-              type="monotone" 
-              dataKey="errors" 
+            <Area
+              type="monotone"
+              dataKey="errors"
               stackId="2"
-              stroke="#ef4444" 
-              fill="#ef4444" 
+              stroke="#ef4444"
+              fill="#ef4444"
               fillOpacity={0.6}
               name="Errors"
             />
@@ -216,9 +206,9 @@ export default function ApiMonitoringDashboard() {
       <div className="agent-card p-6">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold text-slate-200">Route Performance</h3>
-          <select 
-            value={period} 
-            onChange={(e) => setPeriod(e.target.value as any)}
+          <select
+            value={period}
+            onChange={(e) => setPeriod(e.target.value as ApiMetricsPeriod)}
             className="px-3 py-1 bg-slate-800 border border-slate-700 rounded text-sm text-slate-200"
           >
             <option value="1h">Last 1 Hour</option>
@@ -247,7 +237,7 @@ export default function ApiMonitoringDashboard() {
                   <td className="py-2 px-4 text-slate-200 font-mono text-xs">{metric.route}</td>
                   <td className="py-2 px-4">
                     <span className={`px-2 py-1 rounded text-xs font-medium ${
-                      metric.method === 'GET' ? 'bg-blue-900/30 text-blue-400' :
+                      metric.method === 'GET'  ? 'bg-blue-900/30 text-blue-400' :
                       metric.method === 'POST' ? 'bg-emerald-900/30 text-emerald-400' :
                       'bg-slate-700 text-slate-300'
                     }`}>
@@ -274,21 +264,11 @@ export default function ApiMonitoringDashboard() {
           </table>
         </div>
 
-      {metrics.length === 0 && (
-        <div className="text-center py-8 text-slate-400">
-          No API calls recorded in this period
-        </div>
-      )}
-
-      {/* Deployment Notice */}
-      {metrics.length === 0 && (
-        <div className="mt-4 bg-amber-900/20 border border-amber-700/50 rounded-lg p-4">
-          <p className="text-sm text-amber-300">
-            <strong>Note:</strong> API monitoring requires deployment of the api-metrics Lambda. 
-            Push to main to deploy, or check the deployment status.
-          </p>
-        </div>
-      )}
+        {metrics.length === 0 && (
+          <div className="text-center py-8 text-slate-400">
+            No API calls recorded in this period
+          </div>
+        )}
       </div>
 
       {/* Cost Notice */}
@@ -298,7 +278,7 @@ export default function ApiMonitoringDashboard() {
           <div className="text-sm">
             <p className="text-blue-300 font-medium mb-1">Free CloudWatch Metrics</p>
             <p className="text-blue-200/80">
-              This dashboard uses AWS CloudWatch standard metrics (free tier includes 10 custom metrics). 
+              This dashboard uses AWS CloudWatch standard metrics (free tier includes 10 custom metrics).
               No additional charges for basic API monitoring. Data refreshes every 60 seconds.
             </p>
           </div>

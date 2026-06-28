@@ -137,6 +137,42 @@ export async function uploadFileToS3(
 export { ApiError };
 
 // ────────────────────────────────────────────────────────────────────────────
+// API Monitoring — CloudWatch metrics via api-metrics Lambda
+// ────────────────────────────────────────────────────────────────────────────
+
+export type ApiMetricsPeriod = '1h' | '24h' | '7d';
+
+export interface ApiRouteMetric {
+  route: string;
+  method: string;
+  totalCalls: number;
+  successCount: number;
+  errorCount: number;
+  successRate: number;
+  avgLatency: number;
+  p99Latency: number;
+}
+
+export interface ApiTimeSeriesPoint {
+  timestamp: string;
+  calls: number;
+  successes: number;
+  errors: number;
+}
+
+export interface ApiMetricsSummary {
+  routes: ApiRouteMetric[];
+  timeSeries: ApiTimeSeriesPoint[];
+  message?: string;
+}
+
+export async function fetchApiMetrics(
+  period: ApiMetricsPeriod = '24h',
+): Promise<ApiMetricsSummary> {
+  return request<ApiMetricsSummary>(`/metrics/summary?period=${period}`);
+}
+
+// ────────────────────────────────────────────────────────────────────────────
 // Google OAuth — personal Calendar/Gmail access (Executive Assistant agent)
 // ────────────────────────────────────────────────────────────────────────────
 
@@ -319,41 +355,6 @@ export async function postToInstagram(caption: string, imageUrl: string): Promis
     body: JSON.stringify({ caption, image_url: imageUrl }),
   });
 }
-
-// ────────────────────────────────────────────────────────────────────────────
-// API Monitoring
-// ────────────────────────────────────────────────────────────────────────────
-
-export interface ApiMetric {
-  route: string;
-  method: string;
-  totalCalls: number;
-  successCount: number;
-  errorCount: number;
-  successRate: number;
-  avgLatency: number;
-  p99Latency: number;
-}
-
-export interface TimeSeriesData {
-  timestamp: string;
-  calls: number;
-  successes: number;
-  errors: number;
-}
-
-export interface ApiMetricsResponse {
-  routes: ApiMetric[];
-  timeSeries: TimeSeriesData[];
-}
-
-export async function fetchApiMetrics(period: '1h' | '24h' | '7d' = '24h'): Promise<ApiMetricsResponse> {
-  return request<ApiMetricsResponse>(`/api/metrics/summary?period=${period}`);
-}
-
-// ────────────────────────────────────────────────────────────────────────────
-// Web analytics and Meta marketing (reads from analytics S3 bucket via Lambda)
-// ────────────────────────────────────────────────────────────────────────────
 
 export async function fetchMetaAnalytics(period: AnalyticsPeriod = 'weekly'): Promise<MetaAnalyticsData> {
   try {
