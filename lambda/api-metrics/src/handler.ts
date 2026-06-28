@@ -71,6 +71,7 @@ async function getApiMetrics(period: string): Promise<{ routes: RouteMetric[]; t
   const granularitySeconds = getGranularitySeconds(period);
 
   console.log('Fetching metrics for API_NAME:', API_NAME, 'period:', period, 'granularity:', granularitySeconds);
+  console.log('Time range:', startTime.toISOString(), 'to', endTime.toISOString());
 
   const metricQueries: MetricDataQuery[] = [
     // Total requests
@@ -163,6 +164,8 @@ async function getApiMetrics(period: string): Promise<{ routes: RouteMetric[]; t
 
   const response = await cw.send(command);
 
+  console.log('CloudWatch response:', JSON.stringify(response, null, 2));
+
   const totalCallsSeries  = response.MetricDataResults?.find(r => r.Id === 'totalCalls');
   const errors4xxSeries   = response.MetricDataResults?.find(r => r.Id === 'errors4xx');
   const errors5xxSeries   = response.MetricDataResults?.find(r => r.Id === 'errors5xx');
@@ -241,6 +244,8 @@ async function getApiMetrics(period: string): Promise<{ routes: RouteMetric[]; t
     avgLatency:   Math.round(avgLatencyMs),
     p99Latency:   Math.round(p99Latency),
   }];
+
+  console.log('Returning metrics:', JSON.stringify({ routes, timeSeries: timeSeries.length }, null, 2));
 
   return { routes, timeSeries };
 }
