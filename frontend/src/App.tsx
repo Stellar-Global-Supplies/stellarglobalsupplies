@@ -39,20 +39,29 @@ import ApiMonitoringDashboard from '@/components/ApiMonitoringDashboard';
 import TasksPage from '@/pages/tasks/TasksPage';
 
 // ────────────────────────────────────────────────────────────────[...]
-// Nav item config
-// ────────────────────────────────────────────────────────────────[...]
-const NAV_ITEMS: { section: NavSection; label: string; Icon: LucideIcon }[] = [
-  { section: 'dashboard', label: 'Dashboard',        Icon: LayoutDashboard },
-  { section: 'agents',    label: 'AI Agents',        Icon: Bot              },
-  { section: 'ingest',    label: 'Data Ingest',      Icon: Upload           },
-  { section: 'inventory', label: 'Inventory',        Icon: Package          },
-  { section: 'analytics', label: 'Analytics',        Icon: BarChart3        },
-  { section: 'registers', label: 'Sales & Purchase', Icon: FileText         },
-  { section: 'web',       label: 'Web Traffic',      Icon: Globe            },
-  { section: 'meta',      label: 'Meta Marketing',   Icon: Megaphone        },
-  { section: 'cloud',     label: 'Cloud Costs',      Icon: Cloud            },
-  { section: 'monitoring',label: 'API Monitoring',   Icon: Activity         },
-  { section: 'tasks',     label: 'Tasks',            Icon: CheckSquare      },
+// Nav item config with sections
+// ────────────────────────────────────────────────────────────────
+interface NavItem {
+  section: NavSection;
+  label: string;
+  Icon: LucideIcon;
+}
+
+const CEO_ITEMS: NavItem[] = [
+  { section: 'dashboard',  label: 'Dashboard',         Icon: LayoutDashboard },
+  { section: 'agents',     label: 'AI Agents',         Icon: Bot              },
+  { section: 'ingest',     label: 'Data Ingest',       Icon: Upload           },
+  { section: 'inventory',  label: 'Inventory',         Icon: Package          },
+  { section: 'analytics',  label: 'Analytics',         Icon: BarChart3        },
+  { section: 'registers',  label: 'Sales & Purchase',  Icon: FileText         },
+  { section: 'meta',       label: 'Meta Marketing',    Icon: Megaphone        },
+  { section: 'tasks',      label: 'Tasks',             Icon: CheckSquare      },
+];
+
+const CTO_ITEMS: NavItem[] = [
+  { section: 'monitoring', label: 'API Monitoring',    Icon: Activity         },
+  { section: 'cloud',      label: 'Cloud Costs',       Icon: Cloud            },
+  { section: 'web',        label: 'Web Traffic',       Icon: Globe            },
 ];
 
 // ────────────────────────────────────────────────────────────────[...]
@@ -147,7 +156,56 @@ function Sidebar() {
 
         {/* Navigation */}
         <nav className="flex-1 px-2 py-4 space-y-1 overflow-y-auto scrollbar-hide">
-          {NAV_ITEMS.map(({ section, label, Icon }) => {
+          {/* CEO Section */}
+          <div className="px-3 py-2 text-2xs font-semibold text-slate-500 uppercase tracking-wider">
+            CEO
+          </div>
+          {CEO_ITEMS.map(({ section, label, Icon }) => {
+            const isActive = activeSection === section;
+            return (
+              <button
+                key={section}
+                onClick={() => {
+                  setSection(section);
+                  if (window.innerWidth < 1024) toggleSidebar();
+                }}
+                className={`
+                  w-full flex items-center gap-3 px-3 py-2.5 rounded-lg
+                  transition-all duration-150 group relative
+                  ${isActive
+                    ? 'bg-[rgba(0,185,142,0.14)] text-emerald-200 border border-[rgba(0,185,142,0.35)] shadow-[0_0_28px_rgba(0,185,142,0.12)]'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-white/10'
+                  }
+                `}
+                aria-current={isActive ? 'page' : undefined}
+                title={!sidebarOpen ? label : undefined}
+              >
+                <Icon className={`w-5 h-5 shrink-0 ${isActive ? 'text-[#00B98E]' : ''}`} />
+                {sidebarOpen && (
+                  <span className="text-sm font-medium truncate">{label}</span>
+                )}
+                {sidebarOpen && isActive && (
+                  <ChevronRight size={14} className="ml-auto text-[#00B98E]" />
+                )}
+                {/* Tooltip for collapsed state */}
+                {!sidebarOpen && (
+                  <span className="
+                    absolute left-full ml-2 px-2 py-1 text-xs bg-slate-700 text-slate-200
+                    rounded-md whitespace-nowrap opacity-0 pointer-events-none
+                    group-hover:opacity-100 transition-opacity z-50
+                  ">
+                    {label}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+
+          {/* CTO Section */}
+          <div className="px-3 py-2 mt-4 text-2xs font-semibold text-slate-500 uppercase tracking-wider">
+            CTO
+          </div>
+          {CTO_ITEMS.map(({ section, label, Icon }) => {
             const isActive = activeSection === section;
             return (
               <button
@@ -216,7 +274,8 @@ function Header() {
   const { notifications } = useNotificationStore();
   const unread = notifications.length;
 
-  const sectionLabel = NAV_ITEMS.find((n) => n.section === activeSection)?.label ?? '';
+  const allItems = [...CEO_ITEMS, ...CTO_ITEMS];
+  const sectionLabel = allItems.find((n) => n.section === activeSection)?.label ?? '';
 
   return (
     <header
