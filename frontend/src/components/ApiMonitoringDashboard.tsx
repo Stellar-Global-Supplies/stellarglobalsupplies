@@ -39,7 +39,7 @@ export default function ApiMonitoringDashboard() {
       
       if (!response.ok) {
         if (response.status === 404) {
-          // Endpoint not deployed yet
+          // Endpoint not deployed yet - silent, no error needed
           setMetrics([]);
           setTimeSeries([]);
           return;
@@ -52,7 +52,10 @@ export default function ApiMonitoringDashboard() {
       setMetrics(data.routes || []);
       setTimeSeries(data.timeSeries || []);
     } catch (error) {
-      console.error('Failed to fetch API metrics:', error);
+      // Only log unexpected errors, not 404s
+      if (!(error instanceof Error && error.message.includes('HTTP 404'))) {
+        console.error('Failed to fetch API metrics:', error);
+      }
       setMetrics([]);
       setTimeSeries([]);
     } finally {
