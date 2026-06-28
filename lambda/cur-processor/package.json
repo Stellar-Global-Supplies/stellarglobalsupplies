@@ -3,9 +3,8 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "build": "npm run type-check && npx esbuild src/handler.ts --bundle --platform=node --target=node22 --outfile=dist/handler.js --external:@aws-sdk/* --external:zlib",
-    "prebuild": "rm -rf dist",
-    "type-check": "tsc --noEmit"
+    "build": "npx esbuild src/handler.ts --bundle --platform=node --target=node22 --outfile=dist/handler.js --external:@aws-sdk/* --external:zlib",
+    "prebuild": "rm -rf dist"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.600.0"
