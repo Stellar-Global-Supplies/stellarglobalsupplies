@@ -157,7 +157,7 @@ function Sidebar() {
         {/* Navigation */}
         <nav className="flex-1 px-2 py-4 space-y-1 overflow-y-auto scrollbar-hide">
           {/* CEO Section */}
-          <div className="px-3 py-2 text-2xs font-semibold text-slate-500 uppercase tracking-wider">
+          <div className="px-3 py-2 text-sm font-bold text-slate-300 uppercase tracking-wider">
             CEO
           </div>
           {CEO_ITEMS.map(({ section, label, Icon }) => {
@@ -202,7 +202,7 @@ function Sidebar() {
           })}
 
           {/* CTO Section */}
-          <div className="px-3 py-2 mt-4 text-2xs font-semibold text-slate-500 uppercase tracking-wider">
+          <div className="px-3 py-2 mt-4 text-sm font-bold text-slate-300 uppercase tracking-wider">
             CTO
           </div>
           {CTO_ITEMS.map(({ section, label, Icon }) => {
