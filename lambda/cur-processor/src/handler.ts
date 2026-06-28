@@ -91,7 +91,7 @@ async function processCURManifest(manifest: CURManifest): Promise<void> {
   const decompressedBuffer = zlib.gunzipSync(compressedBuffer);
   const csvText = decompressedBuffer.toString('utf-8');
 
-  const lines = csvText.split('\n').filter(l => l.trim());
+  const lines = csvText.split('\n').filter((l: string) => l.trim());
   if (lines.length < 2) { console.log('No data rows in CSV'); return; }
 
   const headers = parseCSVLine(lines[0]);
@@ -190,7 +190,7 @@ async function cleanupOldProcessedFiles(daysOld: number = 2): Promise<void> {
       Bucket: PROCESSED_BUCKET, Prefix: 'processed/', MaxKeys: 1000,
     }));
     if (!listResponse.Contents?.length) { console.log('No processed files to clean up'); return; }
-    const oldFiles = listResponse.Contents.filter(obj => obj.LastModified && obj.LastModified < cutoffDate);
+    const oldFiles = listResponse.Contents.filter((obj: any) => obj.LastModified && obj.LastModified < cutoffDate);
     console.log(`Deleting ${oldFiles.length} old files`);
     for (const file of oldFiles) {
       if (file.Key) await s3Client.send(new DeleteObjectCommand({ Bucket: PROCESSED_BUCKET, Key: file.Key }));
@@ -208,8 +208,8 @@ async function processLatestCUR(): Promise<void> {
   if (!listResponse.Contents?.length) { console.log('No files found'); return; }
 
   const manifestFiles = listResponse.Contents
-    .filter(obj => obj.Key?.toLowerCase().endsWith('manifest.json'))
-    .sort((a, b) => (b.LastModified?.getTime() || 0) - (a.LastModified?.getTime() || 0));
+    .filter((obj: any) => obj.Key?.toLowerCase().endsWith('manifest.json'))
+    .sort((a: any, b: any) => (b.LastModified?.getTime() || 0) - (a.LastModified?.getTime() || 0));
 
   if (!manifestFiles.length) { console.log('No manifest files found'); return; }
 
