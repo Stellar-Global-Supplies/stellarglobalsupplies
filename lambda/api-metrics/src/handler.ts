@@ -1,8 +1,9 @@
 import { CloudWatchClient, GetMetricDataCommand, MetricDataQuery } from '@aws-sdk/client-cloudwatch';
 import { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda';
 
-const REGION = process.env.AWS_REGION ?? 'us-east-1';
-const API_NAME = process.env.API_NAME ?? '';
+const REGION   = process.env.AWS_REGION ?? 'us-east-1';
+const API_NAME = process.env.API_NAME   ?? '';
+const API_ID   = process.env.API_ID     ?? '';   // HTTP API (v2) uses ApiId, not ApiName
 
 const cw = new CloudWatchClient({ region: REGION });
 
@@ -58,99 +59,101 @@ function getGranularitySeconds(period: string): number {
 function getStartTime(period: string): Date {
   const now = new Date();
   switch (period) {
-    case '1h': now.setHours(now.getHours() - 1); break;
-    case '24h': now.setDate(now.getDate() - 1); break;
-    case '7d': now.setDate(now.getDate() - 7); break;
+    case '1h':  now.setHours(now.getHours() - 1);  break;
+    case '24h': now.setDate(now.getDate() - 1);     break;
+    case '7d':  now.setDate(now.getDate() - 7);     break;
   }
   return now;
 }
 
 async function getApiMetrics(period: string): Promise<{ routes: RouteMetric[]; timeSeries: TimeSeriesPoint[] }> {
-  const startTime = getStartTime(period);
-  const endTime = new Date();
+  const startTime          = getStartTime(period);
+  const endTime            = new Date();
   const granularitySeconds = getGranularitySeconds(period);
 
-  console.log('Fetching metrics for API_NAME:', API_NAME, 'period:', period, 'granularity:', granularitySeconds);
+  // ── Determine REST API vs HTTP API (v2) ────────────────────────────────────
+  // HTTP APIs use dimension "ApiId" and lowercase metric names "4xx"/"5xx".
+  // REST APIs use dimension "ApiName" and "4XXError"/"5XXError".
+  // Set API_ID for HTTP APIs; API_NAME for REST APIs.
+  const isHttpApi      = Boolean(API_ID);
+  const dimension      = isHttpApi
+    ? { Name: 'ApiId',   Value: API_ID   }
+    : { Name: 'ApiName', Value: API_NAME };
+  const error4xxMetric = isHttpApi ? '4xx'      : '4XXError';
+  const error5xxMetric = isHttpApi ? '5xx'      : '5XXError';
+  const displayName    = isHttpApi ? API_ID      : API_NAME;
+
+  console.log(
+    'Fetching metrics — mode:', isHttpApi ? 'HTTP API v2 (ApiId)' : 'REST API (ApiName)',
+    '| value:', displayName,
+    '| period:', period,
+    '| granularity:', granularitySeconds,
+  );
   console.log('Time range:', startTime.toISOString(), 'to', endTime.toISOString());
 
   const metricQueries: MetricDataQuery[] = [
-    // Total requests
     {
       Id: 'totalCalls',
       MetricStat: {
         Metric: {
-          Namespace: 'AWS/ApiGateway',
+          Namespace:  'AWS/ApiGateway',
           MetricName: 'Count',
-          Dimensions: [
-            { Name: 'ApiName', Value: API_NAME },
-          ],
+          Dimensions: [dimension],
         },
         Period: granularitySeconds,
-        Stat: 'Sum',
+        Stat:   'Sum',
       },
       ReturnData: true,
     },
-    // 4xx errors
     {
       Id: 'errors4xx',
       MetricStat: {
         Metric: {
-          Namespace: 'AWS/ApiGateway',
-          MetricName: '4XXError',
-          Dimensions: [
-            { Name: 'ApiName', Value: API_NAME },
-          ],
+          Namespace:  'AWS/ApiGateway',
+          MetricName: error4xxMetric,
+          Dimensions: [dimension],
         },
         Period: granularitySeconds,
-        Stat: 'Sum',
+        Stat:   'Sum',
       },
       ReturnData: true,
     },
-    // 5xx errors
     {
       Id: 'errors5xx',
       MetricStat: {
         Metric: {
-          Namespace: 'AWS/ApiGateway',
-          MetricName: '5XXError',
-          Dimensions: [
-            { Name: 'ApiName', Value: API_NAME },
-          ],
+          Namespace:  'AWS/ApiGateway',
+          MetricName: error5xxMetric,
+          Dimensions: [dimension],
         },
         Period: granularitySeconds,
-        Stat: 'Sum',
+        Stat:   'Sum',
       },
       ReturnData: true,
     },
-    // Average Latency
     {
       Id: 'latency',
       MetricStat: {
         Metric: {
-          Namespace: 'AWS/ApiGateway',
+          Namespace:  'AWS/ApiGateway',
           MetricName: 'Latency',
-          Dimensions: [
-            { Name: 'ApiName', Value: API_NAME },
-          ],
+          Dimensions: [dimension],
         },
         Period: granularitySeconds,
-        Stat: 'Average',
+        Stat:   'Average',
       },
       ReturnData: true,
     },
-    // P99 Latency
     {
       Id: 'p99Latency',
       MetricStat: {
         Metric: {
-          Namespace: 'AWS/ApiGateway',
+          Namespace:  'AWS/ApiGateway',
           MetricName: 'Latency',
-          Dimensions: [
-            { Name: 'ApiName', Value: API_NAME },
-          ],
+          Dimensions: [dimension],
         },
         Period: granularitySeconds,
-        Stat: 'p99',
+        Stat:   'p99',
       },
       ReturnData: true,
     },
@@ -159,26 +162,26 @@ async function getApiMetrics(period: string): Promise<{ routes: RouteMetric[]; t
   const command = new GetMetricDataCommand({
     MetricDataQueries: metricQueries,
     StartTime: startTime,
-    EndTime: endTime,
+    EndTime:   endTime,
   });
 
   const response = await cw.send(command);
 
   console.log('CloudWatch response:', JSON.stringify(response, null, 2));
 
-  const totalCallsSeries  = response.MetricDataResults?.find(r => r.Id === 'totalCalls');
-  const errors4xxSeries   = response.MetricDataResults?.find(r => r.Id === 'errors4xx');
-  const errors5xxSeries   = response.MetricDataResults?.find(r => r.Id === 'errors5xx');
-  const latencySeries     = response.MetricDataResults?.find(r => r.Id === 'latency');
-  const p99LatencySeries  = response.MetricDataResults?.find(r => r.Id === 'p99Latency');
+  const totalCallsSeries = response.MetricDataResults?.find(r => r.Id === 'totalCalls');
+  const errors4xxSeries  = response.MetricDataResults?.find(r => r.Id === 'errors4xx');
+  const errors5xxSeries  = response.MetricDataResults?.find(r => r.Id === 'errors5xx');
+  const latencySeries    = response.MetricDataResults?.find(r => r.Id === 'latency');
+  const p99LatencySeries = response.MetricDataResults?.find(r => r.Id === 'p99Latency');
 
   // Build a timestamp-keyed map so all series align correctly
   const tsMap = new Map<string, TimeSeriesPoint>();
 
   const allTimestamps = [
     ...(totalCallsSeries?.Timestamps ?? []),
-    ...(errors4xxSeries?.Timestamps ?? []),
-    ...(errors5xxSeries?.Timestamps ?? []),
+    ...(errors4xxSeries?.Timestamps  ?? []),
+    ...(errors5xxSeries?.Timestamps  ?? []),
   ];
 
   // Seed every known timestamp with zeros
@@ -192,20 +195,19 @@ async function getApiMetrics(period: string): Promise<{ routes: RouteMetric[]; t
   // Fill totalCalls
   (totalCallsSeries?.Timestamps ?? []).forEach((ts, i) => {
     const key = ts.toISOString();
-    const pt = tsMap.get(key)!;
-    pt.calls = Math.round(totalCallsSeries?.Values?.[i] ?? 0);
+    const pt  = tsMap.get(key)!;
+    pt.calls  = Math.round(totalCallsSeries?.Values?.[i] ?? 0);
   });
 
   // Fill errors
   (errors4xxSeries?.Timestamps ?? []).forEach((ts, i) => {
     const key = ts.toISOString();
-    const pt = tsMap.get(key)!;
+    const pt  = tsMap.get(key)!;
     pt.errors += Math.round(errors4xxSeries?.Values?.[i] ?? 0);
   });
-
   (errors5xxSeries?.Timestamps ?? []).forEach((ts, i) => {
     const key = ts.toISOString();
-    const pt = tsMap.get(key)!;
+    const pt  = tsMap.get(key)!;
     pt.errors += Math.round(errors5xxSeries?.Values?.[i] ?? 0);
   });
 
@@ -220,11 +222,11 @@ async function getApiMetrics(period: string): Promise<{ routes: RouteMetric[]; t
   );
 
   // Aggregate totals
-  const totalCalls   = timeSeries.reduce((sum, t) => sum + t.calls, 0);
+  const totalCalls   = timeSeries.reduce((sum, t) => sum + t.calls,     0);
   const totalSuccess = timeSeries.reduce((sum, t) => sum + t.successes, 0);
-  const totalErrors  = timeSeries.reduce((sum, t) => sum + t.errors, 0);
+  const totalErrors  = timeSeries.reduce((sum, t) => sum + t.errors,    0);
 
-  // Average latency — avoid divide-by-zero
+  // Average latency
   const latencyValues = latencySeries?.Values ?? [];
   const avgLatencyMs  = latencyValues.length > 0
     ? latencyValues.reduce((a, b) => a + b, 0) / latencyValues.length
@@ -235,8 +237,8 @@ async function getApiMetrics(period: string): Promise<{ routes: RouteMetric[]; t
   const p99Latency = p99Values.length > 0 ? p99Values[p99Values.length - 1] : 0;
 
   const routes: RouteMetric[] = [{
-    route: API_NAME ? `${API_NAME}/*` : 'all',
-    method: 'ALL',
+    route:        displayName ? `${displayName}/*` : 'all',
+    method:       'ALL',
     totalCalls:   Math.round(totalCalls),
     successCount: Math.round(totalSuccess),
     errorCount:   Math.round(totalErrors),
@@ -259,12 +261,13 @@ export const handler = async (event: APIGatewayProxyEventV2): Promise<APIGateway
   try {
     const period = event.queryStringParameters?.period ?? '24h';
 
-    if (!API_NAME) {
-      console.warn('API_NAME env var is not set — returning empty metrics');
+    // Require either API_ID (HTTP API) or API_NAME (REST API)
+    if (!API_ID && !API_NAME) {
+      console.warn('Neither API_ID nor API_NAME env var is set — returning empty metrics');
       return success({
-        routes: [],
+        routes:    [],
         timeSeries: [],
-        message: 'API_NAME not configured - no metrics available',
+        message:   'API_ID (HTTP API) or API_NAME (REST API) not configured',
       });
     }
 
