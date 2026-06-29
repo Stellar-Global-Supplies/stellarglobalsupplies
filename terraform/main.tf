@@ -962,6 +962,98 @@ resource "aws_lambda_permission" "eventbridge_cur_processor" {
 }
 
 
+
+# ---- s3-cleanup Lambda role ----
+resource "aws_iam_role" "s3_cleanup" {
+  name               = "${local.prefix}-s3-cleanup-role"
+  assume_role_policy = data.aws_iam_policy_document.lambda_trust.json
+}
+
+resource "aws_iam_role_policy" "s3_cleanup" {
+  name = "${local.prefix}-s3-cleanup-policy"
+  role = aws_iam_role.s3_cleanup.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid      = "S3CleanupAccess"
+        Effect   = "Allow"
+        Action   = [
+          "s3:ListBucket",
+          "s3:DeleteObject",
+          "s3:DeleteObjectVersion"
+        ]
+        Resource = [
+          "arn:aws:s3:::stellarglobal-cf-logs",
+          "arn:aws:s3:::stellar-global-prod-data-9856add5",
+          "arn:aws:s3:::stellar-global-prod-attachments-20260627040526193400000001",
+          "arn:aws:s3:::stellarglobal-cf-logs/*",
+          "arn:aws:s3:::stellar-global-prod-data-9856add5/*",
+          "arn:aws:s3:::stellar-global-prod-attachments-20260627040526193400000001/*"
+        ]
+      },
+      {
+        Sid      = "Logs"
+        Effect   = "Allow"
+        Action   = ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"]
+        Resource = "arn:aws:logs:*:*:*"
+      }
+    ]
+  })
+}
+
+resource "aws_cloudwatch_log_group" "s3_cleanup" {
+  name              = "/aws/lambda/${local.prefix}-s3-cleanup"
+  retention_in_days = var.log_retention_days
+}
+
+data "archive_file" "s3_cleanup" {
+  type        = "zip"
+  source_dir  = "${local.lambda_dir}/s3-cleanup/dist"
+  output_path = "${path.module}/.terraform-build/s3-cleanup.zip"
+}
+
+resource "aws_lambda_function" "s3_cleanup" {
+  function_name    = "${local.prefix}-s3-cleanup"
+  role             = aws_iam_role.s3_cleanup.arn
+  handler          = "handler.handler"
+  runtime          = var.lambda_runtime
+  filename         = data.archive_file.s3_cleanup.output_path
+  source_code_hash = data.archive_file.s3_cleanup.output_base64sha256
+  memory_size      = 256
+  timeout          = 300
+
+  environment {
+    variables = {
+      RETENTION_DAYS = "2"
+      ENVIRONMENT    = var.environment
+    }
+  }
+
+  depends_on = [aws_cloudwatch_log_group.s3_cleanup]
+}
+
+# EventBridge rule to trigger S3 cleanup daily at 2 AM IST (8:30 PM UTC previous day)
+resource "aws_cloudwatch_event_rule" "s3_daily_cleanup" {
+  name                = "${local.prefix}-s3-daily-cleanup"
+  description         = "Triggers s3-cleanup Lambda daily at 2 AM IST"
+  schedule_expression = "cron(30 20 * * ? *)"
+}
+
+resource "aws_cloudwatch_event_target" "s3_daily_cleanup" {
+  rule      = aws_cloudwatch_event_rule.s3_daily_cleanup.name
+  arn       = aws_lambda_function.s3_cleanup.arn
+}
+
+resource "aws_lambda_permission" "eventbridge_s3_cleanup" {
+  statement_id  = "AllowEventBridgeInvokeS3Cleanup"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.s3_cleanup.function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.s3_daily_cleanup.arn
+}
+
+
 resource "aws_iam_role" "google_auth" {
   name               = "${local.prefix}-google-auth-role"
   assume_role_policy = data.aws_iam_policy_document.lambda_trust.json

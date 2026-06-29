@@ -1,0 +1,19 @@
+{
+  "name": "s3-cleanup",
+  "version": "1.0.0",
+  "description": "S3 cleanup Lambda - deletes files older than 2 days",
+  "main": "dist/handler.js",
+  "scripts": {
+    "build": "esbuild src/handler.ts --bundle --minify --sourcemap --target=nodejs20.x --platform=node --outfile=dist/handler.js --format=cjs --external:aws-sdk",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.600.0"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^3.10.0",
+    "@types/node": "^20.14.9",
+    "esbuild": "^0.21.0",
+    "typescript": "^5.4.0"
+  }
+}
