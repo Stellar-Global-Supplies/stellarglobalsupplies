@@ -108,7 +108,7 @@ function NotificationToasts() {
 }
 
 // ─── Sidebar ─────────────────────────────────────────────────────────────────
-function Sidebar() {
+function Sidebar({ session }: { session: Session | null }) {
   const { activeSection, setSection, sidebarOpen, toggleSidebar } = useNavStore();
   const [time, setTime] = useState(new Date());
 
@@ -246,11 +246,11 @@ function Sidebar() {
             <div className="flex items-center gap-3 px-3 py-2 rounded-xl" style={{ background: 'rgba(0,185,142,0.05)' }}>
               <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-xs font-black text-slate-950"
                 style={{ background: 'linear-gradient(135deg, #00B98E, #00E5FF)' }}>
-                MG
+                {getInitials(session?.user?.email)}
               </div>
               <div className="overflow-hidden flex-1">
-                <p className="text-xs font-bold text-slate-200 truncate">Manager</p>
-                <p className="text-2xs text-slate-500 truncate">Operations · Pune</p>
+                <p className="text-xs font-bold text-slate-200 truncate">{getDisplayName(session?.user)}</p>
+                <p className="text-2xs text-slate-500 truncate">{session?.user?.email ?? ''}</p>
               </div>
               <Shield size={12} style={{ color: 'rgba(0,185,142,0.50)', flexShrink: 0 }} />
             </div>
@@ -258,7 +258,7 @@ function Sidebar() {
             <div className="flex justify-center">
               <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-black text-slate-950"
                 style={{ background: 'linear-gradient(135deg, #00B98E, #00E5FF)' }}>
-                MG
+                {getInitials(session?.user?.email)}
               </div>
             </div>
           )}
@@ -266,6 +266,40 @@ function Sidebar() {
       </aside>
     </>
   );
+}
+
+/** Derive initials from the user's email (first letter of name before @ and last letter of domain) */
+function getInitials(email?: string | null): string {
+  if (!email) return '??';
+  const name = email.split('@')[0];
+  if (!name) return '??';
+  // Use first letter and last letter of the name part
+  const parts = name.split(/[._-]/);
+  if (parts.length >= 2) {
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  }
+  return name.slice(0, 2).toUpperCase();
+}
+
+/** Derive a display name from the user's session metadata or email */
+function getDisplayName(user: import('@supabase/supabase-js').User | undefined): string {
+  if (!user) return 'User';
+  // Try full_name from user_metadata first
+  const fullName = user.user_metadata?.full_name;
+  if (fullName && typeof fullName === 'string') return fullName;
+  // Try name
+  const name = user.user_metadata?.name;
+  if (name && typeof name === 'string') return name;
+  // Fall back to email prefix
+  const emailName = user.email?.split('@')[0];
+  if (emailName) {
+    // Convert snake_case/dot_case to Title Case
+    return emailName
+      .split(/[._-]/)
+      .map(s => s.charAt(0).toUpperCase() + s.slice(1))
+      .join(' ');
+  }
+  return 'User';
 }
 
 // ─── Header ──────────────────────────────────────────────────────────────────
@@ -368,13 +402,13 @@ function PWAUpdateBanner() {
 }
 
 // ─── Main Content ─────────────────────────────────────────────────────────────
-function MainContent() {
+function MainContent({ session }: { session: Session | null }) {
   const { activeSection, sidebarOpen, toggleSidebar } = useNavStore();
 
   const content = (() => {
     switch (activeSection) {
       case 'dashboard':  return <Dashboard />;
-      case 'agents':     return <AgentPanel />;
+      case 'agents':     return <AgentPanel session={session} />;
       case 'ingest':     return <DataIngestion />;
       case 'inventory':  return <InventoryDashboard />;
       case 'analytics':  return <Analytics />;
@@ -507,9 +541,9 @@ export default function App() {
       <AmbientOrbs />
       <FloatingParticles />
       <PWAUpdateBanner />
-      <Sidebar />
+      <Sidebar session={session} />
       <Header />
-      <MainContent />
+      <MainContent session={session} />
       <NotificationToasts />
     </div>
   );

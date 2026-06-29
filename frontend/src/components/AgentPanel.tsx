@@ -34,9 +34,8 @@ import {
   disconnectGoogleAccount,
 } from '@/api/client';
 import { useChatStore, useNotificationStore } from '@/store';
+import type { Session } from '@supabase/supabase-js';
 import type { AgentProfile, ChatMessage } from '@/types';
-
-const CURRENT_USER_ID = 'manager-001';
 
 // ────────────────────────────────────────────────────────────────────────────
 // Icon map
@@ -294,13 +293,13 @@ function EmptyChatState({
 // ────────────────────────────────────────────────────────────────────────────
 // Google Connection Banner — for Executive Assistant agent only
 // ────────────────────────────────────────────────────────────────────────────
-function GoogleConnectionBanner() {
+function GoogleConnectionBanner({ userId }: { userId: string }) {
   const push = useNotificationStore((s) => s.push);
   const queryClient = useQueryClient();
 
   const { data: status, isLoading } = useQuery({
-    queryKey: ['google-connection-status', CURRENT_USER_ID],
-    queryFn:  () => getGoogleConnectionStatus(CURRENT_USER_ID),
+    queryKey: ['google-connection-status', userId],
+    queryFn:  () => getGoogleConnectionStatus(userId),
     staleTime: 60 * 1000,
   });
 
@@ -337,18 +336,18 @@ function GoogleConnectionBanner() {
     url.searchParams.delete('email');
     window.history.replaceState({}, '', url.toString());
 
-    queryClient.invalidateQueries({ queryKey: ['google-connection-status', CURRENT_USER_ID] });
-  }, [push, queryClient]);
+    queryClient.invalidateQueries({ queryKey: ['google-connection-status', userId] });
+  }, [push, queryClient, userId]);
 
   const handleConnect = () => {
-    window.location.href = getGoogleConnectUrl(CURRENT_USER_ID);
+    window.location.href = getGoogleConnectUrl(userId);
   };
 
   const handleDisconnect = async () => {
     setDisconnecting(true);
     try {
-      await disconnectGoogleAccount(CURRENT_USER_ID);
-      await queryClient.invalidateQueries({ queryKey: ['google-connection-status', CURRENT_USER_ID] });
+      await disconnectGoogleAccount(userId);
+      await queryClient.invalidateQueries({ queryKey: ['google-connection-status', userId] });
       push({
         type:    'info',
         title:   'Google account disconnected',
@@ -426,9 +425,11 @@ function GoogleConnectionBanner() {
 function ChatPanel({
   agent,
   onBack,
+  userId,
 }: {
   agent: AgentProfile;
   onBack: () => void;
+  userId: string;
 }) {
   const [input, setInput]     = useState('');
   const [loading, setLoading] = useState(false);
@@ -464,7 +465,7 @@ function ChatPanel({
       }
 
       // Ensure session exists
-      const sess = getOrCreateSession(agent.agent_id, CURRENT_USER_ID);
+      const sess = getOrCreateSession(agent.agent_id, userId);
 
       // Append user message
       const userMsg: ChatMessage = {
@@ -494,7 +495,7 @@ function ChatPanel({
         const response = await sendChatMessage(agent.agent_id, {
           session_id: sess.session_id,
           message:    trimmed,
-          user_id:    CURRENT_USER_ID,
+          user_id:    userId,
         });
 
         updateLastMessage(agent.agent_id, {
@@ -575,7 +576,7 @@ function ChatPanel({
       </div>
 
       {/* Google connection banner — Executive Assistant only */}
-      {agent.role === 'executive-assistant' && <GoogleConnectionBanner />}
+      {agent.role === 'executive-assistant' && <GoogleConnectionBanner userId={userId} />}
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto chat-scroll px-4 py-4 space-y-4">
@@ -713,7 +714,8 @@ function AgentCard({
 // ────────────────────────────────────────────────────────────────────────────
 // Agent Panel main
 // ────────────────────────────────────────────────────────────────────────────
-export default function AgentPanel() {
+export default function AgentPanel({ session }: { session: Session | null }) {
+  const userId = session?.user?.id ?? session?.user?.email ?? 'anonymous';
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
 
   const { data: agents = [], isLoading, isError, error, refetch } = useQuery({
@@ -815,6 +817,7 @@ export default function AgentPanel() {
             <ChatPanel
               agent={selectedAgent}
               onBack={() => setSelectedAgentId(null)}
+              userId={userId}
             />
           </div>
         ) : (
