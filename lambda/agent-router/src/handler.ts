@@ -494,6 +494,9 @@ const CORS_HEADERS = {
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
   'Content-Type':                 'application/json',
+  'X-Content-Type-Options':       'nosniff',
+  'X-Frame-Options':              'DENY',
+  'Referrer-Policy':              'strict-origin-when-cross-origin',
 };
 
 function respond(statusCode: number, body: unknown): APIGatewayProxyResultV2 {
