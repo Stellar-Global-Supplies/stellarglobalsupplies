@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis,
@@ -9,7 +8,7 @@ import {
   AlertCircle, Info,
 } from 'lucide-react';
 import { fetchWebAnalytics } from '@/api/client';
-import type { WebAnalyticsData, AnalyticsPeriod } from '@/types';
+import type { WebAnalyticsData } from '@/types';
 import { format, parseISO } from 'date-fns';
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -55,25 +54,6 @@ const TOOLTIP_STYLE = {
   contentStyle: { backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px', fontSize: '12px', color: '#e2e8f0' },
   labelStyle:   { color: '#94a3b8' },
 };
-
-// ────────────────────────────────────────────────────────────────────────────
-// Period toggle
-// ────────────────────────────────────────────────────────────────────────────
-function PeriodToggle({ value, onChange }: { value: AnalyticsPeriod; onChange: (p: AnalyticsPeriod) => void }) {
-  return (
-    <div className="flex items-center bg-slate-800 border border-slate-700 rounded-lg p-1 gap-1">
-      {(['weekly', 'monthly'] as AnalyticsPeriod[]).map((p) => (
-        <button
-          key={p}
-          onClick={() => onChange(p)}
-          className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${value === p ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'}`}
-        >
-          {p === 'weekly' ? 'Last 7 days' : 'Last 30 days'}
-        </button>
-      ))}
-    </div>
-  );
-}
 
 // ────────────────────────────────────────────────────────────────────────────
 // Security alert banner — always shown when security probes exist
@@ -235,7 +215,7 @@ function GeoAndPages({ data }: { data: WebAnalyticsData }) {
 // Main dashboard
 // ────────────────────────────────────────────────────────────────────────────
 export default function WebTrafficDashboard() {
-  const [period, setPeriod] = useState<AnalyticsPeriod>('weekly');
+  const period = 'weekly';
 
   const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
     queryKey: ['web-analytics', period],
@@ -254,7 +234,7 @@ export default function WebTrafficDashboard() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <PeriodToggle value={period} onChange={setPeriod} />
+          <span className="text-xs font-medium text-slate-400 bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5">Last 7 days</span>
           <button
             onClick={() => refetch()}
             disabled={isFetching}
