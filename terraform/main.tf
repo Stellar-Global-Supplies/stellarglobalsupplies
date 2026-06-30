@@ -184,6 +184,52 @@ resource "aws_s3_bucket_lifecycle_configuration" "data" {
 }
 
 # ────────────────────────────────────────────────────────────────────────────────
+# ────────────────────────────────────────────────────────────────────────────────
+# CLOUDFRONT — RESPONSE HEADERS POLICY (Security Headers + CSP)
+# ────────────────────────────────────────────────────────────────────────────────
+resource "aws_cloudfront_response_headers_policy" "security" {
+  name    = "${local.prefix}-security-headers"
+  comment = "Security headers + CSP for ${local.fqdn}"
+
+  security_headers_config {
+    content_security_policy {
+      content_security_policy = join(" ", [
+        "default-src 'none';",
+        "script-src 'self' https://www.googletagmanager.com https://www.google-analytics.com;",
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;",
+        "img-src 'self' data: https:;",
+        "font-src 'self' https://fonts.gstatic.com;",
+        "connect-src 'self' https://${local.fqdn} https://${aws_apigatewayv2_api.ops.api_endpoint} https://*.supabase.co https://fonts.googleapis.com https://fonts.gstatic.com;",
+        "frame-src 'self' https://accounts.google.com https://*.supabase.co;",
+        "object-src 'none';",
+        "base-uri 'self';",
+        "form-action 'self';",
+        "upgrade-insecure-requests;",
+      ])
+    }
+
+    strict_transport_security {
+      access_control_max_age_sec = 63072000
+      include_subdomains         = true
+      preload                    = true
+    }
+
+    content_type_options {
+      override = true
+    }
+
+    frame_options {
+      frame_option = "DENY"
+      override     = true
+    }
+
+    referrer_policy {
+      referrer_policy = "strict-origin-when-cross-origin"
+      override        = true
+    }
+  }
+}
+
 # CLOUDFRONT — ORIGIN ACCESS CONTROL + DISTRIBUTION
 # ────────────────────────────────────────────────────────────────────────────────
 resource "aws_cloudfront_origin_access_control" "frontend" {
