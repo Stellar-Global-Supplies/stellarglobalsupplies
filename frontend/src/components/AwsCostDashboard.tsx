@@ -53,16 +53,16 @@ const shortName = (svc: string, svcName?: string): string => {
 export default function AwsCostDashboard() {
   const [response, setResponse] = useState<AwsCostResponse | null>(null);
   const now = new Date();
-  const [selectedYear,  setSelectedYear]  = useState(now.getFullYear());
-  const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1);
+  const currentYear  = now.getFullYear();
+  const currentMonth = now.getMonth() + 1;
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState<string | null>(null);
 
-  const loadData = async (year: number, month: number) => {
+  const loadData = async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetchAwsCosts(year, month);
+      const res = await fetchAwsCosts(currentYear, currentMonth);
       setResponse(res);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to load AWS costs');
@@ -71,14 +71,12 @@ export default function AwsCostDashboard() {
     }
   };
 
-  useEffect(() => { loadData(selectedYear, selectedMonth); }, [selectedYear, selectedMonth]);
+  useEffect(() => { loadData(); }, []);
 
   const allData       = response?.services      ?? [];
   const monthlyTotals = response?.monthly_totals ?? [];
   const forecasts     = response?.forecasts;
-  const monthLabel    = `${MONTHS[selectedMonth - 1]} ${selectedYear}`;
-  const currentYear   = now.getFullYear();
-  const yearOptions   = Array.from({ length: 7 }, (_, i) => currentYear - 3 + i);
+  const monthLabel    = `${MONTHS[currentMonth - 1]} ${currentYear}`;
 
   if (loading) return <div className="agent-card p-4 animate-pulse">Loading cloud cost data…</div>;
   if (error)   return <div className="agent-card p-4 text-red-300">Error: {error}</div>;
@@ -90,10 +88,9 @@ export default function AwsCostDashboard() {
   const activeCount  = costlyData.length;
   const totalRecords = allData.length;
 
-  // Days elapsed in selected month (use today if current month, else full month)
-  const daysInMonth  = new Date(selectedYear, selectedMonth, 0).getDate();
-  const isCurrentMonth = selectedYear === now.getFullYear() && selectedMonth === now.getMonth() + 1;
-  const daysElapsed  = isCurrentMonth ? now.getDate() : daysInMonth;
+  // Days elapsed in current month
+  const daysInMonth  = new Date(currentYear, currentMonth, 0).getDate();
+  const daysElapsed  = now.getDate();
   const dailyAvg     = daysElapsed > 0 ? total / daysElapsed : 0;
 
   // Forecast helper — uses lambda data if non-zero, else daily-avg fallback
@@ -155,29 +152,14 @@ export default function AwsCostDashboard() {
             <span className="text-xs text-slate-400 font-normal">{monthLabel}</span>
           </h2>
         </div>
-        <div className="flex items-center gap-2">
-          <select
-            value={selectedYear}
-            onChange={(e) => setSelectedYear(parseInt(e.target.value, 10))}
-            className="px-3 py-1.5 text-xs rounded-lg border border-slate-700 bg-slate-800 text-slate-300 hover:border-slate-500 transition-colors outline-none focus:border-emerald-400/60"
-          >
-            {yearOptions.map((y) => <option key={y} value={y}>{y}</option>)}
-          </select>
-          <select
-            value={selectedMonth}
-            onChange={(e) => setSelectedMonth(parseInt(e.target.value, 10))}
-            className="px-3 py-1.5 text-xs rounded-lg border border-slate-700 bg-slate-800 text-slate-300 hover:border-slate-500 transition-colors outline-none focus:border-emerald-400/60"
-          >
-            {MONTHS.map((m, i) => <option key={i + 1} value={i + 1}>{m}</option>)}
-          </select>
-          <button
-            onClick={() => loadData(selectedYear, selectedMonth)}
-            className="p-1.5 text-slate-400 hover:text-slate-200 transition-colors"
-            title="Refresh"
-          >
-            <RefreshCw size={14} />
-          </button>
-        </div>
+        <button
+          onClick={loadData}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-slate-400 hover:text-slate-200 bg-slate-800 border border-slate-700 hover:border-slate-500 rounded-lg transition-colors"
+          title="Refresh"
+        >
+          <RefreshCw size={12} />
+          Refresh
+        </button>
       </div>
 
       {/* Top Summary KPI Row */}
