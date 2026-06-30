@@ -206,12 +206,14 @@ resource "aws_cloudfront_response_headers_policy" "security" {
         "form-action 'self';",
         "upgrade-insecure-requests;",
       ])
+      override = true
     }
 
     strict_transport_security {
       access_control_max_age_sec = 63072000
       include_subdomains         = true
       preload                    = true
+      override                   = true
     }
 
     content_type_options {
@@ -1593,7 +1595,7 @@ resource "aws_lambda_permission" "apigw_social_poster" {
 resource "aws_apigatewayv2_integration" "email_sender" {
   api_id           = aws_apigatewayv2_api.ops.id
   integration_type = "AWS_PROXY"
-  integration_uri  = aws_lambda_function.email_sender.arn
+  integration_uri  = aws_lambda_function.email_sender.invoke_arn
   payload_format_version = "2.0"
 }
 
