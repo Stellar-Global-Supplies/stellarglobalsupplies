@@ -1,7 +1,7 @@
 {
   "name": "s3-cleanup",
   "version": "1.0.0",
-  "description": "S3 cleanup Lambda - deletes files older than 2 days",
+  "description": "S3 cleanup Lambda - deletes old files with per-bucket retention (7d for cf-logs, 2d for others)",
   "main": "dist/handler.js",
   "scripts": {
     "build": "esbuild src/handler.ts --bundle --minify --sourcemap --target=node22 --platform=node --outfile=dist/handler.js --format=cjs --external:aws-sdk",

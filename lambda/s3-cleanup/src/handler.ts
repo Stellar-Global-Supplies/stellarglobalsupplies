@@ -2,18 +2,18 @@ import { S3Client, ListObjectsV2Command, DeleteObjectsCommand } from '@aws-sdk/c
 import { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda';
 
 const REGION = process.env.AWS_REGION ?? 'us-east-1';
-const RETENTION_DAYS = parseInt(process.env.RETENTION_DAYS ?? '2', 10);
 
-// Bucket configurations: bucket name and optional prefix
+// Bucket configurations: bucket name, optional prefix, and retention days
 interface BucketConfig {
   bucket: string;
   prefix?: string;
+  retentionDays: number;
 }
 
 const BUCKETS: BucketConfig[] = [
-  { bucket: 'stellarglobal-cf-logs', prefix: 'AWSLogs/471112840461/CloudFront/' },
-  { bucket: 'stellar-global-prod-data-9856add5' },
-  { bucket: 'stellar-global-prod-attachments-20260627040526193400000001' },
+  { bucket: 'stellarglobal-cf-logs', prefix: 'AWSLogs/471112840461/CloudFront/', retentionDays: 7 },
+  { bucket: 'stellar-global-prod-data-9856add5', retentionDays: 2 },
+  { bucket: 'stellar-global-prod-attachments-20260627040526193400000001', retentionDays: 2 },
 ];
 
 const s3 = new S3Client({ region: REGION });
@@ -52,10 +52,10 @@ async function cleanupBucket(config: BucketConfig): Promise<CleanupResult> {
 
   try {
     const cutoffDate = new Date();
-    cutoffDate.setDate(cutoffDate.getDate() - RETENTION_DAYS);
+    cutoffDate.setDate(cutoffDate.getDate() - config.retentionDays);
     const cutoffTimestamp = cutoffDate.getTime();
 
-    console.log(`Cleaning up ${config.bucket}${config.prefix ? `/${config.prefix}` : ''} - files older than ${cutoffDate.toISOString()}`);
+    console.log(`Cleaning up ${config.bucket}${config.prefix ? `/${config.prefix}` : ''} - files older than ${cutoffDate.toISOString()} (retention: ${config.retentionDays} days)`);
 
     // List objects
     let continuationToken: string | undefined;
@@ -85,7 +85,7 @@ async function cleanupBucket(config: BucketConfig): Promise<CleanupResult> {
         return lastModifiedTimestamp < cutoffTimestamp;
       });
 
-      console.log(`Found ${objects.length} objects, ${objectsToDelete.length} older than ${RETENTION_DAYS} days`);
+      console.log(`Found ${objects.length} objects, ${objectsToDelete.length} older than ${config.retentionDays} days`);
 
       // Delete objects in batches of 1000 (S3 limit)
       if (objectsToDelete.length > 0) {
@@ -141,7 +141,7 @@ async function cleanupBucket(config: BucketConfig): Promise<CleanupResult> {
 
 export const handler = async (_event: APIGatewayProxyEventV2): Promise<APIGatewayProxyResultV2> => {
   try {
-    console.log(`Starting S3 cleanup - deleting files older than ${RETENTION_DAYS} days`);
+    console.log('Starting S3 cleanup with per-bucket retention policies');
     console.log('Buckets to clean:', JSON.stringify(BUCKETS, null, 2));
 
     // Cleanup all buckets in parallel
@@ -154,7 +154,6 @@ export const handler = async (_event: APIGatewayProxyEventV2): Promise<APIGatewa
 
     return success({
       message: 'S3 cleanup completed',
-      retentionDays: RETENTION_DAYS,
       results,
       summary: {
         totalDeleted,
