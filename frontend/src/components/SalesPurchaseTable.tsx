@@ -104,7 +104,7 @@ async function fetchSalesPurchaseData(
         item_name: row.item_name,
         quantity: Number(row.quantity ?? 0),
         unit: row.unit ?? 'units',
-        unit_price: Number(row.base_amount ?? 0),
+        unit_price: Number(row.quantity) > 0 ? Number(row.base_amount ?? 0) / Number(row.quantity) : Number(row.base_amount ?? 0),
         total_amount: Number(row.total_amount ?? 0),
         material_type: row.material_type ?? 'OTHER',
       });
@@ -135,7 +135,7 @@ async function fetchSalesPurchaseData(
         item_name: row.item_name,
         quantity: Number(row.quantity ?? 0),
         unit: row.unit ?? 'units',
-        unit_price: Number(row.base_amount ?? 0),
+        unit_price: Number(row.quantity) > 0 ? Number(row.base_amount ?? 0) / Number(row.quantity) : Number(row.base_amount ?? 0),
         total_amount: Number(row.total_amount ?? 0),
         material_type: row.material_type ?? 'OTHER',
       });
