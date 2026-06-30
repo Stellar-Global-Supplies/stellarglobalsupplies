@@ -134,6 +134,31 @@ export async function uploadFileToS3(
   });
 }
 
+// Upload an image (for Instagram/Facebook/LinkedIn posts) and return a
+// publicly-fetchable URL. Meta's Graph API fetches image_url itself from
+// the public internet, so a private S3 key alone won't work — this returns
+// a presigned GET URL valid for 30 minutes, which is enough time to publish.
+export async function uploadImageForSocialPost(
+  file: File,
+  onProgress?: (pct: number) => void,
+): Promise<string> {
+  const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+  const contentType = allowedTypes.includes(file.type) ? file.type : 'image/jpeg';
+
+  const presign = await requestPresignedUrl({
+    filename: file.name,
+    content_type: contentType as PresignRequest['content_type'],
+    file_size: file.size,
+  });
+
+  await uploadFileToS3(presign.upload_url, file, onProgress);
+
+  if (!presign.read_url) {
+    throw new Error('Upload succeeded but no public URL was returned.');
+  }
+  return presign.read_url;
+}
+
 export { ApiError };
 
 // ────────────────────────────────────────────────────────────────────────────

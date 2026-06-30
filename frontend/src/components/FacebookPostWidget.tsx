@@ -1,18 +1,18 @@
 import { useState, useCallback } from 'react';
 import { Facebook, Upload, Send, Loader2, XCircle } from 'lucide-react';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { getFacebookStatus, postToFacebook } from '@/api/client';
+import { getFacebookStatus, postToFacebook, uploadImageForSocialPost } from '@/api/client';
 
 type FacebookPostData = {
   message: string;
-  imageUrl?: string;
+  imageFile?: File | null;
 };
 
 export default function FacebookPostWidget() {
   const [message, setMessage] = useState('');
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [uploadedImageUrl, setUploadedImageUrl] = useState<string | undefined>(undefined);
+  const [isUploading, setIsUploading] = useState(false);
 
   // Check Facebook connection status (static token - no OAuth)
   const { data: connectionStatus } = useQuery({
@@ -44,13 +44,21 @@ export default function FacebookPostWidget() {
 
   const postMutation = useMutation({
     mutationFn: async (data: FacebookPostData) => {
-      return postToFacebook(data.message, data.imageUrl);
+      let imageUrl: string | undefined;
+      if (data.imageFile) {
+        setIsUploading(true);
+        try {
+          imageUrl = await uploadImageForSocialPost(data.imageFile);
+        } finally {
+          setIsUploading(false);
+        }
+      }
+      return postToFacebook(data.message, imageUrl);
     },
     onSuccess: () => {
       setMessage('');
       setImageFile(null);
       setImagePreview(null);
-      setUploadedImageUrl(undefined);
     },
     onError: (error: any) => {
       alert(`Failed to post: ${error?.message ?? 'Unknown error'}`);
@@ -67,7 +75,7 @@ export default function FacebookPostWidget() {
 
     postMutation.mutate({
       message: message.trim(),
-      imageUrl: uploadedImageUrl,
+      imageFile,
     });
   };
 
@@ -160,7 +168,7 @@ export default function FacebookPostWidget() {
           {postMutation.isPending ? (
             <>
               <Loader2 size={16} className="animate-spin" />
-              Publishing...
+              {isUploading ? 'Uploading image...' : 'Publishing...'}
             </>
           ) : (
             <>

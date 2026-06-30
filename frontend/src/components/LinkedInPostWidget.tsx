@@ -2,11 +2,11 @@ import { useState, useCallback, useEffect } from 'react';
 import { Linkedin, Upload, Send, Loader2, XCircle, Link } from 'lucide-react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
-import { getLinkedInConnectUrl, getLinkedInStatus, disconnectLinkedIn, postToLinkedIn } from '@/api/client';
+import { getLinkedInConnectUrl, getLinkedInStatus, disconnectLinkedIn, postToLinkedIn, uploadImageForSocialPost } from '@/api/client';
 
 type LinkedInPostData = {
   content: string;
-  imageUrl?: string;
+  imageFile?: File | null;
 };
 
 export default function LinkedInPostWidget() {
@@ -14,7 +14,7 @@ export default function LinkedInPostWidget() {
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [userId, setUserId] = useState<string>('');
-  const [uploadedImageUrl, setUploadedImageUrl] = useState<string | undefined>(undefined);
+  const [isUploading, setIsUploading] = useState(false);
 
   // Get current user
   useEffect(() => {
@@ -69,13 +69,21 @@ export default function LinkedInPostWidget() {
   const postMutation = useMutation({
     mutationFn: async (data: LinkedInPostData) => {
       if (!userId) throw new Error('Not authenticated');
-      return postToLinkedIn(userId, data.content, data.imageUrl);
+      let imageUrl: string | undefined;
+      if (data.imageFile) {
+        setIsUploading(true);
+        try {
+          imageUrl = await uploadImageForSocialPost(data.imageFile);
+        } finally {
+          setIsUploading(false);
+        }
+      }
+      return postToLinkedIn(userId, data.content, imageUrl);
     },
     onSuccess: () => {
       setContent('');
       setImageFile(null);
       setImagePreview(null);
-      setUploadedImageUrl(undefined);
     },
     onError: (error: any) => {
       alert(`Failed to post: ${error?.message ?? 'Unknown error'}`);
@@ -92,7 +100,7 @@ export default function LinkedInPostWidget() {
 
     postMutation.mutate({
       content: content.trim(),
-      imageUrl: uploadedImageUrl,
+      imageFile,
     });
   };
 
@@ -204,7 +212,7 @@ export default function LinkedInPostWidget() {
           {postMutation.isPending ? (
             <>
               <Loader2 size={16} className="animate-spin" />
-              Publishing...
+              {isUploading ? 'Uploading image...' : 'Publishing...'}
             </>
           ) : (
             <>

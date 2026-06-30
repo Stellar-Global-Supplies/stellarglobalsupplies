@@ -64,6 +64,22 @@ function clientError(msg: string): APIGatewayProxyResultV2 {
   return { statusCode: 400, headers: corsHeaders(), body: JSON.stringify({ error: msg }) };
 }
 
+// Extracts the S3 object key from an `attachments/...` image URL — handles
+// both plain URLs and presigned URLs (which carry a query string that must
+// be stripped, since it isn't part of the object key).
+function extractAttachmentKey(imageUrl: string): string {
+  let pathname = imageUrl;
+  try {
+    pathname = new URL(imageUrl).pathname; // drops query string + host
+  } catch {
+    // Not a full URL (e.g. already a bare key) — fall back to stripping
+    // the query string manually.
+    pathname = imageUrl.split('?')[0];
+  }
+  const match = pathname.match(/\/?(attachments\/.+)$/);
+  return match ? match[1] : pathname.replace(/^\/+/, '');
+}
+
 interface LinkedInTokenRecord {
   PK: string;
   SK: string;
@@ -260,7 +276,7 @@ async function handlePostToFacebook(event: APIGatewayProxyEventV2): Promise<APIG
     try {
       const s3Image = await s3.send(new GetObjectCommand({
         Bucket: ATTACHMENTS_BUCKET,
-        Key: image_url.replace(/^.*\/attachments\//, 'attachments/'),
+        Key: extractAttachmentKey(image_url),
       }));
       const imageBuffer = await s3Image.Body?.transformToByteArray();
 
@@ -428,7 +444,7 @@ async function handlePostToLinkedIn(event: APIGatewayProxyEventV2): Promise<APIG
       if (uploadUrl && assetUrn) {
         const s3Image = await s3.send(new GetObjectCommand({
           Bucket: ATTACHMENTS_BUCKET,
-          Key: image_url.replace(/^.*\/attachments\//, 'attachments/'),
+          Key: extractAttachmentKey(image_url),
         }));
         const imageBuffer = await s3Image.Body?.transformToByteArray();
 

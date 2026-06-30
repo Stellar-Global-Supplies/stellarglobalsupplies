@@ -125,6 +125,27 @@ resource "aws_s3_bucket_lifecycle_configuration" "attachments" {
       days = 30
     }
   }
+  rule {
+    id     = "expire-social-images"
+    status = "Enabled"
+    filter {
+      prefix = "attachments/"
+    }
+    expiration {
+      days = 7
+    }
+  }
+}
+
+resource "aws_s3_bucket_cors_configuration" "attachments" {
+  bucket = aws_s3_bucket.attachments.id
+  cors_rule {
+    allowed_headers = ["*"]
+    allowed_methods = ["PUT", "POST", "GET"]
+    allowed_origins = ["https://${local.fqdn}"]
+    expose_headers  = ["ETag"]
+    max_age_seconds = 3600
+  }
 }
 
 
@@ -541,6 +562,12 @@ resource "aws_iam_role_policy" "presign" {
         Effect   = "Allow"
         Action   = ["s3:PutObject"]
         Resource = "${aws_s3_bucket.data.arn}/raw-ingest/*"
+      },
+      {
+        Sid      = "S3AttachmentsPresign"
+        Effect   = "Allow"
+        Action   = ["s3:PutObject", "s3:GetObject"]
+        Resource = "${aws_s3_bucket.attachments.arn}/attachments/*"
       },
       {
         Sid      = "Logs"
@@ -1219,9 +1246,10 @@ resource "aws_lambda_function" "presign" {
 
   environment {
     variables = {
-      DATA_BUCKET    = aws_s3_bucket.data.id
-      ALLOWED_ORIGIN = "https://${local.fqdn}"
-      ENVIRONMENT    = var.environment
+      DATA_BUCKET        = aws_s3_bucket.data.id
+      ATTACHMENTS_BUCKET = aws_s3_bucket.attachments.id
+      ALLOWED_ORIGIN     = "https://${local.fqdn}"
+      ENVIRONMENT        = var.environment
     }
   }
 

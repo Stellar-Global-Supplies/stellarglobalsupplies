@@ -1,18 +1,12 @@
 import { useState, useCallback } from 'react';
 import { Instagram, Upload, Send, Loader2, XCircle } from 'lucide-react';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { getFacebookStatus, postToInstagram } from '@/api/client';
-
-type InstagramPostData = {
-  caption: string;
-  imageUrl: string;
-};
+import { getFacebookStatus, postToInstagram, uploadImageForSocialPost } from '@/api/client';
 
 export default function InstagramPostWidget() {
   const [caption, setCaption] = useState('');
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [uploadedImageUrl, setUploadedImageUrl] = useState<string | undefined>(undefined);
 
   // Check Facebook/Instagram connection status
   const { data: connectionStatus } = useQuery({
@@ -42,15 +36,22 @@ export default function InstagramPostWidget() {
     setImagePreview(null);
   }, [imagePreview]);
 
+  const [isUploading, setIsUploading] = useState(false);
+
   const postMutation = useMutation({
-    mutationFn: async (data: InstagramPostData) => {
-      return postToInstagram(data.caption, data.imageUrl);
+    mutationFn: async (data: { caption: string; imageFile: File }) => {
+      setIsUploading(true);
+      try {
+        const imageUrl = await uploadImageForSocialPost(data.imageFile);
+        return await postToInstagram(data.caption, imageUrl);
+      } finally {
+        setIsUploading(false);
+      }
     },
     onSuccess: () => {
       setCaption('');
       setImageFile(null);
       setImagePreview(null);
-      setUploadedImageUrl(undefined);
     },
     onError: (error: any) => {
       alert(`Failed to post: ${error?.message ?? 'Unknown error'}`);
@@ -71,7 +72,7 @@ export default function InstagramPostWidget() {
 
     postMutation.mutate({
       caption: caption.trim(),
-      imageUrl: uploadedImageUrl || '',
+      imageFile,
     });
   };
 
@@ -165,7 +166,7 @@ export default function InstagramPostWidget() {
           {postMutation.isPending ? (
             <>
               <Loader2 size={16} className="animate-spin" />
-              Publishing...
+              {isUploading ? 'Uploading image...' : 'Publishing...'}
             </>
           ) : (
             <>
