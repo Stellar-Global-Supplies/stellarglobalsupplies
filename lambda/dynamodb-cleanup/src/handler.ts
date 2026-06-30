@@ -20,10 +20,15 @@ interface DeleteItem {
 }
 
 /**
- * Scans the DynamoDB table for all items EXCEPT agent profiles (PK starts with "AGENT#").
- * Returns arrays of {PK, SK} for items that should be deleted.
+ * Scans the DynamoDB table for chat session items only — i.e. PK begins
+ * with "SESSION#" (covers both session metadata, SK = META#v0, and chat
+ * messages, SK = MSG#...). Everything else (agent profiles, Google OAuth
+ * tokens, LinkedIn OAuth tokens) is left untouched by design — this is an
+ * explicit allow-list, not a deny-list, so any new entity type added to
+ * the table later is safe by default unless this filter is deliberately
+ * widened.
  */
-async function getNonAgentItems(): Promise<DeleteItem[]> {
+async function getSessionItems(): Promise<DeleteItem[]> {
   const items: DeleteItem[] = [];
   let lastKey: Record<string, any> | undefined;
 
@@ -33,9 +38,9 @@ async function getNonAgentItems(): Promise<DeleteItem[]> {
         TableName: TABLE_NAME,
         ProjectionExpression: 'PK, SK',
         ExclusiveStartKey: lastKey,
-        FilterExpression: 'NOT begins_with(PK, :agentPrefix)',
+        FilterExpression: 'begins_with(PK, :sessionPrefix)',
         ExpressionAttributeValues: {
-          ':agentPrefix': 'AGENT#',
+          ':sessionPrefix': 'SESSION#',
         },
       }),
     );
