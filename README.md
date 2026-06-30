@@ -391,8 +391,8 @@ analytics snapshots.
 ### 📋 Security Checklist
 
 - [ ] Enable API Gateway throttling + AWS WAF
-- [ ] Add input sanitization for chat messages
-- [ ] Restrict S3 cleanup CORS to allowlisted domain
+- [x] Add input sanitization for chat messages
+- [x] Restrict S3 cleanup CORS to allowlisted domain
 - [ ] Enable CloudTrail + CloudWatch audit logging
 - [ ] Enable MFA for all Supabase users
 - [ ] Implement confirmation flow for email sending
