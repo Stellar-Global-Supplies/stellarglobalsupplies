@@ -396,7 +396,7 @@ analytics snapshots.
 - [ ] Enable CloudTrail + CloudWatch audit logging
 - [ ] Enable MFA for all Supabase users
 - [ ] Implement confirmation flow for email sending
-- [ ] Add CSP headers via CloudFront
+- [x] Add CSP headers via CloudFront
 - [ ] Set up AWS Budgets alerts
 - [ ] Review and tighten Lambda IAM policies
 - [ ] Implement rate limiting on `/agents/{id}/chat` endpoint
