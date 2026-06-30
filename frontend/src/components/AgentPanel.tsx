@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import createDOMPurify from 'dompurify';
 import {
   TrendingUp,
   Target,
@@ -53,6 +54,17 @@ const ICON_MAP: Record<string, LucideIcon> = {
 function AgentIcon({ icon, size = 20, className = '' }: { icon: string; size?: number; className?: string }) {
   const Icon = ICON_MAP[icon] ?? Bot;
   return <Icon size={size} className={className} />;
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Security helpers
+// ────────────────────────────────────────────────────────────────────────────
+const DOMPurify = createDOMPurify(window);
+
+function sanitizeMessage(content: string): string {
+  const MAX_LENGTH = 4000;
+  const trimmed = content.trim().slice(0, MAX_LENGTH);
+  return DOMPurify.sanitize(trimmed, { USE_PROFILES: { html: false } });
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -190,7 +202,7 @@ function MessageBubble({
           `}
         >
           {/* Markdown-lite: render newlines and code blocks */}
-          {message.content.split('\n').map((line, i, arr) => {
+          {sanitizeMessage(message.content).split('\n').map((line, i, arr) => {
             const isCode = line.startsWith('```') || line.endsWith('```');
             return (
               <span key={i}>
@@ -456,7 +468,7 @@ function ChatPanel({
 
   const sendMessage = useCallback(
     async (text: string) => {
-      const trimmed = text.trim();
+      const trimmed = sanitizeMessage(text);
       if (!trimmed || loading) return;
 
       setInput('');

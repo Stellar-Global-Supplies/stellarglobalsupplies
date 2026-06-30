@@ -18,10 +18,12 @@ const BUCKETS: BucketConfig[] = [
 
 const s3 = new S3Client({ region: REGION });
 
+const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN ?? 'https://ops.stellarglobalsupplies.com';
+
 function corsHeaders(): Record<string, string> {
   return {
     'Content-Type': 'application/json',
-    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Origin': ALLOWED_ORIGIN,
     'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
   };

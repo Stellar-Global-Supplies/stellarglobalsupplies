@@ -12,3 +12,7 @@ interface ImportMeta {
 }
 
 declare const __APP_VERSION__: string;
+
+declare function createDOMPurify(window: Window): {
+  sanitize(dirty: string, options?: { USE_PROFILES?: { html?: boolean } }): string;
+};

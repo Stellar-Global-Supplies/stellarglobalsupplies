@@ -20,7 +20,8 @@
     "recharts": "^2.12.7",
     "uuid": "^10.0.0",
     "@supabase/supabase-js": "^2.50.0",
-    "zustand": "^4.5.4"
+    "zustand": "^4.5.4",
+    "dompurify": "^3.1.6"
   },
   "devDependencies": {
     "@types/node": "^20.14.9",
