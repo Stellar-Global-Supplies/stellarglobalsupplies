@@ -921,6 +921,15 @@ resource "aws_iam_role_policy" "api_metrics" {
         Resource = "*"
       },
       {
+        Sid      = "S3Cache"
+        Effect   = "Allow"
+        Action   = ["s3:GetObject", "s3:PutObject"]
+        Resource = [
+          "arn:aws:s3:::${var.analytics_bucket_name}",
+          "arn:aws:s3:::${var.analytics_bucket_name}/*"
+        ]
+      },
+      {
         Sid      = "Logs"
         Effect   = "Allow"
         Action   = ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"]
@@ -949,16 +958,78 @@ resource "aws_lambda_function" "api_metrics" {
   filename         = data.archive_file.api_metrics.output_path
   source_code_hash = data.archive_file.api_metrics.output_base64sha256
   memory_size      = 256
-  timeout          = 30
+  timeout          = 60
 
   environment {
     variables = {
-      API_NAME = aws_apigatewayv2_api.ops.name
-      ENVIRONMENT = var.environment
+      API_NAME     = aws_apigatewayv2_api.ops.name
+      ENVIRONMENT  = var.environment
+      CACHE_BUCKET = var.analytics_bucket_name
     }
   }
 
   depends_on = [aws_cloudwatch_log_group.api_metrics]
+}
+
+# ── Scheduled EventBridge rules for API metrics cache refresh ──
+# 9am IST = 3:30 UTC, 12pm IST = 6:30 UTC, 3pm IST = 9:30 UTC, 6pm IST = 12:30 UTC
+resource "aws_cloudwatch_event_rule" "api_metrics_9am" {
+  name                = "${local.prefix}-api-metrics-9am"
+  description         = "Refresh API metrics cache at 9am IST"
+  schedule_expression = "cron(30 3 * * ? *)"
+}
+
+resource "aws_cloudwatch_event_rule" "api_metrics_12pm" {
+  name                = "${local.prefix}-api-metrics-12pm"
+  description         = "Refresh API metrics cache at 12pm IST"
+  schedule_expression = "cron(30 6 * * ? *)"
+}
+
+resource "aws_cloudwatch_event_rule" "api_metrics_3pm" {
+  name                = "${local.prefix}-api-metrics-3pm"
+  description         = "Refresh API metrics cache at 3pm IST"
+  schedule_expression = "cron(30 9 * * ? *)"
+}
+
+resource "aws_cloudwatch_event_rule" "api_metrics_6pm" {
+  name                = "${local.prefix}-api-metrics-6pm"
+  description         = "Refresh API metrics cache at 6pm IST"
+  schedule_expression = "cron(30 12 * * ? *)"
+}
+
+resource "aws_cloudwatch_event_target" "api_metrics_9am" {
+  rule      = aws_cloudwatch_event_rule.api_metrics_9am.name
+  arn       = aws_lambda_function.api_metrics.arn
+}
+
+resource "aws_cloudwatch_event_target" "api_metrics_12pm" {
+  rule      = aws_cloudwatch_event_rule.api_metrics_12pm.name
+  arn       = aws_lambda_function.api_metrics.arn
+}
+
+resource "aws_cloudwatch_event_target" "api_metrics_3pm" {
+  rule      = aws_cloudwatch_event_rule.api_metrics_3pm.name
+  arn       = aws_lambda_function.api_metrics.arn
+}
+
+resource "aws_cloudwatch_event_target" "api_metrics_6pm" {
+  rule      = aws_cloudwatch_event_rule.api_metrics_6pm.name
+  arn       = aws_lambda_function.api_metrics.arn
+}
+
+# Allow EventBridge to invoke the Lambda
+resource "aws_lambda_permission" "api_metrics_events" {
+  count         = 4
+  statement_id  = "AllowEventBridge${count.index}"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.api_metrics.function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = element([
+    aws_cloudwatch_event_rule.api_metrics_9am.arn,
+    aws_cloudwatch_event_rule.api_metrics_12pm.arn,
+    aws_cloudwatch_event_rule.api_metrics_3pm.arn,
+    aws_cloudwatch_event_rule.api_metrics_6pm.arn,
+  ], count.index)
 }
 
 # ---- api-metrics API Integration ----

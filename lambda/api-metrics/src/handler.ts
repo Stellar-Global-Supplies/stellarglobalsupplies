@@ -1,11 +1,15 @@
 import { CloudWatchClient, GetMetricDataCommand, MetricDataQuery } from '@aws-sdk/client-cloudwatch';
-import { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda';
+import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
+import { APIGatewayProxyEventV2, APIGatewayProxyResultV2, ScheduledEvent } from 'aws-lambda';
 
-const REGION   = process.env.AWS_REGION ?? 'us-east-1';
-const API_NAME = process.env.API_NAME   ?? '';
-const API_ID   = process.env.API_ID     ?? 'wtt3awq1xg';   // HTTP API (v2) uses ApiId, not ApiName
+const REGION      = process.env.AWS_REGION    ?? 'us-east-1';
+const API_NAME    = process.env.API_NAME      ?? '';
+const API_ID      = process.env.API_ID        ?? 'wtt3awq1xg';
+const CACHE_BUCKET = process.env.CACHE_BUCKET  ?? 'stellar-analytics-reports-471112840461';
+const CACHE_KEY    = 'api-metrics/latest.json';
 
 const cw = new CloudWatchClient({ region: REGION });
+const s3 = new S3Client({ region: REGION });
 
 const SECURITY_HEADERS: Record<string, string> = {
   'Content-Type': 'application/json',
@@ -259,14 +263,59 @@ async function getApiMetrics(period: string): Promise<{ routes: RouteMetric[]; t
   return { routes, timeSeries };
 }
 
-export const handler = async (event: APIGatewayProxyEventV2): Promise<APIGatewayProxyResultV2> => {
+// ── Write metrics to S3 cache ──────────────────────────────────────
+async function fetchAndCacheMetrics(): Promise<void> {
+  const metrics = await getApiMetrics('7d');
+  await s3.send(new PutObjectCommand({
+    Bucket: CACHE_BUCKET,
+    Key:    CACHE_KEY,
+    Body:   JSON.stringify(metrics),
+    ContentType: 'application/json',
+  }));
+  console.log('Cached API metrics to s3://' + CACHE_BUCKET + '/' + CACHE_KEY);
+}
+
+// ── Read metrics from S3 cache ─────────────────────────────────────
+async function readFromCache(): Promise<{ routes: RouteMetric[]; timeSeries: TimeSeriesPoint[] } | null> {
+  try {
+    const { Body } = await s3.send(new GetObjectCommand({
+      Bucket: CACHE_BUCKET,
+      Key:    CACHE_KEY,
+    }));
+    const raw = await Body?.transformToString();
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch {
+    console.warn('No cached metrics found at s3://' + CACHE_BUCKET + '/' + CACHE_KEY);
+    return null;
+  }
+}
+
+// ── Main handler ──────────────────────────────────────────────────
+export const handler = async (event: APIGatewayProxyEventV2 | ScheduledEvent): Promise<APIGatewayProxyResultV2 | void> => {
+  // Detect schedule invocation (EventBridge ScheduledEvent has 'source' === 'aws.events')
+  if ('source' in event && event.source === 'aws.events') {
+    console.log('[schedule] Fetching and caching API metrics...');
+    try {
+      await fetchAndCacheMetrics();
+      console.log('[schedule] Metrics cached successfully');
+      return;
+    } catch (error) {
+      console.error('[schedule] Failed to cache metrics:', error);
+      return;
+    }
+  }
+
+  // Regular HTTP invocation
+  const httpEvent = event as APIGatewayProxyEventV2;
+
   // Handle CORS preflight
-  if (event.requestContext.http.method === 'OPTIONS') {
+  if (httpEvent.requestContext.http.method === 'OPTIONS') {
     return { statusCode: 200, headers: corsHeaders(), body: '' };
   }
 
   try {
-    const period = event.queryStringParameters?.period ?? '24h';
+    const period = httpEvent.queryStringParameters?.period ?? '24h';
 
     // Require either API_ID (HTTP API) or API_NAME (REST API)
     if (!API_ID && !API_NAME) {
@@ -278,6 +327,15 @@ export const handler = async (event: APIGatewayProxyEventV2): Promise<APIGateway
       });
     }
 
+    // Read from S3 cache — no CloudWatch calls
+    const cached = await readFromCache();
+    if (cached) {
+      // If period is 7d, return full data; for shorter periods, just return latest 24h slice
+      return success(cached);
+    }
+
+    // Fallback: no cache yet — fetch live (first run only)
+    console.warn('No cached data — fetching live metrics from CloudWatch');
     const metrics = await getApiMetrics(period);
     return success(metrics);
   } catch (error) {
