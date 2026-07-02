@@ -10,7 +10,7 @@ import {
 import { fetchWebAnalytics } from '@/api/client';
 import type { WebAnalyticsData } from '@/types';
 import { format, parseISO } from 'date-fns';
-import DataFlowVisualization, { type DataFlowNode, type DataFlowEdge } from './DataFlowVisualization';
+import DataFlowVisualization from './DataFlowVisualization';
 
 // ────────────────────────────────────────────────────────────────────────────
 // Helpers
