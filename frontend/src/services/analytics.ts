@@ -187,10 +187,10 @@ export async function fetchAnalyticsSummarySupabase(
 
   // When filtering by date, compute material split from filtered sales data
   // Otherwise use the material_split view
-  const materialSplit = dateFilter
+  const materialSplit: AnalyticsSummary['material_split'] = dateFilter
     ? aggregateMaterialSplitFromSales(materials ?? [])
-    : (materials ?? []).reduce((acc: Record<string, number>, row: any) => {
-        const key = String(row.material_type ?? 'OTHER') as keyof typeof acc;
+    : (materials ?? []).reduce((acc: AnalyticsSummary['material_split'], row: any) => {
+        const key = String(row.material_type ?? 'OTHER') as keyof AnalyticsSummary['material_split'];
         acc[key] = (acc[key] ?? 0) + Number(row.total_revenue ?? 0);
         return acc;
       }, { SS: 0, MS: 0, SERVICE: 0, OTHER: 0 });
