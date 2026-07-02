@@ -124,9 +124,6 @@ export default function ApiMonitoringDashboard() {
     { from: 's3', to: 'dashboard', label: 'Display', active: !isWaiting, speed: 'fast' as const },
   ];
 
-  // Data flow visualization (always show)
-  const showDataFlow = true;
-
   // Waiting for processor to run and cache data
   if (isWaiting) {
     return (
