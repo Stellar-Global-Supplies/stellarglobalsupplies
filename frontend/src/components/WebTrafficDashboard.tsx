@@ -10,6 +10,7 @@ import {
 import { fetchWebAnalytics } from '@/api/client';
 import type { WebAnalyticsData } from '@/types';
 import { format, parseISO } from 'date-fns';
+import DataFlowVisualization from './DataFlowVisualization';
 
 // ────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -267,6 +268,25 @@ export default function WebTrafficDashboard() {
 
       {data && (
         <>
+          <DataFlowVisualization
+            title="Web Traffic Data Flow"
+            subtitle="CloudFront → S3 → Analytics → Dashboard"
+            nodes={[
+              { id: 'cloudfront', label: 'CloudFront', icon: 'source', status: 'active', description: 'CDN Logs' },
+              { id: 's3', label: 'S3 Bucket', icon: 'storage', status: 'active', description: 'Log Storage' },
+              { id: 'processor', label: 'Processor', icon: 'process', status: 'active', description: 'ETL' },
+              { id: 'analytics', label: 'Analytics', icon: 'process', status: 'active', description: 'Insights' },
+              { id: 'dashboard', label: 'Dashboard', icon: 'output', status: 'active', description: 'Real-time' },
+            ]}
+            edges={[
+              { from: 'cloudfront', to: 's3', label: 'Logs', active: true, speed: 'fast' },
+              { from: 's3', to: 'processor', label: 'Process', active: true, speed: 'medium' },
+              { from: 'processor', to: 'analytics', label: 'Analyze', active: true, speed: 'medium' },
+              { from: 'analytics', to: 'dashboard', label: 'Display', active: true, speed: 'fast' },
+            ]}
+            refreshInterval={2500}
+          />
+
           <SecurityAlert data={data} />
           <BotAlert data={data} />
           <KPIs data={data} />
