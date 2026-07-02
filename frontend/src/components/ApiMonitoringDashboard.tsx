@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Activity, TrendingUp, AlertCircle, CheckCircle, XCircle, Terminal } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Legend } from 'recharts';
 import { fetchApiMetrics, type ApiMetricsPeriod, type ApiRouteMetric, type ApiTimeSeriesPoint, type ApiLambdaMetric, type ApiLambdaTimeSeriesPoint } from '@/api/client';
+import DataFlowVisualization from './DataFlowVisualization';
 
 interface TimeSeriesData extends ApiTimeSeriesPoint {
   label: string;
@@ -103,10 +104,41 @@ export default function ApiMonitoringDashboard() {
     );
   }
 
+  // Data flow visualization
+  const apiFlowNodes = [
+    { id: 'client', label: 'Client', icon: 'source' as const, status: 'active' as const, description: 'HTTP Requests' },
+    { id: 'apigw', label: 'API Gateway', icon: 'process' as const, status: 'active' as const, description: 'Route & Auth' },
+    { id: 'lambda', label: 'Lambda', icon: 'process' as const, status: 'active' as const, description: 'Business Logic' },
+    { id: 'cloudwatch', label: 'CloudWatch', icon: 'storage' as const, status: 'active' as const, description: 'Metrics & Logs' },
+    { id: 'processor', label: 'Processor', icon: 'process' as const, status: isWaiting ? 'idle' as const : 'active' as const, description: '4x Daily' },
+    { id: 's3', label: 'S3 Cache', icon: 'storage' as const, status: isWaiting ? 'idle' as const : 'active' as const, description: 'Cached Data' },
+    { id: 'dashboard', label: 'Dashboard', icon: 'output' as const, status: 'active' as const, description: 'Real-time View' },
+  ];
+
+  const apiFlowEdges = [
+    { from: 'client', to: 'apigw', label: 'HTTPS', active: true, speed: 'fast' as const },
+    { from: 'apigw', to: 'lambda', label: 'Proxy', active: true, speed: 'fast' as const },
+    { from: 'lambda', to: 'cloudwatch', label: 'Metrics', active: true, speed: 'medium' as const },
+    { from: 'cloudwatch', to: 'processor', label: 'Fetch', active: !isWaiting, speed: 'medium' as const },
+    { from: 'processor', to: 's3', label: 'Cache', active: !isWaiting, speed: 'medium' as const },
+    { from: 's3', to: 'dashboard', label: 'Display', active: !isWaiting, speed: 'fast' as const },
+  ];
+
+  // Data flow visualization (always show)
+  const showDataFlow = true;
+
   // Waiting for processor to run and cache data
   if (isWaiting) {
     return (
       <div className="space-y-6">
+        <DataFlowVisualization
+          title="API Metrics Data Flow"
+          subtitle="Real-time data pipeline from API Gateway to Dashboard"
+          nodes={apiFlowNodes}
+          edges={apiFlowEdges}
+          refreshInterval={2000}
+        />
+
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           {[
             { label: 'Total API Calls',   value: '—',   icon: <Activity className="text-slate-600" size={24} /> },
@@ -153,6 +185,14 @@ export default function ApiMonitoringDashboard() {
     console.log('Showing placeholder - no metrics data');
     return (
       <div className="space-y-6">
+        <DataFlowVisualization
+          title="API Metrics Data Flow"
+          subtitle="Real-time data pipeline from API Gateway to Dashboard"
+          nodes={apiFlowNodes}
+          edges={apiFlowEdges}
+          refreshInterval={2000}
+        />
+
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           {[
             { label: 'Total API Calls',   value: '0',   icon: <Activity className="text-blue-400" size={24} /> },
@@ -194,6 +234,15 @@ export default function ApiMonitoringDashboard() {
 
   return (
     <div className="space-y-6">
+      {/* Data Flow Visualization */}
+      <DataFlowVisualization
+        title="API Metrics Data Flow"
+        subtitle="Real-time data pipeline from API Gateway to Dashboard"
+        nodes={apiFlowNodes}
+        edges={apiFlowEdges}
+        refreshInterval={2000}
+      />
+
       {/* API Summary Cards */}
       <h2 className="text-xl font-semibold text-slate-200">API Gateway Metrics</h2>
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
