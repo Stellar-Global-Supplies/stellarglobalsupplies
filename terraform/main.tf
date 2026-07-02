@@ -902,7 +902,7 @@ data "archive_file" "cur_processor" {
 }
 
 
-# ---- api-metrics Lambda role ----
+# ---- api-metrics Lambda role (serves cached data only) ----
 resource "aws_iam_role" "api_metrics" {
   name               = "${local.prefix}-api-metrics-role"
   assume_role_policy = data.aws_iam_policy_document.lambda_trust.json
@@ -915,15 +915,9 @@ resource "aws_iam_role_policy" "api_metrics" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid      = "CloudWatchRead"
+        Sid      = "S3CacheRead"
         Effect   = "Allow"
-        Action   = ["cloudwatch:GetMetricData", "cloudwatch:ListMetrics"]
-        Resource = "*"
-      },
-      {
-        Sid      = "S3Cache"
-        Effect   = "Allow"
-        Action   = ["s3:GetObject", "s3:PutObject"]
+        Action   = ["s3:GetObject"]
         Resource = [
           "arn:aws:s3:::${var.analytics_bucket_name}",
           "arn:aws:s3:::${var.analytics_bucket_name}/*"
@@ -962,7 +956,6 @@ resource "aws_lambda_function" "api_metrics" {
 
   environment {
     variables = {
-      API_NAME     = aws_apigatewayv2_api.ops.name
       ENVIRONMENT  = var.environment
       CACHE_BUCKET = var.analytics_bucket_name
     }
@@ -971,8 +964,78 @@ resource "aws_lambda_function" "api_metrics" {
   depends_on = [aws_cloudwatch_log_group.api_metrics]
 }
 
+# ---- api-metrics-processor Lambda role (scheduled data collection) ----
+resource "aws_iam_role" "api_metrics_processor" {
+  name               = "${local.prefix}-api-metrics-processor-role"
+  assume_role_policy = data.aws_iam_policy_document.lambda_trust.json
+}
+
+resource "aws_iam_role_policy" "api_metrics_processor" {
+  name = "${local.prefix}-api-metrics-processor-policy"
+  role = aws_iam_role.api_metrics_processor.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid      = "CloudWatchRead"
+        Effect   = "Allow"
+        Action   = ["cloudwatch:GetMetricData", "cloudwatch:ListMetrics"]
+        Resource = "*"
+      },
+      {
+        Sid      = "S3CacheWrite"
+        Effect   = "Allow"
+        Action   = ["s3:PutObject", "s3:GetObject"]
+        Resource = [
+          "arn:aws:s3:::${var.analytics_bucket_name}",
+          "arn:aws:s3:::${var.analytics_bucket_name}/*"
+        ]
+      },
+      {
+        Sid      = "Logs"
+        Effect   = "Allow"
+        Action   = ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"]
+        Resource = "arn:aws:logs:*:*:*"
+      }
+    ]
+  })
+}
+
+resource "aws_cloudwatch_log_group" "api_metrics_processor" {
+  name              = "/aws/lambda/${local.prefix}-api-metrics-processor"
+  retention_in_days = var.log_retention_days
+}
+
+data "archive_file" "api_metrics_processor" {
+  type        = "zip"
+  source_dir  = "${local.lambda_dir}/api-metrics-processor/dist"
+  output_path = "${path.module}/.terraform-build/api-metrics-processor.zip"
+}
+
+resource "aws_lambda_function" "api_metrics_processor" {
+  function_name    = "${local.prefix}-api-metrics-processor"
+  role             = aws_iam_role.api_metrics_processor.arn
+  handler          = "handler.handler"
+  runtime          = var.lambda_runtime
+  filename         = data.archive_file.api_metrics_processor.output_path
+  source_code_hash = data.archive_file.api_metrics_processor.output_base64sha256
+  memory_size      = 512
+  timeout          = 120
+
+  environment {
+    variables = {
+      API_NAME     = aws_apigatewayv2_api.ops.name
+      ENVIRONMENT  = var.environment
+      CACHE_BUCKET = var.analytics_bucket_name
+    }
+  }
+
+  depends_on = [aws_cloudwatch_log_group.api_metrics_processor]
+}
+
 # ── Scheduled EventBridge rules for API metrics cache refresh ──
 # 9am IST = 3:30 UTC, 12pm IST = 6:30 UTC, 3pm IST = 9:30 UTC, 6pm IST = 12:30 UTC
+# Now triggers api-metrics-processor instead of api-metrics
 resource "aws_cloudwatch_event_rule" "api_metrics_9am" {
   name                = "${local.prefix}-api-metrics-9am"
   description         = "Refresh API metrics cache at 9am IST"
@@ -999,30 +1062,30 @@ resource "aws_cloudwatch_event_rule" "api_metrics_6pm" {
 
 resource "aws_cloudwatch_event_target" "api_metrics_9am" {
   rule      = aws_cloudwatch_event_rule.api_metrics_9am.name
-  arn       = aws_lambda_function.api_metrics.arn
+  arn       = aws_lambda_function.api_metrics_processor.arn
 }
 
 resource "aws_cloudwatch_event_target" "api_metrics_12pm" {
   rule      = aws_cloudwatch_event_rule.api_metrics_12pm.name
-  arn       = aws_lambda_function.api_metrics.arn
+  arn       = aws_lambda_function.api_metrics_processor.arn
 }
 
 resource "aws_cloudwatch_event_target" "api_metrics_3pm" {
   rule      = aws_cloudwatch_event_rule.api_metrics_3pm.name
-  arn       = aws_lambda_function.api_metrics.arn
+  arn       = aws_lambda_function.api_metrics_processor.arn
 }
 
 resource "aws_cloudwatch_event_target" "api_metrics_6pm" {
   rule      = aws_cloudwatch_event_rule.api_metrics_6pm.name
-  arn       = aws_lambda_function.api_metrics.arn
+  arn       = aws_lambda_function.api_metrics_processor.arn
 }
 
-# Allow EventBridge to invoke the Lambda
-resource "aws_lambda_permission" "api_metrics_events" {
+# Allow EventBridge to invoke the processor Lambda
+resource "aws_lambda_permission" "api_metrics_processor_events" {
   count         = 4
   statement_id  = "AllowEventBridge${count.index}"
   action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.api_metrics.function_name
+  function_name = aws_lambda_function.api_metrics_processor.function_name
   principal     = "events.amazonaws.com"
   source_arn    = element([
     aws_cloudwatch_event_rule.api_metrics_9am.arn,
