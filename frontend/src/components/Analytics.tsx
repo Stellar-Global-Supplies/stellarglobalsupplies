@@ -217,58 +217,66 @@ function SKUPerformanceChart({ skus }: { skus: AnalyticsSummary['top_skus'] }) {
     };
   });
 
+  if (data.length === 0 || data.every(d => d.revenue === 0)) {
+    return (
+      <div className="glass-card p-5">
+        <SectionHeader
+          title="SKU Performance"
+          subtitle="Revenue by product SKU"
+        />
+        <EmptyChart />
+      </div>
+    );
+  }
+
   return (
     <div className="glass-card p-5">
       <SectionHeader
         title="SKU Performance"
         subtitle="Revenue by product SKU"
       />
-      {data.length === 0 ? (
-        <EmptyChart />
-      ) : (
-        <ResponsiveContainer width="100%" height={260}>
-          <BarChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-            <XAxis
-              dataKey="sku"
-              tick={{ fill: '#64748b', fontSize: 10 }}
-              axisLine={false}
-              tickLine={false}
-              interval={0}
-              angle={-30}
-              textAnchor="end"
-              height={50}
-            />
-            <YAxis
-              tickFormatter={(v: number) => fmt(v)}
-              tick={{ fill: '#64748b', fontSize: 11 }}
-              axisLine={false}
-              tickLine={false}
-              width={60}
-            />
-            <Tooltip
-              {...CHART_TOOLTIP_STYLE}
-              formatter={(v: number, name: string) => [
-                name === 'revenue' ? fmt(v) : v.toLocaleString() + ' units',
-                name === 'revenue' ? 'Revenue' : 'Quantity',
-              ]}
-            />
-            <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '8px' }} />
-            <Bar
-              dataKey="revenue"
-              radius={[4, 4, 0, 0]}
-              maxBarSize={32}
-            >
-              {data.map((entry, i) => (
-                <Cell
-                  key={i}
-                  fill={entry.material === 'SS' ? '#6366f1' : '#06b6d4'}
-                />
-              ))}
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
-      )}
+      <ResponsiveContainer width="100%" height={260}>
+        <BarChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+          <XAxis
+            dataKey="sku"
+            tick={{ fill: '#64748b', fontSize: 10 }}
+            axisLine={false}
+            tickLine={false}
+            interval={0}
+            angle={-30}
+            textAnchor="end"
+            height={50}
+          />
+          <YAxis
+            tickFormatter={(v: number) => fmt(v)}
+            tick={{ fill: '#64748b', fontSize: 11 }}
+            axisLine={false}
+            tickLine={false}
+            width={60}
+          />
+          <Tooltip
+            {...CHART_TOOLTIP_STYLE}
+            formatter={(v: number, name: string) => [
+              name === 'revenue' ? fmt(v) : v.toLocaleString() + ' units',
+              name === 'revenue' ? 'Revenue' : 'Quantity',
+            ]}
+          />
+          <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '8px' }} />
+          <Bar
+            dataKey="revenue"
+            radius={[4, 4, 0, 0]}
+            maxBarSize={32}
+          >
+            {data.map((entry, i) => (
+              <Cell
+                key={i}
+                fill={entry.material === 'SS' ? '#6366f1' : '#06b6d4'}
+              />
+            ))}
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
     </div>
   );
 }
@@ -284,6 +292,18 @@ function MaterialSplitDetail({ split }: { split: AnalyticsSummary['material_spli
     { name: 'SERVICE', value: split.SERVICE ?? 0, color: '#38bdf8', label: 'Service' },
     { name: 'OTHER', value: split.OTHER ?? 0, color: '#94a3b8', label: 'Other' },
   ].filter((entry) => entry.value > 0);
+
+  if (total === 0) {
+    return (
+      <div className="glass-card p-5">
+        <SectionHeader
+          title="Material Type Breakdown"
+          subtitle="Revenue distribution by material"
+        />
+        <EmptyChart />
+      </div>
+    );
+  }
 
   return (
     <div className="glass-card p-5">
