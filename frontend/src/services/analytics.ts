@@ -1,21 +1,28 @@
 import { supabase } from '@/lib/supabase';
-import type { AnalyticsSummary } from '@/types';
+import type { AnalyticsSummary, FinancialYear } from '@/types';
 
 export async function fetchAnalyticsSummarySupabase(
   months = 6,
   year?: string,
   month?: string,
+  financialYear?: FinancialYear,
 ): Promise<AnalyticsSummary> {
 
-  // Build date range filter if year is specified
-  const dateFilter: { gte: string; lte: string } | null = year
-    ? month
-      ? (() => {
-          const lastDay = new Date(Number(year), Number(month), 0).getDate();
-          return { gte: `${year}-${month}-01`, lte: `${year}-${month}-${String(lastDay).padStart(2, '0')}` };
-        })()
-      : { gte: `${year}-01-01`, lte: `${year}-12-31` }
-    : null;
+  // Financial year filter takes precedence (Apr-Mar)
+  const dateFilter: { gte: string; lte: string } | null = financialYear
+    ? (() => {
+        const start = new Date(financialYear.startYear, 3, 1); // Apr 1
+        const end = new Date(financialYear.startYear + 1, 2, 31); // Mar 31 next year
+        return { gte: `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-01`, lte: `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, '0')}-31` };
+      })()
+    : year
+      ? month
+        ? (() => {
+            const lastDay = new Date(Number(year), Number(month), 0).getDate();
+            return { gte: `${year}-${month}-01`, lte: `${year}-${month}-${String(lastDay).padStart(2, '0')}` };
+          })()
+        : { gte: `${year}-01-01`, lte: `${year}-12-31` }
+      : null;
 
   const monthsFilter = dateFilter
     ? supabase.from('monthly_revenue').select('*').gte('month', dateFilter.gte.slice(0, 7)).lte('month', dateFilter.lte.slice(0, 7)).order('month', { ascending: false })

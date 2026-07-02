@@ -324,3 +324,8 @@ export interface WebAnalyticsData {
 export type MetaAnalyticsData = WebAnalyticsData;
 
 export type AnalyticsPeriod = 'weekly' | 'monthly';
+
+export type FinancialYear = {
+  startYear: number;
+  label: string;
+};

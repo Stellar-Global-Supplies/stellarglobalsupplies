@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   TrendingUp,
@@ -27,7 +28,7 @@ import {
   Cell,
 } from 'recharts';
 import { fetchAnalyticsSummarySupabase } from '@/services/analytics';
-import type { AnalyticsSummary } from '@/types';
+import type { AnalyticsSummary, FinancialYear } from '@/types';
 import { format, parseISO } from 'date-fns';
 import { useNavStore } from '@/store';
 
@@ -526,10 +527,17 @@ function ErrorCard({ message, onRetry }: { message: string; onRetry: () => void 
 // ────────────────────────────────────────────────────────────────────────────
 // Dashboard main
 // ────────────────────────────────────────────────────────────────────────────
+const FINANCIAL_YEAR_OPTIONS: FinancialYear[] = [
+  { startYear: 2025, label: 'FY 2025-26' },
+  { startYear: 2024, label: 'FY 2024-25' },
+];
+
 export default function Dashboard() {
+  const [selectedFY, setSelectedFY] = useState<FinancialYear | null>(null);
+
   const { data, isLoading, isError, error, refetch } = useQuery({
-    queryKey: ['analytics-summary'],
-    queryFn:  () => fetchAnalyticsSummarySupabase(6),
+    queryKey: ['analytics-summary', selectedFY?.startYear],
+    queryFn:  () => fetchAnalyticsSummarySupabase(6, undefined, undefined, selectedFY || undefined),
     staleTime: 5 * 60 * 1000,
   });
 
@@ -596,13 +604,28 @@ export default function Dashboard() {
             </span>
           </p>
         </div>
-        <button
-          onClick={() => refetch()}
-          className="flex items-center gap-2 px-3 py-1.5 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 transition-colors ripple-effect"
-        >
-          <RefreshCw size={12} className="animate-spin-slow" />
-          Refresh <span className="live-dot" />
-        </button>
+        <div className="flex items-center gap-2">
+          <select
+            value={selectedFY?.label ?? ''}
+            onChange={(e) => {
+              const fy = FINANCIAL_YEAR_OPTIONS.find(f => f.label === e.target.value) || null;
+              setSelectedFY(fy);
+            }}
+            className="text-2xs bg-slate-800 border border-slate-700 text-slate-300 rounded-lg px-2 py-1.5 outline-none cursor-pointer"
+          >
+            <option value="">All Time</option>
+            {FINANCIAL_YEAR_OPTIONS.map((fy) => (
+              <option key={fy.label} value={fy.label}>{fy.label}</option>
+            ))}
+          </select>
+          <button
+            onClick={() => refetch()}
+            className="flex items-center gap-2 px-3 py-1.5 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 transition-colors ripple-effect"
+          >
+            <RefreshCw size={12} className="animate-spin-slow" />
+            Refresh <span className="live-dot" />
+          </button>
+        </div>
       </div>
 
       {/* Data Flow Diagram */}

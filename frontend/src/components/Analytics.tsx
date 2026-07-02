@@ -24,7 +24,7 @@ import {
   Filter,
 } from 'lucide-react';
 import { fetchAnalyticsSummarySupabase } from '@/services/analytics';
-import type { AnalyticsSummary } from '@/types';
+import type { AnalyticsSummary, FinancialYear } from '@/types';
 import { format, parseISO } from 'date-fns';
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -541,6 +541,11 @@ const YEAR_OPTIONS = [
   { label: '2025', value: '2025' },
 ];
 
+const FINANCIAL_YEAR_OPTIONS: FinancialYear[] = [
+  { startYear: 2025, label: 'FY 2025-26' },
+  { startYear: 2024, label: 'FY 2024-25' },
+];
+
 // ────────────────────────────────────────────────────────────────────────────
 // Analytics main
 // ────────────────────────────────────────────────────────────────────────────
@@ -548,16 +553,26 @@ export default function Analytics() {
   const [months, setMonths] = useState(6);
   const [selectedYear, setSelectedYear] = useState('');
   const [selectedMonth, setSelectedMonth] = useState('');
+  const [selectedFY, setSelectedFY] = useState<FinancialYear | null>(null);
 
-  // Reset month filter when year is cleared
+  // Reset month/year filter when FY is selected/cleared
+  const handleFYChange = (fy: FinancialYear | null) => {
+    setSelectedFY(fy);
+    if (fy) {
+      setSelectedYear('');
+      setSelectedMonth('');
+    }
+  };
+
   const handleYearChange = (year: string) => {
     setSelectedYear(year);
     if (!year) setSelectedMonth('');
+    if (selectedFY) setSelectedFY(null);
   };
 
   const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
-    queryKey: ['analytics-summary', months, selectedYear, selectedMonth],
-    queryFn:  () => fetchAnalyticsSummarySupabase(months, selectedYear || undefined, selectedMonth || undefined),
+    queryKey: ['analytics-summary', months, selectedYear, selectedMonth, selectedFY?.startYear],
+    queryFn:  () => fetchAnalyticsSummarySupabase(months, selectedYear || undefined, selectedMonth || undefined, selectedFY || undefined),
     staleTime: 5 * 60 * 1000,
   });
 
@@ -592,12 +607,30 @@ export default function Analytics() {
         </div>
 
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
+          {/* Financial Year filter */}
+          <div className="flex items-center gap-1 bg-slate-800 border border-slate-700 rounded-lg p-1">
+            <select
+              value={selectedFY?.label ?? ''}
+              onChange={(e) => {
+                const fy = FINANCIAL_YEAR_OPTIONS.find(f => f.label === e.target.value) || null;
+                handleFYChange(fy);
+              }}
+              className="text-2xs bg-transparent text-slate-300 outline-none px-1 py-0.5 cursor-pointer"
+            >
+              <option value="">All Years</option>
+              {FINANCIAL_YEAR_OPTIONS.map((fy) => (
+                <option key={fy.label} value={fy.label}>{fy.label}</option>
+              ))}
+            </select>
+          </div>
+
           {/* Year / Month filters */}
           <div className="flex items-center gap-1 bg-slate-800 border border-slate-700 rounded-lg p-1">
             <select
               value={selectedYear}
               onChange={(e) => handleYearChange(e.target.value)}
-              className="text-2xs bg-transparent text-slate-300 outline-none px-1 py-0.5 cursor-pointer"
+              disabled={!!selectedFY}
+              className="text-2xs bg-transparent text-slate-300 outline-none px-1 py-0.5 cursor-pointer disabled:opacity-40"
             >
               {YEAR_OPTIONS.map((y) => (
                 <option key={y.value} value={y.value}>{y.label}</option>
@@ -607,7 +640,7 @@ export default function Analytics() {
             <select
               value={selectedMonth}
               onChange={(e) => setSelectedMonth(e.target.value)}
-              disabled={!selectedYear}
+              disabled={!selectedYear || !!selectedFY}
               className="text-2xs bg-transparent text-slate-300 outline-none px-1 py-0.5 cursor-pointer disabled:opacity-40"
             >
               {MONTH_NAMES.map((m) => (

@@ -178,6 +178,13 @@ const TYPE_OPTIONS = [
   { label: 'Purchase Only', value: 'purchase' },
 ];
 
+interface FinancialYearOption { startYear: number; label: string; }
+
+const FINANCIAL_YEAR_OPTIONS: FinancialYearOption[] = [
+  { startYear: 2025, label: 'FY 2025-26' },
+  { startYear: 2024, label: 'FY 2024-25' },
+];
+
 // ────────────────────────────────────────────────────────────────────────────
 // Sales & Purchase Table Page
 // ────────────────────────────────────────────────────────────────────────────
@@ -186,39 +193,56 @@ export default function SalesPurchaseTable() {
   const [selectedMonth, setSelectedMonth] = useState('');
   const [selectedType, setSelectedType] = useState<RowType | ''>('');
   const [search, setSearch] = useState('');
+  const [selectedFY, setSelectedFY] = useState<FinancialYearOption | null>(null);
 
   const handleYearChange = (year: string) => {
     setSelectedYear(year);
     if (!year) setSelectedMonth('');
   };
 
+  const handleFYChange = (fy: FinancialYearOption | null) => {
+    setSelectedFY(fy);
+    if (fy) { setSelectedYear(''); setSelectedMonth(''); }
+  };
+
+  // Compute FY date range for filtering
+  const fyGte = selectedFY ? `${selectedFY.startYear}-04-01` : null;
+  const fyLte = selectedFY ? `${selectedFY.startYear + 1}-03-31` : null;
+
   const { data: rows = [], isLoading, isError, error, refetch } = useQuery({
-    queryKey: ['sales-purchase-table', selectedYear, selectedMonth, selectedType],
+    queryKey: ['sales-purchase-table', selectedYear, selectedMonth, selectedType, selectedFY?.startYear],
     queryFn: () => fetchSalesPurchaseData(selectedYear || undefined, selectedMonth || undefined, selectedType || undefined),
     staleTime: 5 * 60 * 1000,
   });
 
-  // Filter by search
+  // Apply client-side FY filter
+  const fyFiltered = selectedFY
+    ? rows.filter((r) => r.date >= fyGte! && r.date <= fyLte!)
+    : rows;
+
+  // Then search
   const filtered = search.trim()
-    ? rows.filter((r) =>
+    ? fyFiltered.filter((r) =>
         r.item_name.toLowerCase().includes(search.toLowerCase()) ||
         r.invoice_id.toLowerCase().includes(search.toLowerCase()) ||
         r.party_name.toLowerCase().includes(search.toLowerCase()),
       )
-    : rows;
+    : fyFiltered;
 
   // Compute totals
-  const totalSales = rows.filter((r) => r.type === 'sales').reduce((s, r) => s + r.total_amount, 0);
-  const totalPurchases = rows.filter((r) => r.type === 'purchase').reduce((s, r) => s + r.total_amount, 0);
-  const totalQtySold = rows.filter((r) => r.type === 'sales').reduce((s, r) => s + r.quantity, 0);
-  const totalQtyPurchased = rows.filter((r) => r.type === 'purchase').reduce((s, r) => s + r.quantity, 0);
+  const totalSales = fyFiltered.filter((r) => r.type === 'sales').reduce((s, r) => s + r.total_amount, 0);
+  const totalPurchases = fyFiltered.filter((r) => r.type === 'purchase').reduce((s, r) => s + r.total_amount, 0);
+  const totalQtySold = fyFiltered.filter((r) => r.type === 'sales').reduce((s, r) => s + r.quantity, 0);
+  const totalQtyPurchased = fyFiltered.filter((r) => r.type === 'purchase').reduce((s, r) => s + r.quantity, 0);
 
   // Period label
-  const periodLabel = selectedYear
-    ? selectedMonth
-      ? `${MONTH_NAMES.find(m => m.value === selectedMonth)?.label} ${selectedYear}`
-      : `FY ${selectedYear}`
-    : 'All Time';
+  const periodLabel = selectedFY
+    ? selectedFY.label
+    : selectedYear
+      ? selectedMonth
+        ? `${MONTH_NAMES.find(m => m.value === selectedMonth)?.label} ${selectedYear}`
+        : `FY ${selectedYear}`
+      : 'All Time';
 
   if (isLoading) {
     return (
@@ -288,12 +312,30 @@ export default function SalesPurchaseTable() {
             ))}
           </select>
 
+          {/* Financial Year filter */}
+          <div className="flex items-center gap-1 bg-slate-800 border border-slate-700 rounded-lg p-1">
+            <select
+              value={selectedFY?.label ?? ''}
+              onChange={(e) => {
+                const fy = FINANCIAL_YEAR_OPTIONS.find(f => f.label === e.target.value) || null;
+                handleFYChange(fy);
+              }}
+              className="text-2xs bg-transparent text-slate-300 outline-none px-1 py-0.5 cursor-pointer"
+            >
+              <option value="">All Time</option>
+              {FINANCIAL_YEAR_OPTIONS.map((fy) => (
+                <option key={fy.label} value={fy.label}>{fy.label}</option>
+              ))}
+            </select>
+          </div>
+
           {/* Year / Month filters */}
           <div className="flex items-center gap-1 bg-slate-800 border border-slate-700 rounded-lg p-1">
             <select
               value={selectedYear}
               onChange={(e) => handleYearChange(e.target.value)}
-              className="text-2xs bg-transparent text-slate-300 outline-none px-1 py-0.5 cursor-pointer"
+              disabled={!!selectedFY}
+              className="text-2xs bg-transparent text-slate-300 outline-none px-1 py-0.5 cursor-pointer disabled:opacity-40"
             >
               {YEAR_OPTIONS.map((y) => (
                 <option key={y.value} value={y.value}>{y.label}</option>
@@ -303,7 +345,7 @@ export default function SalesPurchaseTable() {
             <select
               value={selectedMonth}
               onChange={(e) => setSelectedMonth(e.target.value)}
-              disabled={!selectedYear}
+              disabled={!selectedYear || !!selectedFY}
               className="text-2xs bg-transparent text-slate-300 outline-none px-1 py-0.5 cursor-pointer disabled:opacity-40"
             >
               {MONTH_NAMES.map((m) => (
