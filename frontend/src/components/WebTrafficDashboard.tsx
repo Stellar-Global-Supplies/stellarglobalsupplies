@@ -10,7 +10,7 @@ import {
 import { fetchWebAnalytics } from '@/api/client';
 import type { WebAnalyticsData } from '@/types';
 import { format, parseISO } from 'date-fns';
-import DataFlowVisualization from './DataFlowVisualization';
+import DataFlowVisualization, { type DataFlowNode, type DataFlowEdge } from './DataFlowVisualization';
 
 // ────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -272,17 +272,17 @@ export default function WebTrafficDashboard() {
             title="Web Traffic Data Flow"
             subtitle="CloudFront → S3 → Analytics → Dashboard"
             nodes={[
-              { id: 'cloudfront', label: 'CloudFront', icon: 'source', status: 'active', description: 'CDN Logs' },
-              { id: 's3', label: 'S3 Bucket', icon: 'storage', status: 'active', description: 'Log Storage' },
-              { id: 'processor', label: 'Processor', icon: 'process', status: 'active', description: 'ETL' },
-              { id: 'analytics', label: 'Analytics', icon: 'process', status: 'active', description: 'Insights' },
-              { id: 'dashboard', label: 'Dashboard', icon: 'output', status: 'active', description: 'Real-time' },
+              { id: 'cloudfront', label: 'CloudFront', icon: 'source'   as const, status: 'active' as const, description: 'CDN Logs' },
+              { id: 's3',         label: 'S3 Bucket',  icon: 'storage'  as const, status: 'active' as const, description: 'Log Storage' },
+              { id: 'processor',  label: 'Processor',  icon: 'process'  as const, status: 'active' as const, description: 'ETL' },
+              { id: 'analytics',  label: 'Analytics',  icon: 'process'  as const, status: 'active' as const, description: 'Insights' },
+              { id: 'dashboard',  label: 'Dashboard',  icon: 'output'   as const, status: 'active' as const, description: 'Real-time' },
             ]}
             edges={[
-              { from: 'cloudfront', to: 's3', label: 'Logs', active: true, speed: 'fast' },
-              { from: 's3', to: 'processor', label: 'Process', active: true, speed: 'medium' },
-              { from: 'processor', to: 'analytics', label: 'Analyze', active: true, speed: 'medium' },
-              { from: 'analytics', to: 'dashboard', label: 'Display', active: true, speed: 'fast' },
+              { from: 'cloudfront', to: 's3',        label: 'Logs',    active: true, speed: 'fast'   as const },
+              { from: 's3',         to: 'processor',  label: 'Process', active: true, speed: 'medium' as const },
+              { from: 'processor',  to: 'analytics',  label: 'Analyze', active: true, speed: 'medium' as const },
+              { from: 'analytics',  to: 'dashboard',  label: 'Display', active: true, speed: 'fast'   as const },
             ]}
             refreshInterval={2500}
           />

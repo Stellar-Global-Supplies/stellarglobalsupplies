@@ -5,7 +5,7 @@ import {
 } from 'recharts';
 import { fetchAwsCosts, type AwsCostResponse } from '@/services/aws';
 import { RefreshCw } from 'lucide-react';
-import DataFlowVisualization from './DataFlowVisualization';
+import DataFlowVisualization, { type DataFlowNode, type DataFlowEdge } from './DataFlowVisualization';
 
 const COLOURS = [
   '#3B82F6', '#00B98E', '#EF4444', '#F59E0B',
@@ -136,19 +136,19 @@ export default function AwsCostDashboard() {
   const variance = (v: number) => ({ low: v * 0.8, high: v * 1.2 });
 
   // Data flow visualization for AWS costs
-  const costFlowNodes = [
-    { id: 'cur', label: 'CUR Reports', icon: 'source' as const, status: 'active' as const, description: 'S3 Bucket' },
-    { id: 'processor', label: 'CUR Processor', icon: 'process' as const, status: 'active' as const, description: 'Daily 7AM' },
-    { id: 's3', label: 'Processed S3', icon: 'storage' as const, status: 'active' as const, description: 'Parquet Files' },
-    { id: 'athena', label: 'Athena', icon: 'process' as const, status: 'active' as const, description: 'SQL Queries' },
-    { id: 'dashboard', label: 'Cost Dashboard', icon: 'output' as const, status: 'active' as const, description: 'Real-time View' },
+  const costFlowNodes: DataFlowNode[] = [
+    { id: 'cur',       label: 'CUR Reports',    icon: 'source'   as const, status: 'active' as const, description: 'S3 Bucket' },
+    { id: 'processor', label: 'CUR Processor',  icon: 'process'  as const, status: 'active' as const, description: 'Daily 7AM' },
+    { id: 's3',        label: 'Processed S3',   icon: 'storage'  as const, status: 'active' as const, description: 'Parquet Files' },
+    { id: 'athena',    label: 'Athena',         icon: 'process'  as const, status: 'active' as const, description: 'SQL Queries' },
+    { id: 'dashboard', label: 'Cost Dashboard', icon: 'output'   as const, status: 'active' as const, description: 'Real-time View' },
   ];
 
-  const costFlowEdges = [
-    { from: 'cur', to: 'processor', label: 'Raw', active: true, speed: 'medium' as const },
-    { from: 'processor', to: 's3', label: 'Process', active: true, speed: 'medium' as const },
-    { from: 's3', to: 'athena', label: 'Query', active: true, speed: 'fast' as const },
-    { from: 'athena', to: 'dashboard', label: 'Display', active: true, speed: 'fast' as const },
+  const costFlowEdges: DataFlowEdge[] = [
+    { from: 'cur',       to: 'processor', label: 'Raw',     active: true, speed: 'medium' as const },
+    { from: 'processor', to: 's3',        label: 'Process', active: true, speed: 'medium' as const },
+    { from: 's3',        to: 'athena',    label: 'Query',   active: true, speed: 'fast'   as const },
+    { from: 'athena',    to: 'dashboard', label: 'Display', active: true, speed: 'fast'   as const },
   ];
 
   return (
