@@ -5,6 +5,7 @@ import {
 } from 'recharts';
 import { fetchAwsCosts, type AwsCostResponse } from '@/services/aws';
 import { RefreshCw } from 'lucide-react';
+import DataFlowVisualization from './DataFlowVisualization';
 
 const COLOURS = [
   '#3B82F6', '#00B98E', '#EF4444', '#F59E0B',
@@ -121,19 +122,11 @@ export default function AwsCostDashboard() {
   ];
 
   // Daily cost trend — build from costs.json grouped by date
-  // We aggregate from monthly_totals (per-day breakdown not in response, use allData proxy)
-  // monthlyTotals is per-month; for daily bar we need to use combinedData
   const trendMonths = monthlyTotals.map((m) => ({
     month: m.month,
     total: m.total,
   }));
 
-  // Stacked daily data — approximate from allData records by date
-  // Group allData doesn't have date; use monthlyTotals as daily proxy from handler
-  // The handler returns monthly_totals (one entry per month in history).
-  // For the daily trend chart inside a single month we need raw cost records.
-  // We'll build a "daily" chart from the forecast data points as a proxy,
-  // or show the per-month trend if only 1 month available.
   const showDailyTrend = trendMonths.length <= 2;
 
   // Forecast values
@@ -142,8 +135,33 @@ export default function AwsCostDashboard() {
   const fc12val = inferForecast(12);
   const variance = (v: number) => ({ low: v * 0.8, high: v * 1.2 });
 
+  // Data flow visualization for AWS costs
+  const costFlowNodes = [
+    { id: 'cur', label: 'CUR Reports', icon: 'source' as const, status: 'active' as const, description: 'S3 Bucket' },
+    { id: 'processor', label: 'CUR Processor', icon: 'process' as const, status: 'active' as const, description: 'Daily 7AM' },
+    { id: 's3', label: 'Processed S3', icon: 'storage' as const, status: 'active' as const, description: 'Parquet Files' },
+    { id: 'athena', label: 'Athena', icon: 'process' as const, status: 'active' as const, description: 'SQL Queries' },
+    { id: 'dashboard', label: 'Cost Dashboard', icon: 'output' as const, status: 'active' as const, description: 'Real-time View' },
+  ];
+
+  const costFlowEdges = [
+    { from: 'cur', to: 'processor', label: 'Raw', active: true, speed: 'medium' as const },
+    { from: 'processor', to: 's3', label: 'Process', active: true, speed: 'medium' as const },
+    { from: 's3', to: 'athena', label: 'Query', active: true, speed: 'fast' as const },
+    { from: 'athena', to: 'dashboard', label: 'Display', active: true, speed: 'fast' as const },
+  ];
+
   return (
     <div className="space-y-4">
+      {/* Data Flow Visualization */}
+      <DataFlowVisualization
+        title="AWS Cost Data Flow"
+        subtitle="CUR processing pipeline from S3 to dashboard"
+        nodes={costFlowNodes}
+        edges={costFlowEdges}
+        refreshInterval={3000}
+      />
+
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
@@ -360,50 +378,14 @@ export default function AwsCostDashboard() {
             const v = variance(fc.value);
             return (
               <div key={fc.label} className="text-center p-3 rounded-lg bg-slate-800/50 border border-slate-700/50">
-                <div className="text-xs text-slate-400 mb-1">{fc.label}</div>
-                <div className="text-xl font-bold text-white">{fmt2(fc.value)}</div>
-                <div className="text-2xs text-slate-500 mt-0.5">{fmt2(v.low)} – {fmt2(v.high)}</div>
+                <div className="text-2xs text-slate-400 mb-1">{fc.label}</div>
+                <div className="text-lg font-semibold text-white">{fmt2(fc.value)}</div>
+                <div className="text-2xs text-slate-500 mt-1">
+                  {fmt2(v.low)} – {fmt2(v.high)}
+                </div>
               </div>
             );
           })}
-        </div>
-      </div>
-
-      {/* Stacked Daily Cost by Service */}
-      <div className="agent-card p-4">
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3">
-          Stacked Daily Cost by Service
-        </h3>
-        <div style={{ width: '100%', height: 220 }}>
-          <ResponsiveContainer>
-            <BarChart
-              data={trendMonths.map((m) => {
-                const entry: Record<string, number | string> = { month: fmtDay(m.month + '-01') };
-                // Distribute top services proportionally for stacked view
-                costlyData.slice(0, 6).forEach((svc) => {
-                  entry[shortName(svc.service, svc.serviceName)] =
-                    Math.round(m.total * (svc.cost / total) * 10000) / 10000;
-                });
-                if (costlyData.length > 6) {
-                  const othersShare = costlyData.slice(6).reduce((s, d) => s + d.cost, 0) / total;
-                  entry['Others'] = Math.round(m.total * othersShare * 10000) / 10000;
-                }
-                return entry;
-              })}
-              margin={{ top: 8, right: 16, left: 0, bottom: 8 }}
-            >
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-              <XAxis dataKey="month" tick={{ fontSize: 10 }} interval={1} />
-              <YAxis tickFormatter={(v: number) => `$${v.toFixed(2)}`} tick={{ fontSize: 10 }} width={55} />
-              <Tooltip formatter={(v: number, name: string) => [fmt4(v), name]} />
-              <Legend wrapperStyle={{ fontSize: 10 }} iconSize={8} />
-              {[...costlyData.slice(0, 6).map((svc) => shortName(svc.service, svc.serviceName)),
-                ...(costlyData.length > 6 ? ['Others'] : [])
-              ].map((name, i) => (
-                <Bar key={name} dataKey={name} stackId="a" fill={COLOURS[i % COLOURS.length]} radius={i === 0 ? [3, 3, 0, 0] : [0, 0, 0, 0]} />
-              ))}
-            </BarChart>
-          </ResponsiveContainer>
         </div>
       </div>
     </div>
