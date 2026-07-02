@@ -542,6 +542,7 @@ const YEAR_OPTIONS = [
 ];
 
 const FINANCIAL_YEAR_OPTIONS: FinancialYear[] = [
+  { startYear: 2026, label: 'FY 2026-27' },
   { startYear: 2025, label: 'FY 2025-26' },
   { startYear: 2024, label: 'FY 2024-25' },
 ];
