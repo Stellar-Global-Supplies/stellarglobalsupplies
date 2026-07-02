@@ -30,6 +30,8 @@ export default function ApiMonitoringDashboard() {
   const [lambdaTimeSeries, setLambdaTimeSeries] = useState<LambdaTimeSeriesData[]>([]);
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState<ApiMetricsPeriod>('24h');
+  const [isWaiting, setIsWaiting] = useState(false);
+  const [waitMessage, setWaitMessage] = useState('');
 
   useEffect(() => {
     fetchMetrics();
@@ -42,23 +44,36 @@ export default function ApiMonitoringDashboard() {
       const data = await fetchApiMetrics(period);
       console.log('API Metrics received:', data);
 
-      setMetrics(data.routes ?? []);
-      setTimeSeries(
-        (data.timeSeries ?? []).map((pt) => ({
-          ...pt,
-          label: formatTimestamp(pt.timestamp, period),
-        })),
-      );
-      setLambdaMetrics(data.lambdaMetrics ?? []);
-      setLambdaTimeSeries(
-        (data.lambdaTimeSeries ?? []).map((pt) => ({
-          ...pt,
-          label: formatTimestamp(pt.timestamp, period),
-        })),
-      );
+      // Check if the processor hasn't run yet (message field indicates no cache)
+      if ((data as any).message && (data.routes ?? []).length === 0) {
+        setIsWaiting(true);
+        setWaitMessage((data as any).message);
+        setMetrics([]);
+        setTimeSeries([]);
+        setLambdaMetrics([]);
+        setLambdaTimeSeries([]);
+      } else {
+        setIsWaiting(false);
+        setWaitMessage('');
+        setMetrics(data.routes ?? []);
+        setTimeSeries(
+          (data.timeSeries ?? []).map((pt) => ({
+            ...pt,
+            label: formatTimestamp(pt.timestamp, period),
+          })),
+        );
+        setLambdaMetrics(data.lambdaMetrics ?? []);
+        setLambdaTimeSeries(
+          (data.lambdaTimeSeries ?? []).map((pt) => ({
+            ...pt,
+            label: formatTimestamp(pt.timestamp, period),
+          })),
+        );
+      }
     } catch (error) {
       // Silently handle — endpoint may not be deployed yet
       console.error('Failed to fetch API metrics:', error);
+      setIsWaiting(false);
       setMetrics([]);
       setTimeSeries([]);
       setLambdaMetrics([]);
@@ -88,6 +103,51 @@ export default function ApiMonitoringDashboard() {
     );
   }
 
+  // Waiting for processor to run and cache data
+  if (isWaiting) {
+    return (
+      <div className="space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          {[
+            { label: 'Total API Calls',   value: '—',   icon: <Activity className="text-slate-600" size={24} /> },
+            { label: 'Success Rate',      value: 'N/A', icon: <CheckCircle className="text-slate-600" size={24} /> },
+            { label: 'Successful Calls',  value: '—',   icon: <TrendingUp className="text-slate-600" size={24} /> },
+            { label: 'Errors',            value: '—',   icon: <XCircle className="text-slate-600" size={24} /> },
+          ].map(({ label, value, icon }) => (
+            <div key={label} className="agent-card p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-2xs text-slate-400">{label}</p>
+                  <p className="text-2xl font-bold text-slate-500">{value}</p>
+                </div>
+                {icon}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="agent-card p-12">
+          <div className="text-center">
+            <div className="flex items-center justify-center mb-4">
+              <div className="w-16 h-16 rounded-full bg-amber-900/20 flex items-center justify-center">
+                <Activity className="text-amber-400 animate-pulse" size={32} />
+              </div>
+            </div>
+            <h3 className="text-lg font-semibold text-slate-300 mb-2">Waiting for Metrics Processing</h3>
+            <p className="text-sm text-slate-400 max-w-lg mx-auto mb-4">
+              {waitMessage || 'The api-metrics-processor Lambda has not yet run. Metrics will be collected and cached automatically.'}
+            </p>
+            <div className="text-xs text-slate-500 space-y-1">
+              <p>The processor runs 4 times daily:</p>
+              <p className="font-mono">9:00 AM | 12:00 PM | 3:00 PM | 6:00 PM (IST)</p>
+              <p className="mt-2">Next refresh will happen automatically...</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // Placeholder when endpoint is not yet deployed / returns no data
   if (metrics.length === 0 && timeSeries.length === 0 && lambdaMetrics.length === 0) {
     console.log('Showing placeholder - no metrics data');
@@ -98,7 +158,7 @@ export default function ApiMonitoringDashboard() {
             { label: 'Total API Calls',   value: '0',   icon: <Activity className="text-blue-400" size={24} /> },
             { label: 'Success Rate',      value: 'N/A', icon: <CheckCircle className="text-slate-600" size={24} /> },
             { label: 'Successful Calls',  value: '0',   icon: <TrendingUp className="text-slate-600" size={24} /> },
-            { label: 'Failed Calls',      value: '0',   icon: <XCircle className="text-slate-600" size={24} /> },
+            { label: 'Errors',            value: '0',   icon: <XCircle className="text-slate-600" size={24} /> },
           ].map(({ label, value, icon }) => (
             <div key={label} className="agent-card p-4">
               <div className="flex items-center justify-between">
