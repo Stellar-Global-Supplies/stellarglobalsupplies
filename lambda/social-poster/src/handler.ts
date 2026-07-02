@@ -43,6 +43,13 @@ async function getSsmParam(name: string): Promise<string> {
   return resp.Parameter?.Value ?? '';
 }
 
+const SECURITY_HEADERS: Record<string, string> = {
+  'Content-Type': 'application/json',
+  'X-Content-Type-Options': 'nosniff',
+  'X-Frame-Options': 'DENY',
+  'Referrer-Policy': 'strict-origin-when-cross-origin',
+};
+
 function corsHeaders(): Record<string, string> {
   return {
     'Content-Type': 'application/json',
@@ -53,7 +60,7 @@ function corsHeaders(): Record<string, string> {
 }
 
 function success(body: unknown): APIGatewayProxyResultV2 {
-  return { statusCode: 200, headers: corsHeaders(), body: JSON.stringify(body) };
+  return { statusCode: 200, headers: SECURITY_HEADERS, body: JSON.stringify(body) };
 }
 
 function redirect(url: string): APIGatewayProxyResultV2 {

@@ -18,6 +18,13 @@ const BUCKETS: BucketConfig[] = [
 
 const s3 = new S3Client({ region: REGION });
 
+const SECURITY_HEADERS: Record<string, string> = {
+  'Content-Type': 'application/json',
+  'X-Content-Type-Options': 'nosniff',
+  'X-Frame-Options': 'DENY',
+  'Referrer-Policy': 'strict-origin-when-cross-origin',
+};
+
 const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN ?? 'https://ops.stellarglobalsupplies.com';
 
 function corsHeaders(): Record<string, string> {
@@ -30,7 +37,7 @@ function corsHeaders(): Record<string, string> {
 }
 
 function success(body: unknown): APIGatewayProxyResultV2 {
-  return { statusCode: 200, headers: corsHeaders(), body: JSON.stringify(body) };
+  return { statusCode: 200, headers: SECURITY_HEADERS, body: JSON.stringify(body) };
 }
 
 function errorResponse(status: number, message: string): APIGatewayProxyResultV2 {

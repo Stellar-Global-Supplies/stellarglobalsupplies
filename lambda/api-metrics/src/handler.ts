@@ -7,6 +7,13 @@ const API_ID   = process.env.API_ID     ?? 'wtt3awq1xg';   // HTTP API (v2) uses
 
 const cw = new CloudWatchClient({ region: REGION });
 
+const SECURITY_HEADERS: Record<string, string> = {
+  'Content-Type': 'application/json',
+  'X-Content-Type-Options': 'nosniff',
+  'X-Frame-Options': 'DENY',
+  'Referrer-Policy': 'strict-origin-when-cross-origin',
+};
+
 function corsHeaders(): Record<string, string> {
   return {
     'Content-Type': 'application/json',
@@ -17,7 +24,7 @@ function corsHeaders(): Record<string, string> {
 }
 
 function success(body: unknown): APIGatewayProxyResultV2 {
-  return { statusCode: 200, headers: corsHeaders(), body: JSON.stringify(body) };
+  return { statusCode: 200, headers: SECURITY_HEADERS, body: JSON.stringify(body) };
 }
 
 function clientError(msg: string): APIGatewayProxyResultV2 {
