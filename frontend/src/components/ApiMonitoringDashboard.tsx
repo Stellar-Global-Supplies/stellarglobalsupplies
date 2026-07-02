@@ -1,10 +1,14 @@
 import { useState, useEffect } from 'react';
-import { Activity, TrendingUp, AlertCircle, CheckCircle, XCircle } from 'lucide-react';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { fetchApiMetrics, type ApiMetricsPeriod, type ApiRouteMetric, type ApiTimeSeriesPoint } from '@/api/client';
+import { Activity, TrendingUp, AlertCircle, CheckCircle, XCircle, Terminal } from 'lucide-react';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Legend } from 'recharts';
+import { fetchApiMetrics, type ApiMetricsPeriod, type ApiRouteMetric, type ApiTimeSeriesPoint, type ApiLambdaMetric, type ApiLambdaTimeSeriesPoint } from '@/api/client';
 
 interface TimeSeriesData extends ApiTimeSeriesPoint {
-  label: string; // formatted for display
+  label: string;
+}
+
+interface LambdaTimeSeriesData extends ApiLambdaTimeSeriesPoint {
+  label: string;
 }
 
 function formatTimestamp(iso: string, period: string): string {
@@ -22,6 +26,8 @@ function formatTimestamp(iso: string, period: string): string {
 export default function ApiMonitoringDashboard() {
   const [metrics, setMetrics] = useState<ApiRouteMetric[]>([]);
   const [timeSeries, setTimeSeries] = useState<TimeSeriesData[]>([]);
+  const [lambdaMetrics, setLambdaMetrics] = useState<ApiLambdaMetric[]>([]);
+  const [lambdaTimeSeries, setLambdaTimeSeries] = useState<LambdaTimeSeriesData[]>([]);
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState<ApiMetricsPeriod>('24h');
 
@@ -43,11 +49,20 @@ export default function ApiMonitoringDashboard() {
           label: formatTimestamp(pt.timestamp, period),
         })),
       );
+      setLambdaMetrics(data.lambdaMetrics ?? []);
+      setLambdaTimeSeries(
+        (data.lambdaTimeSeries ?? []).map((pt) => ({
+          ...pt,
+          label: formatTimestamp(pt.timestamp, period),
+        })),
+      );
     } catch (error) {
       // Silently handle — endpoint may not be deployed yet
       console.error('Failed to fetch API metrics:', error);
       setMetrics([]);
       setTimeSeries([]);
+      setLambdaMetrics([]);
+      setLambdaTimeSeries([]);
     } finally {
       setLoading(false);
     }
@@ -58,18 +73,23 @@ export default function ApiMonitoringDashboard() {
   const totalErrors       = metrics.reduce((sum, m) => sum + m.errorCount, 0);
   const overallSuccessRate = totalCalls > 0 ? ((totalSuccess / totalCalls) * 100).toFixed(2) : '0.00';
 
+  const totalInvocations = lambdaMetrics.reduce((sum, m) => sum + m.invocations, 0);
+  const totalLambdaErrors = lambdaMetrics.reduce((sum, m) => sum + m.errors, 0);
+  const totalLambdaSuccess = lambdaMetrics.reduce((sum, m) => sum + m.successCount, 0);
+  const overallLambdaSuccessRate = totalInvocations > 0 ? ((totalLambdaSuccess / totalInvocations) * 100).toFixed(2) : '0.00';
+
   if (loading) {
     return (
       <div className="agent-card p-6">
         <div className="flex items-center justify-center py-12">
-          <div className="text-slate-400">Loading API metrics...</div>
+          <div className="text-slate-400">Loading metrics...</div>
         </div>
       </div>
     );
   }
 
   // Placeholder when endpoint is not yet deployed / returns no data
-  if (metrics.length === 0 && timeSeries.length === 0) {
+  if (metrics.length === 0 && timeSeries.length === 0 && lambdaMetrics.length === 0) {
     console.log('Showing placeholder - no metrics data');
     return (
       <div className="space-y-6">
@@ -114,7 +134,8 @@ export default function ApiMonitoringDashboard() {
 
   return (
     <div className="space-y-6">
-      {/* Summary Cards */}
+      {/* API Summary Cards */}
+      <h2 className="text-xl font-semibold text-slate-200">API Gateway Metrics</h2>
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="agent-card p-4">
           <div className="flex items-center justify-between">
@@ -157,7 +178,7 @@ export default function ApiMonitoringDashboard() {
         </div>
       </div>
 
-      {/* Time Series Chart */}
+      {/* API Time Series Chart */}
       <div className="agent-card p-6">
         <h3 className="text-lg font-semibold text-slate-200 mb-4">API Calls Over Time</h3>
         <ResponsiveContainer width="100%" height={300}>
@@ -274,19 +295,208 @@ export default function ApiMonitoringDashboard() {
         )}
       </div>
 
-      {/* Cost Notice */}
-      <div className="bg-blue-900/20 border border-blue-700/50 rounded-lg p-4">
-        <div className="flex items-start gap-3">
-          <AlertCircle className="text-blue-400 mt-0.5" size={20} />
-          <div className="text-sm">
-            <p className="text-blue-300 font-medium mb-1">Free CloudWatch Metrics</p>
-            <p className="text-blue-200/80">
-              This dashboard uses AWS CloudWatch standard metrics (free tier includes 10 custom metrics).
-              No additional charges for basic API monitoring. Data refreshes every 60 seconds.
-            </p>
+      {/* ── Lambda Metrics Section ── */}
+      {lambdaMetrics.length > 0 && (
+        <>
+          <div className="border-t border-slate-700 my-8"></div>
+          <h2 className="text-xl font-semibold text-slate-200 flex items-center gap-2">
+            <Terminal size={22} className="text-orange-400" />
+            Lambda Function Metrics
+          </h2>
+
+          {/* Lambda Summary Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="agent-card p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-2xs text-slate-400">Total Invocations</p>
+                  <p className="text-2xl font-bold text-slate-200">{totalInvocations.toLocaleString()}</p>
+                </div>
+                <Terminal className="text-orange-400" size={24} />
+              </div>
+            </div>
+
+            <div className="agent-card p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-2xs text-slate-400">Lambda Success Rate</p>
+                  <p className="text-2xl font-bold text-emerald-400">{overallLambdaSuccessRate}%</p>
+                </div>
+                <CheckCircle className="text-emerald-400" size={24} />
+              </div>
+            </div>
+
+            <div className="agent-card p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-2xs text-slate-400">Successful Invocations</p>
+                  <p className="text-2xl font-bold text-emerald-400">{totalLambdaSuccess.toLocaleString()}</p>
+                </div>
+                <TrendingUp className="text-emerald-400" size={24} />
+              </div>
+            </div>
+
+            <div className="agent-card p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-2xs text-slate-400">Lambda Errors</p>
+                  <p className="text-2xl font-bold text-red-400">{totalLambdaErrors.toLocaleString()}</p>
+                </div>
+                <XCircle className="text-red-400" size={24} />
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
+
+          {/* Lambda Time Series Chart */}
+          {lambdaTimeSeries.length > 0 && (
+            <div className="agent-card p-6">
+              <h3 className="text-lg font-semibold text-slate-200 mb-4">Lambda Invocations Over Time</h3>
+              <ResponsiveContainer width="100%" height={300}>
+                <AreaChart data={lambdaTimeSeries}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                  <XAxis
+                    dataKey="label"
+                    stroke="#94a3b8"
+                    style={{ fontSize: '12px' }}
+                    tick={{ fill: '#94a3b8' }}
+                  />
+                  <YAxis
+                    stroke="#94a3b8"
+                    style={{ fontSize: '12px' }}
+                    tick={{ fill: '#94a3b8' }}
+                    allowDecimals={false}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: '#1e293b',
+                      border: '1px solid #334155',
+                      borderRadius: '8px',
+                    }}
+                    labelStyle={{ color: '#94a3b8' }}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="invocations"
+                    stackId="1"
+                    stroke="#f97316"
+                    fill="#f97316"
+                    fillOpacity={0.6}
+                    name="Total Invocations"
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="errors"
+                    stackId="2"
+                    stroke="#ef4444"
+                    fill="#ef4444"
+                    fillOpacity={0.6}
+                    name="Errors"
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+
+          {/* Lambda Per-Function Bar Chart */}
+          <div className="agent-card p-6">
+            <h3 className="text-lg font-semibold text-slate-200 mb-4">Per-Function Invocations vs Errors</h3>
+            <ResponsiveContainer width="100%" height={lambdaMetrics.length > 20 ? 600 : 300}>
+              <BarChart
+                data={lambdaMetrics}
+                layout="vertical"
+                margin={{ left: lambdaMetrics.some(m => m.functionName.length > 40) ? 80 : 60 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                <XAxis type="number" stroke="#94a3b8" style={{ fontSize: '12px' }} tick={{ fill: '#94a3b8' }} />
+                <YAxis
+                  type="category"
+                  dataKey="functionName"
+                  stroke="#94a3b8"
+                  style={{ fontSize: '11px' }}
+                  tick={{ fill: '#94a3b8' }}
+                  width={lambdaMetrics.some(m => m.functionName.length > 40) ? 200 : 150}
+                />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: '#1e293b',
+                    border: '1px solid #334155',
+                    borderRadius: '8px',
+                  }}
+                  labelStyle={{ color: '#94a3b8' }}
+                />
+                <Legend />
+                <Bar dataKey="invocations" fill="#f97316" name="Invocations" radius={[0, 4, 4, 0]} />
+                <Bar dataKey="errors" fill="#ef4444" name="Errors" radius={[0, 4, 4, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Lambda Details Table */}
+          <div className="agent-card p-6">
+            <h3 className="text-lg font-semibold text-slate-200 mb-4">Lambda Function Details</h3>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-700">
+                    <th className="text-left py-2 px-4 text-slate-400 font-medium">Function Name</th>
+                    <th className="text-right py-2 px-4 text-slate-400 font-medium">Invocations</th>
+                    <th className="text-right py-2 px-4 text-slate-400 font-medium">Success</th>
+                    <th className="text-right py-2 px-4 text-slate-400 font-medium">Errors</th>
+                    <th className="text-right py-2 px-4 text-slate-400 font-medium">Throttles</th>
+                    <th className="text-right py-2 px-4 text-slate-400 font-medium">Success Rate</th>
+                    <th className="text-right py-2 px-4 text-slate-400 font-medium">Avg Duration</th>
+                    <th className="text-right py-2 px-4 text-slate-400 font-medium">P99 Duration</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {lambdaMetrics.map((metric, idx) => (
+                    <tr key={idx} className="border-b border-slate-800 hover:bg-slate-800/30">
+                      <td className="py-2 px-4 text-slate-200 font-mono text-xs max-w-[200px] truncate" title={metric.functionName}>
+                        {metric.functionName}
+                      </td>
+                      <td className="py-2 px-4 text-right text-slate-300">{metric.invocations.toLocaleString()}</td>
+                      <td className="py-2 px-4 text-right text-emerald-400">{metric.successCount.toLocaleString()}</td>
+                      <td className="py-2 px-4 text-right text-red-400">{metric.errors.toLocaleString()}</td>
+                      <td className="py-2 px-4 text-right text-amber-400">{metric.throttles.toLocaleString()}</td>
+                      <td className="py-2 px-4 text-right">
+                        <span className={`font-medium ${
+                          metric.successRate >= 99 ? 'text-emerald-400' :
+                          metric.successRate >= 95 ? 'text-amber-400' :
+                          'text-red-400'
+                        }`}>
+                          {metric.successRate.toFixed(2)}%
+                        </span>
+                      </td>
+                      <td className="py-2 px-4 text-right text-slate-300">{metric.avgDuration.toFixed(2)}ms</td>
+                      <td className="py-2 px-4 text-right text-slate-300">{metric.p99Duration.toFixed(2)}ms</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {lambdaMetrics.length === 0 && (
+              <div className="text-center py-8 text-slate-400">
+                No Lambda invocations recorded in this period
+              </div>
+            )}
+          </div>
+
+          {/* Cost Notice */}
+          <div className="bg-blue-900/20 border border-blue-700/50 rounded-lg p-4">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="text-blue-400 mt-0.5" size={20} />
+              <div className="text-sm">
+                <p className="text-blue-300 font-medium mb-1">Free CloudWatch Metrics</p>
+                <p className="text-blue-200/80">
+                  This dashboard uses AWS CloudWatch standard metrics (free tier includes 10 custom metrics).
+                  No additional charges for basic Lambda & API monitoring. Data refreshes every minute via scheduled EventBridge rules.
+                </p>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

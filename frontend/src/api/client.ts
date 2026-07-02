@@ -185,9 +185,29 @@ export interface ApiTimeSeriesPoint {
   errors: number;
 }
 
+export interface ApiLambdaMetric {
+  functionName: string;
+  invocations: number;
+  errors: number;
+  throttles: number;
+  successCount: number;
+  successRate: number;
+  avgDuration: number;
+  p99Duration: number;
+}
+
+export interface ApiLambdaTimeSeriesPoint {
+  timestamp: string;
+  invocations: number;
+  errors: number;
+  successes: number;
+}
+
 export interface ApiMetricsSummary {
   routes: ApiRouteMetric[];
   timeSeries: ApiTimeSeriesPoint[];
+  lambdaMetrics?: ApiLambdaMetric[];
+  lambdaTimeSeries?: ApiLambdaTimeSeriesPoint[];
   message?: string;
 }
 
