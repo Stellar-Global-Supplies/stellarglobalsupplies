@@ -22,6 +22,7 @@ import {
   Zap,
   Shield,
   ClipboardList,
+  Database,
 } from 'lucide-react';
 import type { Session } from '@supabase/supabase-js';
 import type { LucideIcon } from 'lucide-react';
@@ -41,6 +42,7 @@ import AwsCostDashboard from '@/components/AwsCostDashboard';
 import ApiMonitoringDashboard from '@/components/ApiMonitoringDashboard';
 import TasksPage from '@/pages/tasks/TasksPage';
 import OrderSummaryDashboard from '@/components/OrderSummaryDashboard';
+import SupabaseDashboard from '@/components/SupabaseDashboard';
 
 interface NavItem {
   section: NavSection;
@@ -65,6 +67,7 @@ const CTO_ITEMS: NavItem[] = [
   { section: 'monitoring', label: 'API Monitoring',    Icon: Activity         },
   { section: 'cloud',      label: 'Cloud Costs',       Icon: Cloud            },
   { section: 'web',        label: 'Web Traffic',       Icon: Globe            },
+  { section: 'supabase',   label: 'Supabase',          Icon: Database         },
 ];
 
 // ─── Notification Toasts ─────────────────────────────────────────────────────
@@ -422,6 +425,7 @@ function MainContent({ session }: { session: Session | null }) {
       case 'monitoring': return <ApiMonitoringDashboard />;
       case 'tasks':      return <TasksPage />;
       case 'orders':     return <OrderSummaryDashboard />;
+      case 'supabase':   return <SupabaseDashboard />;
       default:           return <Dashboard />;
     }
   })();

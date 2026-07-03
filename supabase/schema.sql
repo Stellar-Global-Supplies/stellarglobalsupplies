@@ -337,6 +337,60 @@ for select to authenticated using (true);
 create policy "Authenticated users can read purchase items" on public.purchase_items
 for select to authenticated using (true);
 
+-- ────────────────────────────────────────────────────────────────────────────
+-- Supabase Dashboard Functions
+-- ────────────────────────────────────────────────────────────────────────────
+
+-- Function to get table statistics (row count and size)
+create or replace function public.get_table_stats()
+returns table (
+  table_name text,
+  row_count bigint,
+  size_bytes bigint,
+  size_mb numeric
+)
+language plpgsql
+security definer
+as $$
+begin
+  return query
+  select
+    t.table_name::text,
+    (select reltuples::bigint from pg_class where relname = t.table_name)::bigint as row_count,
+    pg_total_relation_size(t.table_name::regclass)::bigint as size_bytes,
+    round(pg_total_relation_size(t.table_name::regclass) / 1024.0 / 1024.0, 2)::numeric as size_mb
+  from information_schema.tables t
+  where t.table_schema = 'public'
+    and t.table_type = 'BASE TABLE'
+    and t.table_name in ('sales', 'purchases', 'customers', 'suppliers', 'sales_items', 'purchase_items', 'ingestion_files')
+  order by pg_total_relation_size(t.table_name::regclass) desc;
+end;
+$$;
+
+-- Function to get database info
+create or replace function public.get_db_info()
+returns table (
+  version text,
+  size text
+)
+language plpgsql
+security definer
+as $$
+declare
+  db_size text;
+begin
+  select pg_size_pretty(pg_database_size(current_database())) into db_size;
+  return query
+  select
+    (select setting from pg_settings where name = 'server_version')::text as version,
+    db_size as size;
+end;
+$$;
+
+-- Grant execute permissions on the functions
+grant execute on function public.get_table_stats to authenticated;
+grant execute on function public.get_db_info to authenticated;
+
 grant usage on schema public to authenticated;
 grant select on all tables in schema public to authenticated;
 grant select on all sequences in schema public to authenticated;

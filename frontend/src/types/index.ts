@@ -252,7 +252,39 @@ export interface UploadJob {
 // UI state
 // -----------------------------------------------------------
 
-export type NavSection = 'dashboard' | 'agents' | 'ingest' | 'analytics' | 'web' | 'meta' | 'inventory' | 'registers' | 'cloud' | 'monitoring' | 'tasks' | 'orders';
+export type NavSection = 'dashboard' | 'agents' | 'ingest' | 'analytics' | 'web' | 'meta' | 'inventory' | 'registers' | 'cloud' | 'monitoring' | 'tasks' | 'orders' | 'supabase';
+
+// -----------------------------------------------------------
+// Supabase Dashboard types
+// -----------------------------------------------------------
+
+export interface SupabaseTableInfo {
+  table_name: string;
+  row_count: number;
+  size_mb: number;
+  size_bytes: number;
+}
+
+export interface SupabaseConnectionStatus {
+  connected: boolean;
+  database_version?: string;
+  database_size?: string;
+  error?: string;
+}
+
+export interface SupabaseRequestMetrics {
+  total_requests: number;
+  successful_requests: number;
+  failed_requests: number;
+  success_rate: number;
+}
+
+export interface SupabaseMetrics {
+  connection: SupabaseConnectionStatus;
+  tables: SupabaseTableInfo[];
+  total_db_size_mb: number;
+  request_metrics: SupabaseRequestMetrics;
+}
 
 export interface AppNotification {
   id:      string;
