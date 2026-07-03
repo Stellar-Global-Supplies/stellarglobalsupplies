@@ -387,9 +387,31 @@ begin
 end;
 $$;
 
+-- Function to get project size (only application tables, excluding system tables)
+create or replace function public.get_project_size()
+returns table (
+  project_size_bytes bigint,
+  project_size_mb numeric
+)
+language plpgsql
+security definer
+as $$
+begin
+  return query
+  select
+    sum(pg_total_relation_size(t.table_name::regclass))::bigint as project_size_bytes,
+    round(sum(pg_total_relation_size(t.table_name::regclass)) / 1024.0 / 1024.0, 2)::numeric as project_size_mb
+  from information_schema.tables t
+  where t.table_schema = 'public'
+    and t.table_type = 'BASE TABLE'
+    and t.table_name in ('sales', 'purchases', 'customers', 'suppliers', 'sales_items', 'purchase_items', 'ingestion_files');
+end;
+$$;
+
 -- Grant execute permissions on the functions
 grant execute on function public.get_table_stats to authenticated;
 grant execute on function public.get_db_info to authenticated;
+grant execute on function public.get_project_size to authenticated;
 
 grant usage on schema public to authenticated;
 grant select on all tables in schema public to authenticated;

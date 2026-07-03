@@ -118,15 +118,37 @@ export async function testSupabaseConnection(): Promise<SupabaseConnectionStatus
   }
 }
 
+// Fetch project size (only application tables)
+export async function fetchProjectSize(): Promise<{ size_bytes: number; size_mb: number } | null> {
+  try {
+    const { data, error } = await supabase.rpc('get_project_size');
+    
+    if (error) {
+      console.warn('RPC get_project_size not available');
+      return null;
+    }
+    
+    const row = (data ?? [])[0] as any;
+    return {
+      size_bytes: Number(row?.project_size_bytes ?? 0),
+      size_mb: Number(row?.project_size_mb ?? 0),
+    };
+  } catch (err) {
+    console.error('Error fetching project size:', err);
+    return null;
+  }
+}
+
 // Fetch all Supabase metrics
 export async function fetchSupabaseMetrics(): Promise<SupabaseMetrics> {
-  const [connection, tables] = await Promise.all([
+  const [connection, tables, projectSize] = await Promise.all([
     testSupabaseConnection(),
     fetchSupabaseTableInfo(),
+    fetchProjectSize(),
   ]);
   
   // Calculate total database size
-  const totalDbSizeMb = tables.reduce((sum, t) => sum + t.size_mb, 0);
+  const totalDbSizeMb = projectSize?.size_mb ?? tables.reduce((sum, t) => sum + t.size_mb, 0);
   
   // For request metrics, we'll use a simple approach:
   // Count total records across all tables as a proxy for "requests"

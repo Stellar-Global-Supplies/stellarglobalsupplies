@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Database, Table, Activity, CheckCircle, XCircle, RefreshCw, Server, HardDrive, FileText } from 'lucide-react';
+import { Database, Table, Activity, CheckCircle, XCircle, RefreshCw, Server, HardDrive, FileText, Folder } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell, PieChart, Pie, Legend } from 'recharts';
 import { fetchSupabaseMetrics, type SupabaseMetrics } from '@/services/supabase';
 import DataFlowVisualization, { type DataFlowNode, type DataFlowEdge } from './DataFlowVisualization';
@@ -100,7 +100,7 @@ export default function SupabaseDashboard() {
       </div>
 
       {/* Connection Status */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="agent-card p-4">
           <div className="flex items-center justify-between">
             <div>
@@ -128,6 +128,17 @@ export default function SupabaseDashboard() {
             <HardDrive size={24} className="text-blue-400" />
           </div>
           <p className="text-2xs text-slate-500 mt-2">{tables.length} tables</p>
+        </div>
+
+        <div className="agent-card p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-2xs text-slate-400">Project Size</p>
+              <p className="text-lg font-bold text-emerald-400">{fmtMB(total_db_size_mb)}</p>
+            </div>
+            <Folder size={24} className="text-emerald-400" />
+          </div>
+          <p className="text-2xs text-slate-500 mt-2">Application data only</p>
         </div>
 
         <div className="agent-card p-4">
