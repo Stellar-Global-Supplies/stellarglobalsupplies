@@ -3,10 +3,14 @@ import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { ScheduledEvent } from 'aws-lambda';
 
 const REGION      = process.env.AWS_REGION    ?? 'us-east-1';
-const API_NAME    = process.env.API_NAME      ?? '';
-const API_ID      = process.env.API_ID        ?? 'wtt3awq1xg';
 const CACHE_BUCKET = process.env.CACHE_BUCKET  ?? 'stellar-analytics-reports-471112840461';
 const CACHE_KEY    = 'api-metrics/latest.json';
+
+// Configure multiple APIs to monitor
+const APIS_TO_MONITOR = [
+  { name: 'stellar-oms-api', id: 'rjwx3tdkx3' },
+  { name: 'ops-api', id: 'wtt3awq1xg' },
+];
 
 const cw = new CloudWatchClient({ region: REGION });
 const s3 = new S3Client({ region: REGION });
@@ -79,142 +83,151 @@ async function getApiMetrics(period: string): Promise<{ routes: RouteMetric[]; t
   const endTime            = new Date();
   const granularitySeconds = getGranularitySeconds(period);
 
-  const isHttpApi      = Boolean(API_ID);
-  const dimension      = isHttpApi
-    ? { Name: 'ApiId',   Value: API_ID   }
-    : { Name: 'ApiName', Value: API_NAME };
-  const error4xxMetric = isHttpApi ? '4xx'      : '4XXError';
-  const error5xxMetric = isHttpApi ? '5xx'      : '5XXError';
-  const displayName    = isHttpApi ? API_ID      : API_NAME;
+  console.log('Fetching API metrics for multiple APIs | period:', period);
 
-  console.log('Fetching API metrics — mode:', isHttpApi ? 'HTTP API v2' : 'REST API', '| period:', period);
+  const allRoutes: RouteMetric[] = [];
+  const allTimeSeries: TimeSeriesPoint[] = [];
 
-  const metricQueries = [
-    {
-      Id: 'totalCalls',
-      MetricStat: {
-        Metric: { Namespace: 'AWS/ApiGateway', MetricName: 'Count', Dimensions: [dimension] },
-        Period: granularitySeconds,
-        Stat:   'Sum',
+  // Fetch metrics for each API
+  for (const api of APIS_TO_MONITOR) {
+    const isHttpApi      = true; // All configured APIs are HTTP APIs
+    const dimension      = { Name: 'ApiId', Value: api.id };
+    const error4xxMetric = '4xx';
+    const error5xxMetric = '5xx';
+    const displayName    = api.id;
+
+    console.log(`Fetching metrics for ${api.name} (${api.id})`);
+
+    const metricQueries = [
+      {
+        Id: `totalCalls_${api.id}`,
+        MetricStat: {
+          Metric: { Namespace: 'AWS/ApiGateway', MetricName: 'Count', Dimensions: [dimension] },
+          Period: granularitySeconds,
+          Stat:   'Sum',
+        },
+        ReturnData: true,
       },
-      ReturnData: true,
-    },
-    {
-      Id: 'errors4xx',
-      MetricStat: {
-        Metric: { Namespace: 'AWS/ApiGateway', MetricName: error4xxMetric, Dimensions: [dimension] },
-        Period: granularitySeconds,
-        Stat:   'Sum',
+      {
+        Id: `errors4xx_${api.id}`,
+        MetricStat: {
+          Metric: { Namespace: 'AWS/ApiGateway', MetricName: error4xxMetric, Dimensions: [dimension] },
+          Period: granularitySeconds,
+          Stat:   'Sum',
+        },
+        ReturnData: true,
       },
-      ReturnData: true,
-    },
-    {
-      Id: 'errors5xx',
-      MetricStat: {
-        Metric: { Namespace: 'AWS/ApiGateway', MetricName: error5xxMetric, Dimensions: [dimension] },
-        Period: granularitySeconds,
-        Stat:   'Sum',
+      {
+        Id: `errors5xx_${api.id}`,
+        MetricStat: {
+          Metric: { Namespace: 'AWS/ApiGateway', MetricName: error5xxMetric, Dimensions: [dimension] },
+          Period: granularitySeconds,
+          Stat:   'Sum',
+        },
+        ReturnData: true,
       },
-      ReturnData: true,
-    },
-    {
-      Id: 'latency',
-      MetricStat: {
-        Metric: { Namespace: 'AWS/ApiGateway', MetricName: 'Latency', Dimensions: [dimension] },
-        Period: granularitySeconds,
-        Stat:   'Average',
+      {
+        Id: `latency_${api.id}`,
+        MetricStat: {
+          Metric: { Namespace: 'AWS/ApiGateway', MetricName: 'Latency', Dimensions: [dimension] },
+          Period: granularitySeconds,
+          Stat:   'Average',
+        },
+        ReturnData: true,
       },
-      ReturnData: true,
-    },
-    {
-      Id: 'p99Latency',
-      MetricStat: {
-        Metric: { Namespace: 'AWS/ApiGateway', MetricName: 'Latency', Dimensions: [dimension] },
-        Period: granularitySeconds,
-        Stat:   'p99',
+      {
+        Id: `p99Latency_${api.id}`,
+        MetricStat: {
+          Metric: { Namespace: 'AWS/ApiGateway', MetricName: 'Latency', Dimensions: [dimension] },
+          Period: granularitySeconds,
+          Stat:   'p99',
+        },
+        ReturnData: true,
       },
-      ReturnData: true,
-    },
-  ];
+    ];
 
-  const command = new GetMetricDataCommand({
-    MetricDataQueries: metricQueries,
-    StartTime: startTime,
-    EndTime:   endTime,
-  });
+    const command = new GetMetricDataCommand({
+      MetricDataQueries: metricQueries,
+      StartTime: startTime,
+      EndTime:   endTime,
+    });
 
-  const response = await cw.send(command);
+    const response = await cw.send(command);
 
-  const totalCallsSeries = response.MetricDataResults?.find(r => r.Id === 'totalCalls');
-  const errors4xxSeries  = response.MetricDataResults?.find(r => r.Id === 'errors4xx');
-  const errors5xxSeries  = response.MetricDataResults?.find(r => r.Id === 'errors5xx');
-  const latencySeries    = response.MetricDataResults?.find(r => r.Id === 'latency');
-  const p99LatencySeries = response.MetricDataResults?.find(r => r.Id === 'p99Latency');
+    const totalCallsSeries = response.MetricDataResults?.find(r => r.Id === `totalCalls_${api.id}`);
+    const errors4xxSeries  = response.MetricDataResults?.find(r => r.Id === `errors4xx_${api.id}`);
+    const errors5xxSeries  = response.MetricDataResults?.find(r => r.Id === `errors5xx_${api.id}`);
+    const latencySeries    = response.MetricDataResults?.find(r => r.Id === `latency_${api.id}`);
+    const p99LatencySeries = response.MetricDataResults?.find(r => r.Id === `p99Latency_${api.id}`);
 
-  const tsMap = new Map<string, TimeSeriesPoint>();
+    const tsMap = new Map<string, TimeSeriesPoint>();
 
-  const allTimestamps = [
-    ...(totalCallsSeries?.Timestamps ?? []),
-    ...(errors4xxSeries?.Timestamps  ?? []),
-    ...(errors5xxSeries?.Timestamps  ?? []),
-  ];
+    const allTimestamps = [
+      ...(totalCallsSeries?.Timestamps ?? []),
+      ...(errors4xxSeries?.Timestamps  ?? []),
+      ...(errors5xxSeries?.Timestamps  ?? []),
+    ];
 
-  for (const ts of allTimestamps) {
-    const key = ts.toISOString();
-    if (!tsMap.has(key)) {
-      tsMap.set(key, { timestamp: key, calls: 0, successes: 0, errors: 0 });
+    for (const ts of allTimestamps) {
+      const key = ts.toISOString();
+      if (!tsMap.has(key)) {
+        tsMap.set(key, { timestamp: key, calls: 0, successes: 0, errors: 0 });
+      }
     }
+
+    (totalCallsSeries?.Timestamps ?? []).forEach((ts, idx) => {
+      const key = ts.toISOString();
+      const pt  = tsMap.get(key)!;
+      pt.calls  = Math.round(totalCallsSeries?.Values?.[idx] ?? 0);
+    });
+
+    (errors4xxSeries?.Timestamps ?? []).forEach((ts, idx) => {
+      const key = ts.toISOString();
+      const pt  = tsMap.get(key)!;
+      pt.errors += Math.round(errors4xxSeries?.Values?.[idx] ?? 0);
+    });
+    (errors5xxSeries?.Timestamps ?? []).forEach((ts, idx) => {
+      const key = ts.toISOString();
+      const pt  = tsMap.get(key)!;
+      pt.errors += Math.round(errors5xxSeries?.Values?.[idx] ?? 0);
+    });
+
+    for (const pt of tsMap.values()) {
+      pt.successes = Math.max(0, pt.calls - pt.errors);
+    }
+
+    const timeSeries: TimeSeriesPoint[] = Array.from(tsMap.values()).sort(
+      (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
+    );
+
+    const totalCalls   = timeSeries.reduce((sum, t) => sum + t.calls,     0);
+    const totalSuccess = timeSeries.reduce((sum, t) => sum + t.successes, 0);
+    const totalErrors  = timeSeries.reduce((sum, t) => sum + t.errors,    0);
+
+    const latencyValues = latencySeries?.Values ?? [];
+    const avgLatencyMs  = latencyValues.length > 0
+      ? latencyValues.reduce((a, b) => a + b, 0) / latencyValues.length
+      : 0;
+
+    const p99Values  = p99LatencySeries?.Values ?? [];
+    const p99Latency = p99Values.length > 0 ? p99Values[p99Values.length - 1] : 0;
+
+    const routeMetric: RouteMetric = {
+      route:        `${api.name}/*`,
+      method:       'ALL',
+      totalCalls:   Math.round(totalCalls),
+      successCount: Math.round(totalSuccess),
+      errorCount:   Math.round(totalErrors),
+      successRate:  totalCalls > 0 ? (totalSuccess / totalCalls) * 100 : 0,
+      avgLatency:   Math.round(avgLatencyMs),
+      p99Latency:   Math.round(p99Latency),
+    };
+
+    allRoutes.push(routeMetric);
+    allTimeSeries.push(...timeSeries);
   }
 
-  (totalCallsSeries?.Timestamps ?? []).forEach((ts, i) => {
-    const key = ts.toISOString();
-    const pt  = tsMap.get(key)!;
-    pt.calls  = Math.round(totalCallsSeries?.Values?.[i] ?? 0);
-  });
-
-  (errors4xxSeries?.Timestamps ?? []).forEach((ts, i) => {
-    const key = ts.toISOString();
-    const pt  = tsMap.get(key)!;
-    pt.errors += Math.round(errors4xxSeries?.Values?.[i] ?? 0);
-  });
-  (errors5xxSeries?.Timestamps ?? []).forEach((ts, i) => {
-    const key = ts.toISOString();
-    const pt  = tsMap.get(key)!;
-    pt.errors += Math.round(errors5xxSeries?.Values?.[i] ?? 0);
-  });
-
-  for (const pt of tsMap.values()) {
-    pt.successes = Math.max(0, pt.calls - pt.errors);
-  }
-
-  const timeSeries: TimeSeriesPoint[] = Array.from(tsMap.values()).sort(
-    (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
-  );
-
-  const totalCalls   = timeSeries.reduce((sum, t) => sum + t.calls,     0);
-  const totalSuccess = timeSeries.reduce((sum, t) => sum + t.successes, 0);
-  const totalErrors  = timeSeries.reduce((sum, t) => sum + t.errors,    0);
-
-  const latencyValues = latencySeries?.Values ?? [];
-  const avgLatencyMs  = latencyValues.length > 0
-    ? latencyValues.reduce((a, b) => a + b, 0) / latencyValues.length
-    : 0;
-
-  const p99Values  = p99LatencySeries?.Values ?? [];
-  const p99Latency = p99Values.length > 0 ? p99Values[p99Values.length - 1] : 0;
-
-  const routes: RouteMetric[] = [{
-    route:        displayName ? `${displayName}/*` : 'all',
-    method:       'ALL',
-    totalCalls:   Math.round(totalCalls),
-    successCount: Math.round(totalSuccess),
-    errorCount:   Math.round(totalErrors),
-    successRate:  totalCalls > 0 ? (totalSuccess / totalCalls) * 100 : 0,
-    avgLatency:   Math.round(avgLatencyMs),
-    p99Latency:   Math.round(p99Latency),
-  }];
-
-  return { routes, timeSeries };
+  return { routes: allRoutes, timeSeries: allTimeSeries };
 }
 
 async function listLambdaFunctions(): Promise<string[]> {
@@ -452,8 +465,8 @@ async function processAndCacheMetrics(): Promise<void> {
   console.log('Processing API and Lambda metrics...');
   
   const [apiResult, lambdaResult] = await Promise.all([
-    getApiMetrics('7d'),
-    getLambdaMetrics('7d'),
+    getApiMetrics('24h'),
+    getLambdaMetrics('24h'),
   ]);
 
   const cachedData: CachedMetrics = {

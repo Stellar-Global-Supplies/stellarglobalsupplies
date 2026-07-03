@@ -1024,7 +1024,6 @@ resource "aws_lambda_function" "api_metrics_processor" {
 
   environment {
     variables = {
-      API_NAME     = aws_apigatewayv2_api.ops.name
       ENVIRONMENT  = var.environment
       CACHE_BUCKET = var.analytics_bucket_name
     }
@@ -1034,24 +1033,12 @@ resource "aws_lambda_function" "api_metrics_processor" {
 }
 
 # ── Scheduled EventBridge rules for API metrics cache refresh ──
-# 9am IST = 3:30 UTC, 12pm IST = 6:30 UTC, 3pm IST = 9:30 UTC, 6pm IST = 12:30 UTC
-# Now triggers api-metrics-processor instead of api-metrics
-resource "aws_cloudwatch_event_rule" "api_metrics_9am" {
-  name                = "${local.prefix}-api-metrics-9am"
-  description         = "Refresh API metrics cache at 9am IST"
-  schedule_expression = "cron(30 3 * * ? *)"
-}
-
+# 12pm IST = 6:30 UTC, 6pm IST = 12:30 UTC
+# Triggers api-metrics-processor twice daily
 resource "aws_cloudwatch_event_rule" "api_metrics_12pm" {
   name                = "${local.prefix}-api-metrics-12pm"
   description         = "Refresh API metrics cache at 12pm IST"
   schedule_expression = "cron(30 6 * * ? *)"
-}
-
-resource "aws_cloudwatch_event_rule" "api_metrics_3pm" {
-  name                = "${local.prefix}-api-metrics-3pm"
-  description         = "Refresh API metrics cache at 3pm IST"
-  schedule_expression = "cron(30 9 * * ? *)"
 }
 
 resource "aws_cloudwatch_event_rule" "api_metrics_6pm" {
@@ -1060,18 +1047,8 @@ resource "aws_cloudwatch_event_rule" "api_metrics_6pm" {
   schedule_expression = "cron(30 12 * * ? *)"
 }
 
-resource "aws_cloudwatch_event_target" "api_metrics_9am" {
-  rule      = aws_cloudwatch_event_rule.api_metrics_9am.name
-  arn       = aws_lambda_function.api_metrics_processor.arn
-}
-
 resource "aws_cloudwatch_event_target" "api_metrics_12pm" {
   rule      = aws_cloudwatch_event_rule.api_metrics_12pm.name
-  arn       = aws_lambda_function.api_metrics_processor.arn
-}
-
-resource "aws_cloudwatch_event_target" "api_metrics_3pm" {
-  rule      = aws_cloudwatch_event_rule.api_metrics_3pm.name
   arn       = aws_lambda_function.api_metrics_processor.arn
 }
 
@@ -1082,15 +1059,13 @@ resource "aws_cloudwatch_event_target" "api_metrics_6pm" {
 
 # Allow EventBridge to invoke the processor Lambda
 resource "aws_lambda_permission" "api_metrics_processor_events" {
-  count         = 4
+  count         = 2
   statement_id  = "AllowEventBridge${count.index}"
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.api_metrics_processor.function_name
   principal     = "events.amazonaws.com"
   source_arn    = element([
-    aws_cloudwatch_event_rule.api_metrics_9am.arn,
     aws_cloudwatch_event_rule.api_metrics_12pm.arn,
-    aws_cloudwatch_event_rule.api_metrics_3pm.arn,
     aws_cloudwatch_event_rule.api_metrics_6pm.arn,
   ], count.index)
 }
