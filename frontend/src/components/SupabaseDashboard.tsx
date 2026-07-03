@@ -268,7 +268,7 @@ export default function SupabaseDashboard() {
               </tr>
             </thead>
             <tbody>
-              {tables.map((table, i) => (
+              {tables.map((table) => (
                 <tr key={table.table_name} className="border-t border-white/5">
                   <td className="py-1.5 pr-3 text-slate-200 font-medium">
                     <div className="flex items-center gap-2">
