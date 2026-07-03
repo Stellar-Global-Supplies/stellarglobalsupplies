@@ -25,6 +25,18 @@ resource "aws_iam_role_policy" "aws_costs" {
         Resource = "*"
       },
       {
+        Sid = "S3ProcessedCURRead",
+        Effect = "Allow",
+        Action = [
+          "s3:GetObject",
+          "s3:ListBucket"
+        ],
+        Resource = [
+          "arn:aws:s3:::stellarglobal-costing-bucket",
+          "arn:aws:s3:::stellarglobal-costing-bucket/processed/*"
+        ]
+      },
+      {
         Sid = "Logs",
         Effect = "Allow",
         Action = ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"],
