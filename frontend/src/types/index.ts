@@ -252,7 +252,7 @@ export interface UploadJob {
 // UI state
 // -----------------------------------------------------------
 
-export type NavSection = 'dashboard' | 'agents' | 'ingest' | 'analytics' | 'web' | 'meta' | 'inventory' | 'registers' | 'cloud' | 'monitoring' | 'tasks';
+export type NavSection = 'dashboard' | 'agents' | 'ingest' | 'analytics' | 'web' | 'meta' | 'inventory' | 'registers' | 'cloud' | 'monitoring' | 'tasks' | 'orders';
 
 export interface AppNotification {
   id:      string;
@@ -329,3 +329,48 @@ export type FinancialYear = {
   startYear: number;
   label: string;
 };
+
+// ────────────────────────────────────────────────────────────────────────────
+// Order Management types
+// ────────────────────────────────────────────────────────────────────────────
+
+export type OrderStatus = 'Order Received' | 'Processing' | 'Ready to Dispatch' | 'Delivered';
+export type PaymentStatus = 'Pending' | 'Paid' | 'Partial';
+export type UnitType = 'Pieces' | 'Kgs';
+
+export interface Order {
+  id:              string;
+  customer_name:   string;
+  phone:           string;
+  email:           string;
+  product_type:    string;
+  material:        string;
+  quantity:        number;
+  unit:            UnitType;
+  sale_cost:       number;
+  payment_status:  PaymentStatus;
+  delivery_timeline: string | null;  // ISO date string
+  status:          OrderStatus;
+  created_by:      string | null;
+  updated_by:      string | null;
+  created_at:      string;  // ISO timestamp
+  updated_at:      string;  // ISO timestamp
+}
+
+export interface OrderSummary {
+  total_orders:      number;
+  total_revenue:     number;
+  pending_orders:    number;
+  delivered_orders:  number;
+  avg_order_value:   number;
+  orders_by_status:  { status: OrderStatus; count: number }[];
+  orders_by_payment: { payment_status: PaymentStatus; count: number }[];
+  recent_orders:     Order[];
+}
+
+export interface OrderFilters {
+  financialYear?: FinancialYear;
+  year?: number;
+  month?: number;
+  status?: OrderStatus;
+}
