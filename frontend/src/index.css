@@ -37,6 +37,49 @@
     color-scheme: dark;
   }
 
+  /* Light mode overrides */
+  html.light {
+    color-scheme: light;
+  }
+  html.light {
+    --sgs-navy:    #f8fafc;
+    --sgs-dark:    #f1f5f9;
+    --sgs-mid:     #e2e8f0;
+    --sgs-panel:   rgba(248, 250, 252, 0.80);
+    --sgs-panel-s: rgba(248, 250, 252, 0.95);
+    --sgs-border:  rgba(0, 185, 142, 0.25);
+    --sgs-border-s:rgba(0, 185, 142, 0.60);
+    --sgs-glow:    0 0 40px rgba(0,185,142,0.15);
+    --sgs-glow-lg: 0 0 80px rgba(0,185,142,0.25);
+    --sgs-shadow:  0 32px 96px rgba(0,0,0,0.15);
+    --av-text:   #0f172a;
+    --av-muted:  #475569;
+  }
+
+  html.light body {
+    background: #f8fafc;
+    color: #0f172a;
+  }
+
+  html.light .agent-card {
+    background:
+      linear-gradient(145deg, rgba(241, 245, 249, 0.95), rgba(226, 232, 240, 0.98));
+    border: 1px solid rgba(0, 185, 142, 0.25);
+  }
+
+  html.light .app-sidebar {
+    background:
+      linear-gradient(180deg,
+        rgba(248, 250, 252, 0.98) 0%,
+        rgba(241, 245, 249, 0.99) 100%);
+    border-right: 1px solid rgba(0, 185, 142, 0.25);
+  }
+
+  html.light .app-header {
+    background: rgba(248, 250, 252, 0.88);
+    border-bottom: 1px solid rgba(0, 185, 142, 0.25);
+  }
+
   html { scroll-behavior: smooth; }
 
   body {

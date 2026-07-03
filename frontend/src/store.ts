@@ -50,6 +50,35 @@ export const useNavStore = create<NavState>((set) => ({
 }));
 
 // ────────────────────────────────────────────────────────────────────────────
+// Theme store — dark/light mode
+// ────────────────────────────────────────────────────────────────────────────
+type Theme = 'dark' | 'light';
+
+interface ThemeState {
+  theme: Theme;
+  setTheme: (theme: Theme) => void;
+  toggleTheme: () => void;
+}
+
+export const useThemeStore = create<ThemeState>((set, get) => ({
+  theme: (localStorage.getItem('theme') as Theme) || 'dark',
+  setTheme: (theme) => {
+    localStorage.setItem('theme', theme);
+    set({ theme });
+    // Apply theme to document
+    if (theme === 'light') {
+      document.documentElement.classList.add('light');
+    } else {
+      document.documentElement.classList.remove('light');
+    }
+  },
+  toggleTheme: () => {
+    const newTheme = get().theme === 'dark' ? 'light' : 'dark';
+    get().setTheme(newTheme);
+  },
+}));
+
+// ────────────────────────────────────────────────────────────────────────────
 // Chat session store — manages all in-memory sessions keyed by agentId
 // ────────────────────────────────────────────────────────────────────────────
 interface ChatState {

@@ -23,10 +23,12 @@ import {
   Shield,
   ClipboardList,
   Database,
+  Sun,
+  Moon,
 } from 'lucide-react';
 import type { Session } from '@supabase/supabase-js';
 import type { LucideIcon } from 'lucide-react';
-import { useNavStore, useNotificationStore } from '@/store';
+import { useNavStore, useNotificationStore, useThemeStore } from '@/store';
 import type { NavSection } from '@/types';
 import { supabase } from '@/lib/supabase';
 import Dashboard from '@/components/Dashboard';
@@ -312,6 +314,7 @@ function getDisplayName(user: import('@supabase/supabase-js').User | undefined):
 function Header() {
   const { activeSection, sidebarOpen, toggleSidebar } = useNavStore();
   const { notifications } = useNotificationStore();
+  const { theme, toggleTheme } = useThemeStore();
   const unread = notifications.length;
 
   const allItems = [...CEO_ITEMS, ...CTO_ITEMS];
@@ -348,6 +351,14 @@ function Header() {
       <div className="flex items-center gap-2">
         <OnlineStatus />
         <div className="hidden sm:block w-px h-5 bg-white/8" />
+        <button
+          onClick={toggleTheme}
+          className="p-2 rounded-xl text-slate-500 hover:text-slate-200 transition-colors"
+          aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+          title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+        >
+          {theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}
+        </button>
         <button
           className="relative p-2 rounded-xl text-slate-500 hover:text-slate-200 transition-colors"
           aria-label={`${unread} notifications`}
