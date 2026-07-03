@@ -14,6 +14,8 @@ const BUCKETS: BucketConfig[] = [
   { bucket: 'stellarglobal-cf-logs', prefix: 'AWSLogs/471112840461/CloudFront/', retentionDays: 7 },
   { bucket: 'stellar-global-prod-data-9856add5', retentionDays: 2 },
   { bucket: 'stellar-global-prod-attachments-20260627040526193400000001', retentionDays: 2 },
+  { bucket: 'stellarglobal-costing-bucket', prefix: 'awscost/', retentionDays: 2 },
+  { bucket: 'stellarglobal-costing-bucket', prefix: 'processed/', retentionDays: 2 },
 ];
 
 const s3 = new S3Client({ region: REGION });

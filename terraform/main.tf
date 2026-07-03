@@ -1171,9 +1171,11 @@ resource "aws_iam_role_policy" "s3_cleanup" {
           "arn:aws:s3:::stellarglobal-cf-logs",
           "arn:aws:s3:::stellar-global-prod-data-9856add5",
           "arn:aws:s3:::stellar-global-prod-attachments-20260627040526193400000001",
+          "arn:aws:s3:::stellarglobal-costing-bucket",
           "arn:aws:s3:::stellarglobal-cf-logs/*",
           "arn:aws:s3:::stellar-global-prod-data-9856add5/*",
-          "arn:aws:s3:::stellar-global-prod-attachments-20260627040526193400000001/*"
+          "arn:aws:s3:::stellar-global-prod-attachments-20260627040526193400000001/*",
+          "arn:aws:s3:::stellarglobal-costing-bucket/*"
         ]
       },
       {
@@ -1217,11 +1219,11 @@ resource "aws_lambda_function" "s3_cleanup" {
   depends_on = [aws_cloudwatch_log_group.s3_cleanup]
 }
 
-# EventBridge rule to trigger S3 cleanup daily at 2 AM IST (8:30 PM UTC previous day)
+# EventBridge rule to trigger S3 cleanup daily at 6:45 AM IST (1:15 AM UTC)
 resource "aws_cloudwatch_event_rule" "s3_daily_cleanup" {
   name                = "${local.prefix}-s3-daily-cleanup"
-  description         = "Triggers s3-cleanup Lambda daily at 2 AM IST"
-  schedule_expression = "cron(30 20 * * ? *)"
+  description         = "Triggers s3-cleanup Lambda daily at 6:45 AM IST"
+  schedule_expression = "cron(15 1 * * ? *)"
 }
 
 resource "aws_cloudwatch_event_target" "s3_daily_cleanup" {
