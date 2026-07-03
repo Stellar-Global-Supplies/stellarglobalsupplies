@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Package, DollarSign, Clock, CheckCircle, RefreshCw, Filter } from 'lucide-react';
 import { fetchOrderSummary, fetchOrders } from '@/services/orders';
-import type { Order, OrderSummary, OrderFilters, FinancialYear } from '@/types';
+import type { Order, OrderFilters, FinancialYear } from '@/types';
 import { format, parseISO } from 'date-fns';
 
 // ────────────────────────────────────────────────────────────────────────────

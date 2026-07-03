@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase';
-import type { Order, OrderSummary, OrderFilters, FinancialYear } from '@/types';
+import type { Order, OrderSummary, OrderFilters } from '@/types';
 
 export async function fetchOrders(filters?: OrderFilters): Promise<Order[]> {
   let query = supabase
