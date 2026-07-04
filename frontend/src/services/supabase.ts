@@ -60,7 +60,7 @@ export async function fetchSupabaseTableInfo(): Promise<TableInfo[]> {
 
 // Fallback method: count rows in each known table
 async function fetchTableInfoFallback(): Promise<TableInfo[]> {
-  const tables = ['sales', 'purchases', 'customers', 'suppliers', 'sales_items', 'purchase_items', 'ingestion_files'];
+  const tables = ['sales', 'purchases', 'customers', 'suppliers', 'sales_items', 'purchase_items', 'ingestion_files', 'orders'];
   const tableInfo: TableInfo[] = [];
   
   for (const table of tables) {

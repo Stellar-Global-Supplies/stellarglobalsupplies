@@ -362,7 +362,7 @@ begin
   from information_schema.tables t
   where t.table_schema = 'public'
     and t.table_type = 'BASE TABLE'
-    and t.table_name in ('sales', 'purchases', 'customers', 'suppliers', 'sales_items', 'purchase_items', 'ingestion_files')
+    and t.table_name in ('sales', 'purchases', 'customers', 'suppliers', 'sales_items', 'purchase_items', 'ingestion_files', 'orders')
   order by pg_total_relation_size(t.table_name::regclass) desc;
 end;
 $$;
@@ -404,7 +404,7 @@ begin
   from information_schema.tables t
   where t.table_schema = 'public'
     and t.table_type = 'BASE TABLE'
-    and t.table_name in ('sales', 'purchases', 'customers', 'suppliers', 'sales_items', 'purchase_items', 'ingestion_files');
+    and t.table_name in ('sales', 'purchases', 'customers', 'suppliers', 'sales_items', 'purchase_items', 'ingestion_files', 'orders');
 end;
 $$;
 

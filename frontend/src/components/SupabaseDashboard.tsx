@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Database, Table, Activity, CheckCircle, XCircle, RefreshCw, Server, HardDrive, FileText, Folder } from 'lucide-react';
+import { Database, Table, Activity, CheckCircle, XCircle, RefreshCw, Server, HardDrive, FileText, Folder, Users } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell, PieChart, Pie, Legend } from 'recharts';
 import { fetchSupabaseMetrics, type SupabaseMetrics } from '@/services/supabase';
 import DataFlowVisualization, { type DataFlowNode, type DataFlowEdge } from './DataFlowVisualization';
@@ -122,12 +122,12 @@ export default function SupabaseDashboard() {
         <div className="agent-card p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-2xs text-slate-400">Total Database Size</p>
-              <p className="text-lg font-bold text-white">{fmtMB(total_db_size_mb)}</p>
+              <p className="text-2xs text-slate-400">Connection Count</p>
+              <p className="text-lg font-bold text-white">{fmtNum(tables.length)}</p>
             </div>
-            <HardDrive size={24} className="text-blue-400" />
+            <Users size={24} className="text-blue-400" />
           </div>
-          <p className="text-2xs text-slate-500 mt-2">{tables.length} tables</p>
+          <p className="text-2xs text-slate-500 mt-2">Active tables</p>
         </div>
 
         <div className="agent-card p-4">
