@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Database, Table, Activity, CheckCircle, XCircle, RefreshCw, Server, HardDrive, FileText, Folder, Users } from 'lucide-react';
+import { Database, Table, Activity, CheckCircle, XCircle, RefreshCw, Server, FileText, Folder, Users } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell, PieChart, Pie, Legend } from 'recharts';
 import { fetchSupabaseMetrics, type SupabaseMetrics } from '@/services/supabase';
 import DataFlowVisualization, { type DataFlowNode, type DataFlowEdge } from './DataFlowVisualization';
