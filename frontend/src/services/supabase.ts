@@ -71,7 +71,7 @@ async function fetchTableInfoFallback(): Promise<TableInfo[]> {
     
     let tableNames: string[] = [];
     
-    if (!schemaError && tables && tables.length > 0) {
+    if (!schemaError && tables && Array.isArray(tables) && tables.length > 0) {
       tableNames = tables.map((t: any) => t.table_name);
     } else {
       // If RPC doesn't exist, query information_schema directly
