@@ -21,8 +21,12 @@ concurrency:
 # ─────────────────────────────────────────────────────────────────────────────
 # REQUIRED GITHUB SECRETS  (Settings → Secrets and variables → Actions)
 # ─────────────────────────────────────────────────────────────────────────────
-# AWS_ACCESS_KEY_ID                  IAM user with deploy permissions
-# AWS_SECRET_ACCESS_KEY              IAM user secret key
+# The workflow uses OIDC-based IAM Role assumption (no static credentials needed).
+# 
+# Your GitHub Actions OIDC provider must be configured in your AWS account,
+# and the IAM role below must trust it with a condition on the repo.
+#
+# AWS_ROLE_ARN                      IAM role ARN (GitHub OIDC federated) with deploy permissions
 # AWS_REGION                         e.g. ap-south-1
 # TF_BACKEND_BUCKET                  S3 bucket for Terraform state  (create once)
 # TF_BACKEND_REGION                  Region of the state bucket
@@ -59,12 +63,12 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Configure AWS credentials
+      - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region:            ${{ env.AWS_REGION }}
+          role-to-assume:    ${{ secrets.AWS_ROLE_ARN }}
+          role-session-name: github-deploy-bootstrap
+          aws-region:        ${{ env.AWS_REGION }}
 
       - name: Create S3 state bucket (idempotent)
         run: |
@@ -252,12 +256,12 @@ jobs:
           name: lambda-api-metrics-processor-dist
           path: lambda/api-metrics-processor/dist/
 
-      - name: Configure AWS credentials
+      - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region:            ${{ env.AWS_REGION }}
+          role-to-assume:    ${{ secrets.AWS_ROLE_ARN }}
+          role-session-name: github-deploy-terraform
+          aws-region:        ${{ env.AWS_REGION }}
 
       - name: Setup Terraform ${{ env.TF_VERSION }}
         uses: hashicorp/setup-terraform@v3
@@ -378,12 +382,12 @@ jobs:
           restore-keys: |
             frontend-
 
-      - name: Configure AWS credentials
+      - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region:            ${{ env.AWS_REGION }}
+          role-to-assume:    ${{ secrets.AWS_ROLE_ARN }}
+          role-session-name: github-deploy-frontend
+          aws-region:        ${{ env.AWS_REGION }}
 
       - name: Install dependencies
         working-directory: frontend

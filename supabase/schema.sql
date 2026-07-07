@@ -341,7 +341,7 @@ for select to authenticated using (true);
 -- Supabase Dashboard Functions
 -- ────────────────────────────────────────────────────────────────────────────
 
--- Function to get table statistics (row count and size)
+-- Function to get table statistics (row count and size) for ALL public tables
 create or replace function public.get_table_stats()
 returns table (
   table_name text,
@@ -362,7 +362,6 @@ begin
   from information_schema.tables t
   where t.table_schema = 'public'
     and t.table_type = 'BASE TABLE'
-    and t.table_name in ('sales', 'purchases', 'customers', 'suppliers', 'sales_items', 'purchase_items', 'ingestion_files', 'orders')
   order by pg_total_relation_size(t.table_name::regclass) desc;
 end;
 $$;
@@ -387,7 +386,7 @@ begin
 end;
 $$;
 
--- Function to get project size (only application tables, excluding system tables)
+-- Function to get project size (all public schema tables)
 create or replace function public.get_project_size()
 returns table (
   project_size_bytes bigint,
@@ -403,8 +402,23 @@ begin
     round(sum(pg_total_relation_size(t.table_name::regclass)) / 1024.0 / 1024.0, 2)::numeric as project_size_mb
   from information_schema.tables t
   where t.table_schema = 'public'
-    and t.table_type = 'BASE TABLE'
-    and t.table_name in ('sales', 'purchases', 'customers', 'suppliers', 'sales_items', 'purchase_items', 'ingestion_files', 'orders');
+    and t.table_type = 'BASE TABLE';
+end;
+$$;
+
+-- Function to get active database connections
+create or replace function public.get_active_connections()
+returns table (count bigint)
+language plpgsql
+security definer
+as $$
+begin
+  return query
+  select count(*)::bigint
+  from pg_stat_activity
+  where datname = current_database()
+    and state = 'active'
+    and pid <> pg_backend_pid();
 end;
 $$;
 
@@ -412,6 +426,7 @@ $$;
 grant execute on function public.get_table_stats to authenticated;
 grant execute on function public.get_db_info to authenticated;
 grant execute on function public.get_project_size to authenticated;
+grant execute on function public.get_active_connections to authenticated;
 
 grant usage on schema public to authenticated;
 grant select on all tables in schema public to authenticated;

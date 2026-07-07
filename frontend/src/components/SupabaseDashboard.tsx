@@ -122,12 +122,14 @@ export default function SupabaseDashboard() {
         <div className="agent-card p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-2xs text-slate-400">Connection Count</p>
-              <p className="text-lg font-bold text-white">{fmtNum(tables.length)}</p>
+              <p className="text-2xs text-slate-400">Active Connections</p>
+              <p className="text-lg font-bold text-white">
+                {connection.active_connections != null ? fmtNum(connection.active_connections) : '—'}
+              </p>
             </div>
             <Users size={24} className="text-blue-400" />
           </div>
-          <p className="text-2xs text-slate-500 mt-2">Active tables</p>
+          <p className="text-2xs text-slate-500 mt-2">Current database sessions</p>
         </div>
 
         <div className="agent-card p-4">

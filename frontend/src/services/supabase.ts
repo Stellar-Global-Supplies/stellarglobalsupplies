@@ -13,6 +13,7 @@ export interface SupabaseConnectionStatus {
   connected: boolean;
   database_version?: string;
   database_size?: string;
+  active_connections?: number;
   error?: string;
 }
 
@@ -58,35 +59,76 @@ export async function fetchSupabaseTableInfo(): Promise<TableInfo[]> {
   }
 }
 
-// Fallback method: count rows in each known table
+// Fallback method: dynamically discover all public tables and count rows
 async function fetchTableInfoFallback(): Promise<TableInfo[]> {
-  const tables = ['sales', 'purchases', 'customers', 'suppliers', 'sales_items', 'purchase_items', 'ingestion_files', 'orders'];
   const tableInfo: TableInfo[] = [];
   
-  for (const table of tables) {
-    try {
-      const { count, error } = await supabase.from(table).select('*', { count: 'exact', head: true });
-      if (!error) {
-        tableInfo.push({
-          table_name: table,
-          row_count: count ?? 0,
-          size_mb: 0, // Size not available without RPC
-          size_bytes: 0,
-        });
+  try {
+    // Query information_schema to get all base tables in the public schema
+    const { data: tables, error: schemaError } = await supabase
+      .rpc('get_public_tables')
+      .select('table_name');
+    
+    let tableNames: string[] = [];
+    
+    if (!schemaError && tables && tables.length > 0) {
+      tableNames = tables.map((t: any) => t.table_name);
+    } else {
+      // If RPC doesn't exist, query information_schema directly
+      const { data: schemaTables, error: infoError } = await supabase
+        .from('information_schema.tables')
+        .select('table_name')
+        .eq('table_schema', 'public')
+        .eq('table_type', 'BASE TABLE');
+      
+      if (!infoError && schemaTables) {
+        tableNames = schemaTables.map((t: any) => t.table_name);
       }
-    } catch (err) {
-      console.error(`Error counting table ${table}:`, err);
     }
+    
+    // Fall back to known tables if dynamic discovery fails
+    if (tableNames.length === 0) {
+      tableNames = ['sales', 'purchases', 'customers', 'suppliers', 'sales_items', 'purchase_items', 'ingestion_files'];
+    }
+    
+    for (const table of tableNames) {
+      try {
+        const { count, error } = await supabase.from(table).select('*', { count: 'exact', head: true });
+        if (!error) {
+          tableInfo.push({
+            table_name: table,
+            row_count: count ?? 0,
+            size_mb: 0, // Size not available without RPC
+            size_bytes: 0,
+          });
+        }
+      } catch (err) {
+        console.error(`Error counting table ${table}:`, err);
+      }
+    }
+  } catch (err) {
+    console.error('Error discovering tables:', err);
   }
   
   return tableInfo;
 }
 
-// Test database connection
+// Test database connection and get active connection count
 export async function testSupabaseConnection(): Promise<SupabaseConnectionStatus> {
   try {
     // Try to get the Supabase version and basic connection info
     const { data, error } = await supabase.rpc('get_db_info');
+    
+    // Try to get active connection count from pg_stat_activity
+    let activeConnections: number | undefined;
+    try {
+      const { data: connData } = await supabase.rpc('get_active_connections');
+      if (connData && connData.length > 0) {
+        activeConnections = Number(connData[0].count);
+      }
+    } catch {
+      // Active connections query not available, skip
+    }
     
     if (error) {
       // Fallback: just test if we can query any table
@@ -102,6 +144,7 @@ export async function testSupabaseConnection(): Promise<SupabaseConnectionStatus
       return {
         connected: true,
         database_version: 'PostgreSQL (Supabase)',
+        active_connections: activeConnections,
       };
     }
     
@@ -109,6 +152,7 @@ export async function testSupabaseConnection(): Promise<SupabaseConnectionStatus
       connected: true,
       database_version: data?.version ?? 'PostgreSQL (Supabase)',
       database_size: data?.size ?? undefined,
+      active_connections: activeConnections,
     };
   } catch (err) {
     return {
