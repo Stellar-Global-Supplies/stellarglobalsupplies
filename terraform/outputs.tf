@@ -75,16 +75,6 @@ output "lambda_agent_router_arn" {
   value       = aws_lambda_function.agent_router.arn
 }
 
-output "lambda_email_sender_arn" {
-  description = "Email Sender Lambda ARN"
-  value       = aws_lambda_function.email_sender.arn
-}
-
-output "lambda_social_poster_arn" {
-  description = "Social Poster Lambda ARN"
-  value       = aws_lambda_function.social_poster.arn
-}
-
 output "lambda_google_auth_arn" {
   description = "Google Auth Lambda ARN"
   value       = aws_lambda_function.google_auth.arn
@@ -111,21 +101,6 @@ output "iam_role_ingest" {
 output "iam_role_agent_router" {
   description = "IAM role ARN for agent-router Lambda"
   value       = aws_iam_role.agent_router.arn
-}
-
-output "iam_role_email_sender" {
-  description = "IAM role ARN for email-sender Lambda"
-  value       = aws_iam_role.email_sender.arn
-}
-
-output "iam_role_social_poster" {
-  description = "IAM role ARN for social-poster Lambda"
-  value       = aws_iam_role.social_poster.arn
-}
-
-output "iam_role_google_auth" {
-  description = "IAM role ARN for google-auth Lambda"
-  value       = aws_iam_role.google_auth.arn
 }
 
 # ────────────────────────────────────────────────────────────────────────────────
