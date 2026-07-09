@@ -123,8 +123,8 @@ jobs:
 
     strategy:
       matrix:
-        lambda: [presign, ingest, agent-router, google-auth, aws-costs, dynamodb-cleanup, email-sender, cur-processor, social-poster, api-metrics, api-metrics-processor, s3-cleanup]
-      fail-fast: false   # ← one Lambda failure must NOT cancel the others
+        lambda: [presign, ingest, agent-router, google-auth, dynamodb-cleanup, email-sender, social-poster, s3-cleanup]
+        fail-fast: false   # ← one Lambda failure must NOT cancel the others
 
     steps:
       - name: Checkout
@@ -209,12 +209,6 @@ jobs:
           name: lambda-google-auth-dist
           path: lambda/google-auth/dist/
 
-      - name: Download lambda-aws-costs dist
-        uses: actions/download-artifact@v4
-        with:
-          name: lambda-aws-costs-dist
-          path: lambda/aws-costs/dist/
-
       - name: Download lambda-dynamodb-cleanup dist
         uses: actions/download-artifact@v4
         with:
@@ -226,35 +220,18 @@ jobs:
         with:
           name: lambda-email-sender-dist
           path: lambda/email-sender/dist/
-      
-      - name: Download lambda-cur-processor dist
-        uses: actions/download-artifact@v4
-        with:
-          name: lambda-cur-processor-dist
-          path: lambda/cur-processor/dist/
+
       - name: Download lambda-social-poster dist
         uses: actions/download-artifact@v4
         with:
           name: lambda-social-poster-dist
           path: lambda/social-poster/dist/
 
-      - name: Download lambda-api-metrics dist
-        uses: actions/download-artifact@v4
-        with:
-          name: lambda-api-metrics-dist
-          path: lambda/api-metrics/dist/
-
       - name: Download lambda-s3-cleanup dist
         uses: actions/download-artifact@v4
         with:
           name: lambda-s3-cleanup-dist
           path: lambda/s3-cleanup/dist/
-
-      - name: Download lambda-api-metrics-processor dist
-        uses: actions/download-artifact@v4
-        with:
-          name: lambda-api-metrics-processor-dist
-          path: lambda/api-metrics-processor/dist/
 
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
@@ -525,9 +502,14 @@ jobs:
           echo "  • AI Agent Workspace (6 agents)"
           echo "  • Data Ingestion (CSV/JSON upload)"
           echo "  • Sales Analytics"
-          echo "  • Web Traffic Dashboard"
           echo "  • Meta Marketing Intelligence"
-          echo "  • AWS Cost Dashboard (with forecasting)"
+          echo "  • Order Management"
+          echo ""
+          echo "  Observability dashboards: https://observe.stellarglobalsupplies.com"
+          echo "  • API Monitoring"
+          echo "  • AWS Cost Dashboard"
+          echo "  • Web Traffic Analytics"
+          echo "  • Supabase Database Metrics"
           echo ""
           echo "  Scheduled jobs:"
           echo "  • DynamoDB cleanup: daily at 9am IST"
