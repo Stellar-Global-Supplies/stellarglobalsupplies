@@ -122,9 +122,9 @@ jobs:
     needs: bootstrap
 
     strategy:
+      fail-fast: false   # ← one Lambda failure must NOT cancel the others
       matrix:
         lambda: [presign, ingest, agent-router, google-auth, dynamodb-cleanup, email-sender, social-poster, s3-cleanup]
-        fail-fast: false   # ← one Lambda failure must NOT cancel the others
 
     steps:
       - name: Checkout
