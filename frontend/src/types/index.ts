@@ -252,39 +252,7 @@ export interface UploadJob {
 // UI state
 // -----------------------------------------------------------
 
-export type NavSection = 'dashboard' | 'agents' | 'ingest' | 'analytics' | 'web' | 'meta' | 'inventory' | 'registers' | 'cloud' | 'monitoring' | 'tasks' | 'orders' | 'supabase';
-
-// -----------------------------------------------------------
-// Supabase Dashboard types
-// -----------------------------------------------------------
-
-export interface SupabaseTableInfo {
-  table_name: string;
-  row_count: number;
-  size_mb: number;
-  size_bytes: number;
-}
-
-export interface SupabaseConnectionStatus {
-  connected: boolean;
-  database_version?: string;
-  database_size?: string;
-  error?: string;
-}
-
-export interface SupabaseRequestMetrics {
-  total_requests: number;
-  successful_requests: number;
-  failed_requests: number;
-  success_rate: number;
-}
-
-export interface SupabaseMetrics {
-  connection: SupabaseConnectionStatus;
-  tables: SupabaseTableInfo[];
-  total_db_size_mb: number;
-  request_metrics: SupabaseRequestMetrics;
-}
+export type NavSection = 'dashboard' | 'agents' | 'ingest' | 'analytics' | 'meta' | 'inventory' | 'registers' | 'tasks' | 'orders';
 
 export interface AppNotification {
   id:      string;
@@ -293,69 +261,6 @@ export interface AppNotification {
   message: string;
   ts:      number;
 }
-
-// -----------------------------------------------------------
-// Web analytics and Meta marketing types (from analytics S3 bucket)
-// -----------------------------------------------------------
-
-export interface TrafficDay {
-  date:     string;
-  requests: number;
-}
-
-export interface TopPage {
-  page:       string;
-  visits:     number;
-  bounce_pct: number;
-}
-
-export interface GeoEntry {
-  country:  string;
-  requests: number;
-  pct:      number;
-}
-
-export interface PeakHour {
-  hour:     number;
-  requests: number;
-}
-
-export interface MetaInsights {
-  recommended_objective: string;
-  top_locations:         string[];
-  best_placement:        string;
-  best_ad_time:          string;
-  warm_audience_size:    number;
-  high_intent_visits:    number;
-}
-
-export interface WebAnalyticsSummary {
-  total_requests: number;
-  unique_ips:     number;
-  avg_daily:      number;
-  top_country:    string;
-  mobile_pct:     number;
-  desktop_pct:    number;
-  bounce_rate:    number;
-  peak_hour:      string;
-}
-
-export interface WebAnalyticsData {
-  period:           string;
-  label:            string;
-  generated_at:     string;
-  summary:          WebAnalyticsSummary;
-  traffic_over_time: TrafficDay[];
-  top_pages:        TopPage[];
-  geo_distribution: GeoEntry[];
-  device_split:     Array<{ device: string; pct: number }>;
-  peak_hours:       PeakHour[];
-  meta_insights:    MetaInsights;
-}
-
-export type MetaAnalyticsData = WebAnalyticsData;
-
-export type AnalyticsPeriod = 'weekly' | 'monthly';
 
 export type FinancialYear = {
   startYear: number;

@@ -10,7 +10,8 @@ const CACHE_KEY    = 'api-metrics/latest.json';
 const APIS_TO_MONITOR = [
   { name: 'stellar-oms-api', id: 'rjwx3tdkx3' },
   { name: 'ops-api', id: 'wtt3awq1xg' },
-];
+  { name: 'observe-api', id: process.env.OBSERVE_API_ID ?? '' },
+].filter(api => api.id);
 
 const cw = new CloudWatchClient({ region: REGION });
 const s3 = new S3Client({ region: REGION });

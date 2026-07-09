@@ -7,7 +7,6 @@ import {
   Menu,
   X,
   Bell,
-  Globe,
   Megaphone,
   Wifi,
   WifiOff,
@@ -16,13 +15,10 @@ import {
   Sparkles,
   Package,
   FileText,
-  Cloud,
   CheckSquare,
-  Activity,
   Zap,
   Shield,
   ClipboardList,
-  Database,
   Sun,
   Moon,
 } from 'lucide-react';
@@ -32,7 +28,6 @@ import { useNavStore, useNotificationStore, useThemeStore } from '@/store';
 import type { NavSection } from '@/types';
 import { supabase } from '@/lib/supabase';
 import Dashboard from '@/components/Dashboard';
-import WebTrafficDashboard from '@/components/WebTrafficDashboard';
 import MetaMarketingDashboard from '@/components/MetaMarketingDashboard';
 import AgentPanel from '@/components/AgentPanel';
 import DataIngestion from '@/components/DataIngestion';
@@ -40,11 +35,8 @@ import Analytics from '@/components/Analytics';
 import InventoryDashboard from '@/components/InventoryDashboard';
 import SalesPurchaseTable from '@/components/SalesPurchaseTable';
 import AuthPage from '@/components/AuthPage';
-import AwsCostDashboard from '@/components/AwsCostDashboard';
-import ApiMonitoringDashboard from '@/components/ApiMonitoringDashboard';
 import TasksPage from '@/pages/tasks/TasksPage';
 import OrderSummaryDashboard from '@/components/OrderSummaryDashboard';
-import SupabaseDashboard from '@/components/SupabaseDashboard';
 
 interface NavItem {
   section: NavSection;
@@ -63,13 +55,6 @@ const CEO_ITEMS: NavItem[] = [
   { section: 'meta',       label: 'Meta Marketing',    Icon: Megaphone        },
   { section: 'tasks',      label: 'Tasks',             Icon: CheckSquare      },
   { section: 'orders',     label: 'Order Summary',     Icon: ClipboardList    },
-];
-
-const CTO_ITEMS: NavItem[] = [
-  { section: 'monitoring', label: 'API Monitoring',    Icon: Activity         },
-  { section: 'cloud',      label: 'Cloud Costs',       Icon: Cloud            },
-  { section: 'web',        label: 'Web Traffic',       Icon: Globe            },
-  { section: 'supabase',   label: 'Supabase',          Icon: Database         },
 ];
 
 // ─── Notification Toasts ─────────────────────────────────────────────────────
@@ -216,36 +201,6 @@ function Sidebar({ session }: { session: Session | null }) {
             );
           })}
 
-          <div className={`nav-section-label mt-4 ${!sidebarOpen ? 'text-center' : ''}`}>
-            {sidebarOpen ? 'CTO Suite' : '—'}
-          </div>
-          {CTO_ITEMS.map(({ section, label, Icon }) => {
-            const isActive = activeSection === section;
-            return (
-              <button
-                key={section}
-                onClick={() => { setSection(section); if (window.innerWidth < 1024) toggleSidebar(); }}
-                className={`nav-item ${isActive ? 'active' : ''}`}
-                aria-current={isActive ? 'page' : undefined}
-                title={!sidebarOpen ? label : undefined}
-              >
-                <Icon size={17} className={`nav-icon shrink-0 transition-colors ${isActive ? '' : 'text-slate-500'}`} />
-                {sidebarOpen && (
-                  <>
-                    <span className="text-sm font-medium truncate flex-1 text-left">{label}</span>
-                    {isActive && <ChevronRight size={13} style={{ color: '#00B98E', flexShrink: 0 }} />}
-                  </>
-                )}
-                <div className="nav-indicator" />
-                {!sidebarOpen && (
-                  <span className="absolute left-full ml-3 px-3 py-1.5 text-xs font-semibold rounded-xl whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-50"
-                    style={{ background: 'rgba(4,14,28,0.96)', border: '1px solid rgba(0,185,142,0.25)', color: '#e2fdf6', boxShadow: '0 8px 24px rgba(0,0,0,0.4)' }}>
-                    {label}
-                  </span>
-                )}
-              </button>
-            );
-          })}
         </nav>
 
         {/* Footer User */}
@@ -317,8 +272,7 @@ function Header() {
   const { theme, toggleTheme } = useThemeStore();
   const unread = notifications.length;
 
-  const allItems = [...CEO_ITEMS, ...CTO_ITEMS];
-  const activeItem = allItems.find((n) => n.section === activeSection);
+    const activeItem = CEO_ITEMS.find((n) => n.section === activeSection);
   const sectionLabel = activeItem?.label ?? '';
 
   return (
@@ -430,13 +384,29 @@ function MainContent({ session }: { session: Session | null }) {
       case 'inventory':  return <InventoryDashboard />;
       case 'analytics':  return <Analytics />;
       case 'registers':  return <SalesPurchaseTable />;
-      case 'web':        return <WebTrafficDashboard />;
       case 'meta':       return <MetaMarketingDashboard />;
-      case 'cloud':      return <AwsCostDashboard />;
-      case 'monitoring': return <ApiMonitoringDashboard />;
       case 'tasks':      return <TasksPage />;
       case 'orders':     return <OrderSummaryDashboard />;
-      case 'supabase':   return <SupabaseDashboard />;
+      case 'web':
+      case 'cloud':
+      case 'monitoring':
+      case 'supabase':
+        return (
+          <div className="agent-card p-8 text-center max-w-md mx-auto">
+            <h3 className="text-lg font-semibold text-slate-200 mb-2">Observability Dashboard</h3>
+            <p className="text-sm text-slate-400 mb-4">
+              This dashboard has moved to <code>observe.stellarglobalsupplies.com</code>
+            </p>
+            <a
+              href="https://observe.stellarglobalsupplies.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-block px-4 py-2 bg-blue-500 hover:bg-blue-600 rounded-lg text-white text-sm transition-colors"
+            >
+              Open Observability Dashboard
+            </a>
+          </div>
+        );
       default:           return <Dashboard />;
     }
   })();
