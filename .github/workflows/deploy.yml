@@ -124,7 +124,7 @@ jobs:
     strategy:
       fail-fast: false   # ← one Lambda failure must NOT cancel the others
       matrix:
-        lambda: [presign, ingest, agent-router, google-auth, dynamodb-cleanup, email-sender, social-poster, s3-cleanup]
+        lambda: [presign, ingest, agent-router, google-auth, email-sender, social-poster]
 
     steps:
       - name: Checkout
@@ -203,35 +203,11 @@ jobs:
           name: lambda-agent-router-dist
           path: lambda/agent-router/dist/
 
-      - name: Download lambda-google-auth dist
-        uses: actions/download-artifact@v4
-        with:
-          name: lambda-google-auth-dist
-          path: lambda/google-auth/dist/
-
-      - name: Download lambda-dynamodb-cleanup dist
-        uses: actions/download-artifact@v4
-        with:
-          name: lambda-dynamodb-cleanup-dist
-          path: lambda/dynamodb-cleanup/dist/
-
       - name: Download lambda-email-sender dist
         uses: actions/download-artifact@v4
         with:
           name: lambda-email-sender-dist
           path: lambda/email-sender/dist/
-
-      - name: Download lambda-social-poster dist
-        uses: actions/download-artifact@v4
-        with:
-          name: lambda-social-poster-dist
-          path: lambda/social-poster/dist/
-
-      - name: Download lambda-s3-cleanup dist
-        uses: actions/download-artifact@v4
-        with:
-          name: lambda-s3-cleanup-dist
-          path: lambda/s3-cleanup/dist/
 
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
@@ -511,6 +487,7 @@ jobs:
           echo "  • Web Traffic Analytics"
           echo "  • Supabase Database Metrics"
           echo ""
-          echo "  Scheduled jobs:"
+          echo "  Cleanup jobs: https://github.com/Stellar-Global-Supplies/stellarglobalsupplies-cleanup"
           echo "  • DynamoDB cleanup: daily at 9am IST"
+          echo "  • S3 cleanup: daily at 6:45 AM IST"
           echo "════════════════════════════════════════════════════════════════"
