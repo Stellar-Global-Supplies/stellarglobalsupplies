@@ -276,24 +276,24 @@ function channelPages(data: MetaAnalyticsData, channel: Channel): TopPage[] {
   const native = asNative(data);
   if (native.facebook || native.instagram || native.ads) {
     if (channel === 'ads') {
-      return (native.ads?.campaigns ?? []).slice(0, 8).map((campaign, index) => ({
-        page: campaign.name ?? campaign.campaign_name ?? `Campaign ${index + 1}`,
-        visits: Number(campaign.clicks ?? campaign.impressions ?? campaign.spend ?? 0),
-        bounce_pct: 0,
-      }));
-    }
-    if (channel === 'instagram') {
-      return (native.instagram?.top_posts ?? []).slice(0, 8).map((post, index) => ({
-        page: post.caption || post.media_type || post.id || `Instagram post ${index + 1}`,
-        visits: Number(post.engagements ?? post.reach ?? post.impressions ?? post.likes ?? 0),
-        bounce_pct: 0,
-      }));
-    }
-    return (native.facebook?.top_posts ?? []).slice(0, 8).map((post, index) => ({
-      page: post.message || post.id || `Facebook post ${index + 1}`,
-      visits: Number(post.engagements ?? post.reach ?? post.impressions ?? post.likes ?? 0),
-      bounce_pct: 0,
-    }));
+       return (native.ads?.campaigns ?? []).slice(0, 8).map((campaign: { name?: string; campaign_name?: string; clicks?: number; impressions?: number; spend?: number }, index: number) => ({
+         page: campaign.name ?? campaign.campaign_name ?? `Campaign ${index + 1}`,
+         visits: Number(campaign.clicks ?? campaign.impressions ?? campaign.spend ?? 0),
+         bounce_pct: 0,
+       }));
+     }
+     if (channel === 'instagram') {
+       return (native.instagram?.top_posts ?? []).slice(0, 8).map((post: { id?: string; caption?: string; media_type?: string; impressions?: number; reach?: number; engagements?: number; likes?: number }, index: number) => ({
+         page: post.caption || post.media_type || post.id || `Instagram post ${index + 1}`,
+         visits: Number(post.engagements ?? post.reach ?? post.impressions ?? post.likes ?? 0),
+         bounce_pct: 0,
+       }));
+     }
+     return (native.facebook?.top_posts ?? []).slice(0, 8).map((post: { id?: string; message?: string; impressions?: number; reach?: number; engagements?: number; likes?: number }, index: number) => ({
+       page: post.message || post.id || `Facebook post ${index + 1}`,
+       visits: Number(post.engagements ?? post.reach ?? post.impressions ?? post.likes ?? 0),
+       bounce_pct: 0,
+     }));
   }
   return data.top_pages ?? [];
 }

@@ -252,7 +252,109 @@ export interface UploadJob {
 // UI state
 // -----------------------------------------------------------
 
-export type NavSection = 'dashboard' | 'agents' | 'ingest' | 'analytics' | 'meta' | 'inventory' | 'registers' | 'tasks' | 'orders';
+export type NavSection = 'dashboard' | 'agents' | 'ingest' | 'analytics' | 'meta' | 'inventory' | 'registers' | 'tasks' | 'orders' | 'web' | 'cloud' | 'monitoring' | 'supabase';
+
+// -----------------------------------------------------------
+// Analytics types (for web traffic and meta marketing)
+// -----------------------------------------------------------
+
+export type AnalyticsPeriod = 'daily' | 'weekly' | 'monthly';
+
+export interface GeoEntry {
+  country: string;
+  requests: number;
+  pct: number;
+}
+
+export interface TopPage {
+  page: string;
+  visits: number;
+  bounce_pct?: number;
+}
+
+export interface WebAnalyticsData {
+  summary: {
+    total_requests: number;
+    unique_ips: number;
+    avg_daily: number;
+    top_country: string;
+  };
+  meta_insights: {
+    high_intent_visits: number;
+    warm_audience_size: number;
+  };
+  traffic_over_time: { date: string; requests: number }[];
+  top_pages: TopPage[];
+  geo_distribution: GeoEntry[];
+  generated_at: string;
+}
+
+export interface MetaAnalyticsData {
+  period?: string;
+  label?: string;
+  generated_at: string;
+  summary: {
+    total_requests: number;
+    unique_ips: number;
+    avg_daily: number;
+    top_country: string;
+    mobile_pct: number;
+    desktop_pct: number;
+    bounce_rate: number;
+    peak_hour: string;
+  };
+  traffic_over_time: { date: string; requests: number }[];
+  top_pages: TopPage[];
+  geo_distribution: GeoEntry[];
+  device_split: { device: string; pct: number }[];
+  peak_hours: { hour: number; requests: number }[];
+  meta_insights: {
+    recommended_objective: string;
+    top_locations: string[];
+    best_placement: string;
+    best_ad_time: string;
+    warm_audience_size: number;
+    high_intent_visits: number;
+  };
+  instagram?: {
+    profile?: { name?: string; username?: string; followers?: number; following?: number; media_count?: number };
+    summary?: { total_impressions?: number; total_reach?: number; profile_views?: number; website_clicks?: number; avg_daily_reach?: number; engagement_rate?: number };
+    daily_reach?: { date: string; value: number }[];
+    daily_impressions?: { date: string; value: number }[];
+    daily_profile_views?: { date: string; value: number }[];
+    age_gender?: Record<string, number>;
+    city?: Record<string, number>;
+    online_hours?: Record<string, number>;
+    top_posts?: Array<{ id?: string; caption?: string; media_type?: string; impressions?: number; reach?: number; engagements?: number; likes?: number; comments?: number }>;
+  };
+  facebook?: {
+    profile?: { name?: string; fans?: number; followers?: number; talking_about?: number; category?: string };
+    summary?: { total_reach?: number; total_engagements?: number; total_page_views?: number; fans_added?: number; fans_removed?: number; video_views?: number };
+    daily_reach?: { date: string; value: number }[];
+    daily_engagements?: { date: string; value: number }[];
+    fan_net_daily?: { date: string; value: number }[];
+    fan_age_gender?: Record<string, number>;
+    fan_cities?: Record<string, number>;
+    top_posts?: Array<{ id?: string; message?: string; impressions?: number; reach?: number; engagements?: number; likes?: number; comments?: number }>;
+  };
+  ads?: {
+    summary?: { total_spend?: number; impressions?: number; clicks?: number; ctr?: number; cpc?: number; cpm?: number; reach?: number; frequency?: number; link_clicks?: number; landing_views?: number; leads?: number; post_engagement?: number; roas?: number };
+    daily_trend?: Array<{ date: string; spend?: number; clicks?: number; impressions?: number; reach?: number }>;
+    campaigns?: Array<{ name?: string; campaign_name?: string; impressions?: number; clicks?: number; spend?: number; ctr?: number }>;
+    age_gender?: Record<string, number>;
+    regions?: Record<string, number>;
+    placements?: Record<string, number>;
+  };
+  insights?: {
+    ctr_status?: string;
+    best_campaign?: string;
+    best_region?: string;
+    top_ig_post_type?: string;
+    ig_engagement_rate?: number;
+    fb_fan_growth?: number;
+    recommendation?: string;
+  };
+}
 
 export interface AppNotification {
   id:      string;
