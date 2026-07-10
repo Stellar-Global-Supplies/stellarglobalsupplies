@@ -592,12 +592,12 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="space-y-6 max-w-7xl">
+    <div className="space-y-4 sm:space-y-6 max-w-7xl">
       {/* Page header */}
-      <div className="flex items-start justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
         <div>
-          <h2 className="text-xl font-bold text-slate-100">Operations Dashboard</h2>
-          <p className="text-sm text-slate-400 mt-0.5 flex items-center gap-2">
+          <h2 className="text-lg sm:text-xl font-bold text-slate-100">Operations Dashboard</h2>
+          <p className="text-xs sm:text-sm text-slate-400 mt-0.5 flex items-center gap-2">
             Stellar Global Supplies · {summary.period}
             <span className="inline-flex items-center gap-1 text-2xs text-emerald-400">
               <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-ping" />
@@ -612,7 +612,7 @@ export default function Dashboard() {
               const fy = FINANCIAL_YEAR_OPTIONS.find(f => f.label === e.target.value) || null;
               setSelectedFY(fy);
             }}
-            className="text-2xs bg-slate-800 border border-slate-700 text-slate-300 rounded-lg px-2 py-1.5 outline-none cursor-pointer"
+            className="text-2xs bg-slate-800 border border-slate-700 text-slate-300 rounded-lg px-2 py-1.5 outline-none cursor-pointer touch-manipulation"
           >
             <option value="">All Time</option>
             {FINANCIAL_YEAR_OPTIONS.map((fy) => (
@@ -621,10 +621,10 @@ export default function Dashboard() {
           </select>
           <button
             onClick={() => refetch()}
-            className="flex items-center gap-2 px-3 py-1.5 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 transition-colors ripple-effect"
+            className="touch-target flex items-center gap-2 px-3 py-1.5 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 transition-colors ripple-effect"
           >
             <RefreshCw size={12} className="animate-spin-slow" />
-            Refresh <span className="live-dot" />
+            <span className="hidden sm:inline">Refresh</span> <span className="live-dot" />
           </button>
         </div>
       </div>
@@ -635,44 +635,44 @@ export default function Dashboard() {
       </div>
 
       {/* KPI cards */}
-      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <KPICard
           title="Total Revenue"
           value={fmt(summary.total_revenue)}
           change={summary.growth_rate}
-          icon={<DollarSign size={18} />}
+          icon={<DollarSign size={16} />}
           color="#6366f1"
         />
         <KPICard
           title="Total Purchase"
           value={fmt(summary.total_purchase)}
           change={summary.growth_rate * 0.8}
-          icon={<Factory size={18} />}
+          icon={<Factory size={16} />}
           color="#f59e0b"
         />
         <KPICard
           title="Gross Profit"
           value={fmt(summary.gross_profit)}
           change={summary.growth_rate * 0.5}
-          icon={<TrendingUp size={18} />}
+          icon={<TrendingUp size={16} />}
           color="#38bdf8"
         />
         <KPICard
           title="Gross Margin"
           value={`${summary.gross_margin_pct.toFixed(1)}%`}
           change={2.1}
-          icon={<FileText size={18} />}
+          icon={<FileText size={16} />}
           color="#10b981"
         />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
         <BusinessTrendChart data={summary.business_by_month} />
         <GSTChart data={summary.gst_by_month} />
       </div>
 
       {/* Charts row */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4">
         <div className="lg:col-span-2">
           <RevenueChart data={summary.revenue_by_month} />
         </div>
@@ -680,12 +680,12 @@ export default function Dashboard() {
       </div>
 
       {/* Tables row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
         <TopCustomers customers={summary.top_customers} />
         <TopSuppliers suppliers={summary.top_suppliers} />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
         <TopSKUs      skus={summary.top_skus} />
         <QuickActions />
       </div>

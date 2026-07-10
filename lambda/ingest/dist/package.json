@@ -1,0 +1,21 @@
+{
+  "name": "stellar-lambda-ingest",
+  "version": "1.0.0",
+  "private": true,
+  "description": "S3-triggered Lambda that parses SGS accounting exports and upserts records to Supabase",
+  "scripts": {
+    "build": "esbuild src/handler.ts --bundle --platform=node --target=node22 --format=cjs --outfile=dist/handler.js --external:@aws-sdk/*",
+    "postbuild": "cp package.json dist/",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.600.0",
+    "@supabase/supabase-js": "^2.50.0"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.140",
+    "@types/node": "^20.14.9",
+    "esbuild": "^0.23.0",
+    "typescript": "^5.5.3"
+  }
+}

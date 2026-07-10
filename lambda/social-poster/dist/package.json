@@ -1,0 +1,21 @@
+{
+  "name": "@stellar-global/social-poster",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "esbuild src/handler.ts --bundle --platform=node --target=node20 --outfile=dist/handler.js",
+    "postbuild": "cp package.json dist/"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.600.0",
+    "@aws-sdk/lib-dynamodb": "^3.600.0",
+    "@aws-sdk/client-ssm": "^3.600.0",
+    "@aws-sdk/client-s3": "^3.600.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.24.0",
+    "typescript": "^5.5.0",
+    "@types/node": "^20.0.0",
+    "aws-lambda": "^1.0.7"
+  }
+}

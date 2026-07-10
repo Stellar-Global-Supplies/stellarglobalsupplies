@@ -543,29 +543,29 @@ function ChatPanel({
   };
 
   return (
-    <div className="flex flex-col h-full max-h-[calc(100vh-8rem)] min-h-[400px]">
+    <div className="flex flex-col h-full max-h-[calc(100vh-6rem)] sm:max-h-[calc(100vh-8rem)] min-h-[350px] sm:min-h-[400px]">
       {/* Chat header */}
       <div
-        className="flex items-center gap-3 px-4 py-3 border-b border-slate-800 shrink-0"
+        className="flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2.5 sm:py-3 border-b border-slate-800 shrink-0"
         style={{ borderTopColor: agent.color }}
       >
         <button
           onClick={onBack}
-          className="p-1.5 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors lg:hidden"
+          className="touch-target p-1.5 sm:p-2 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors lg:hidden flex items-center justify-center"
           aria-label="Back to agents"
         >
           <ChevronRight size={16} className="rotate-180" />
         </button>
 
         <div
-          className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+          className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center shrink-0"
           style={{ backgroundColor: `${agent.color}20`, color: agent.color }}
         >
-          <AgentIcon icon={agent.icon} size={18} />
+          <AgentIcon icon={agent.icon} size={16} />
         </div>
 
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-slate-200">{agent.name}</p>
+          <p className="text-sm font-semibold text-slate-200 truncate">{agent.name}</p>
           <p className="text-2xs text-slate-500">
             <span
               className="inline-block w-1.5 h-1.5 rounded-full mr-1"
@@ -578,11 +578,11 @@ function ChatPanel({
         {messages.length > 0 && (
           <button
             onClick={() => clearSession(agent.agent_id)}
-            className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-900/20 transition-colors"
+            className="touch-target p-1.5 sm:p-2 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-900/20 transition-colors flex items-center justify-center"
             aria-label="Clear chat"
             title="Clear conversation"
           >
-            <Trash2 size={15} />
+            <Trash2 size={14} />
           </button>
         )}
       </div>
@@ -591,7 +591,7 @@ function ChatPanel({
       {agent.role === 'executive-assistant' && <GoogleConnectionBanner userId={userId} />}
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto chat-scroll px-4 py-4 space-y-4">
+      <div className="flex-1 overflow-y-auto chat-scroll px-3 sm:px-4 py-3 sm:py-4 space-y-3 sm:space-y-4">
         {messages.length === 0 ? (
           <EmptyChatState agent={agent} onPrompt={sendMessage} />
         ) : (
@@ -610,15 +610,15 @@ function ChatPanel({
       </div>
 
       {/* Input bar - pinned to bottom */}
-      <div className="shrink-0 px-4 py-3 border-t border-slate-800 bg-slate-900/90 backdrop-blur-sm">
-        <div className="flex items-end gap-2 bg-slate-800/80 rounded-xl border border-slate-700 focus-within:border-indigo-500/60 transition-colors px-3 py-2">
+      <div className="shrink-0 px-3 sm:px-4 py-2.5 sm:py-3 border-t border-slate-800 bg-slate-900/90 backdrop-blur-sm">
+        <div className="flex items-end gap-2 bg-slate-800/80 rounded-xl border border-slate-700 focus-within:border-indigo-500/60 transition-colors px-2.5 sm:px-3 py-2">
           <textarea
             ref={inputRef}
             rows={1}
             value={input}
             onChange={handleInputChange}
             onKeyDown={handleKeyDown}
-            placeholder={`Message ${agent.name}… (Enter to send, Shift+Enter for new line)`}
+            placeholder={`Message ${agent.name}…`}
             disabled={loading}
             className="flex-1 bg-transparent text-sm text-slate-200 placeholder-slate-500 resize-none outline-none disabled:opacity-50 py-1 max-h-[80px]"
             aria-label="Chat message"
@@ -627,7 +627,7 @@ function ChatPanel({
             onClick={() => sendMessage(input)}
             disabled={!input.trim() || loading}
             className="
-              mb-0.5 w-8 h-8 rounded-lg flex items-center justify-center shrink-0
+              touch-target w-8 h-8 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center shrink-0
               transition-all duration-150
               disabled:opacity-30 disabled:cursor-not-allowed
               hover:scale-105 active:scale-95
@@ -638,13 +638,13 @@ function ChatPanel({
             aria-label="Send message"
           >
             {loading ? (
-              <Loader2 size={15} className="text-white animate-spin" />
+              <Loader2 size={14} className="text-white animate-spin" />
             ) : (
-              <Send size={15} className="text-white" />
+              <Send size={14} className="text-white" />
             )}
           </button>
         </div>
-        <p className="text-2xs text-slate-600 mt-1.5 text-center">
+        <p className="text-2xs text-slate-600 mt-1.5 text-center hidden sm:block">
           AI responses are context-aware and grounded in your DynamoDB sales data.
         </p>
       </div>

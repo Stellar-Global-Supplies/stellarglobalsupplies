@@ -619,15 +619,15 @@ export default function Analytics() {
   };
 
   return (
-    <div className="max-w-7xl space-y-6">
+    <div className="max-w-7xl space-y-4 sm:space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div className="flex flex-col gap-3">
         <div>
-          <h2 className="text-xl font-bold text-slate-100">Sales Analytics</h2>
-          <p className="text-sm text-slate-400 mt-0.5">{summary.period}</p>
+          <h2 className="text-lg sm:text-xl font-bold text-slate-100">Sales Analytics</h2>
+          <p className="text-xs sm:text-sm text-slate-400 mt-0.5">{summary.period}</p>
         </div>
 
-        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
           {/* Financial Year filter */}
           <div className="flex items-center gap-1 bg-slate-800 border border-slate-700 rounded-lg p-1">
             <select
@@ -636,7 +636,7 @@ export default function Analytics() {
                 const fy = FINANCIAL_YEAR_OPTIONS.find(f => f.label === e.target.value) || null;
                 handleFYChange(fy);
               }}
-              className="text-2xs bg-transparent text-slate-300 outline-none px-1 py-0.5 cursor-pointer"
+              className="text-2xs bg-transparent text-slate-300 outline-none px-1 py-0.5 cursor-pointer touch-manipulation flex-1"
             >
               <option value="">All Years</option>
               {FINANCIAL_YEAR_OPTIONS.map((fy) => (
@@ -651,7 +651,7 @@ export default function Analytics() {
               value={selectedYear}
               onChange={(e) => handleYearChange(e.target.value)}
               disabled={!!selectedFY}
-              className="text-2xs bg-transparent text-slate-300 outline-none px-1 py-0.5 cursor-pointer disabled:opacity-40"
+              className="text-2xs bg-transparent text-slate-300 outline-none px-1 py-0.5 cursor-pointer disabled:opacity-40 touch-manipulation flex-1"
             >
               {YEAR_OPTIONS.map((y) => (
                 <option key={y.value} value={y.value}>{y.label}</option>
@@ -662,7 +662,7 @@ export default function Analytics() {
               value={selectedMonth}
               onChange={(e) => setSelectedMonth(e.target.value)}
               disabled={!selectedYear || !!selectedFY}
-              className="text-2xs bg-transparent text-slate-300 outline-none px-1 py-0.5 cursor-pointer disabled:opacity-40"
+              className="text-2xs bg-transparent text-slate-300 outline-none px-1 py-0.5 cursor-pointer disabled:opacity-40 touch-manipulation flex-1"
             >
               {MONTH_NAMES.map((m) => (
                 <option key={m.value} value={m.value}>{m.label}</option>
@@ -677,7 +677,7 @@ export default function Analytics() {
                 key={p.value}
                 onClick={() => setMonths(p.value)}
                 className={`
-                  px-3 py-1 rounded-md text-xs font-medium transition-all duration-150
+                  px-3 py-1 rounded-md text-xs font-medium transition-all duration-150 touch-manipulation flex-1
                   ${months === p.value
                     ? 'bg-indigo-600 text-white shadow'
                     : 'text-slate-400 hover:text-slate-200'
@@ -692,10 +692,10 @@ export default function Analytics() {
           <button
             onClick={() => refetch()}
             disabled={isFetching}
-            className="flex items-center gap-2 px-3 py-1.5 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 transition-colors disabled:opacity-50"
+            className="touch-target flex items-center justify-center gap-2 px-3 py-1.5 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 transition-colors disabled:opacity-50"
           >
             <RefreshCw size={12} className={isFetching ? 'animate-spin' : ''} />
-            Refresh
+            <span className="hidden sm:inline">Refresh</span>
           </button>
         </div>
       </div>
@@ -723,7 +723,7 @@ export default function Analytics() {
           <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
             {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-20 rounded-xl" />)}
           </div>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Skeleton className="h-72 rounded-xl" />
             <Skeleton className="h-72 rounded-xl" />
           </div>
@@ -734,13 +734,13 @@ export default function Analytics() {
           <SummaryStats summary={summary} />
 
           {/* Charts row 1 */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
             <RevenueVsInvoices data={summary.revenue_by_month} />
             <MaterialSplitDetail split={summary.material_split} />
           </div>
 
           {/* Charts row 2 */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
             <TopCustomersChart customers={summary.top_customers} />
             <SKUPerformanceChart skus={summary.top_skus} />
           </div>

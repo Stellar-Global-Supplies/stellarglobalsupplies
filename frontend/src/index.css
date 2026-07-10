@@ -939,4 +939,61 @@
   .left-sidebar-sm { left: var(--sidebar-collapsed-width); }
   .pl-sidebar    { padding-left: var(--sidebar-width); }
   .pl-sidebar-sm { padding-left: var(--sidebar-collapsed-width); }
+
+  /* ─── Mobile-first responsive utilities ─── */
+  .touch-manipulation {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .mobile-scroll {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+
+  .mobile-card {
+    @apply p-4 rounded-xl border border-slate-700/50 bg-slate-800/40;
+  }
+
+  .mobile-text-sm {
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+  }
+
+  .mobile-text-xs {
+    font-size: 0.75rem;
+    line-height: 1rem;
+  }
+
+  /* Ensure minimum touch target size (44x44px per Apple HIG) */
+  .touch-target {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  /* Mobile-optimized chart containers */
+  .chart-mobile {
+    height: 250px;
+  }
+
+  @media (min-width: 768px) {
+    .chart-mobile {
+      height: 300px;
+    }
+  }
+
+  /* Responsive table wrapper */
+  .table-mobile-wrapper {
+    @apply overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0;
+  }
+
+  /* Mobile-friendly button group */
+  .button-group-mobile {
+    @apply flex flex-col sm:flex-row gap-2;
+  }
+
+  /* Mobile-optimized grid gaps */
+  .grid-mobile {
+    @apply grid gap-3 md:gap-4;
+  }
 }

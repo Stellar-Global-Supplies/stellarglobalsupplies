@@ -1,0 +1,4 @@
+User-agent: *
+Disallow: /
+
+# Internal operational tool — not for public indexing.

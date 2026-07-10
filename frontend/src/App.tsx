@@ -279,7 +279,7 @@ function Header() {
     <header
       className={`
         app-header fixed top-0 right-0 z-10
-        flex items-center gap-4 px-4 md:px-6
+        flex items-center gap-3 px-3 md:px-6
         transition-all duration-300
         ${sidebarOpen ? 'left-sidebar' : 'left-sidebar-sm'}
         max-lg:left-0
@@ -287,7 +287,7 @@ function Header() {
     >
       <button
         onClick={toggleSidebar}
-        className="p-2 rounded-xl transition-all duration-200"
+        className="touch-target p-2 rounded-xl transition-all duration-200 flex items-center justify-center"
         style={{ color: 'rgba(0,185,142,0.70)' }}
         onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(0,185,142,0.10)'; (e.currentTarget as HTMLButtonElement).style.color = '#00B98E'; }}
         onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; (e.currentTarget as HTMLButtonElement).style.color = 'rgba(0,185,142,0.70)'; }}
@@ -296,25 +296,25 @@ function Header() {
         <Menu size={18} />
       </button>
 
-      <div className="flex items-center gap-2 flex-1">
-        <span className="text-2xs font-mono text-slate-600">SGS</span>
-        <ChevronRight size={10} className="text-slate-700" />
-        <h1 className="text-sm font-bold text-slate-200">{sectionLabel}</h1>
+      <div className="flex items-center gap-2 flex-1 min-w-0">
+        <span className="text-2xs font-mono text-slate-600 hidden sm:inline">SGS</span>
+        <ChevronRight size={10} className="text-slate-700 hidden sm:block" />
+        <h1 className="text-sm font-bold text-slate-200 truncate">{sectionLabel}</h1>
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1 sm:gap-2">
         <OnlineStatus />
         <div className="hidden sm:block w-px h-5 bg-white/8" />
         <button
           onClick={toggleTheme}
-          className="p-2 rounded-xl text-slate-500 hover:text-slate-200 transition-colors"
+          className="touch-target p-2 rounded-xl text-slate-500 hover:text-slate-200 transition-colors flex items-center justify-center"
           aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
           title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
         >
           {theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}
         </button>
         <button
-          className="relative p-2 rounded-xl text-slate-500 hover:text-slate-200 transition-colors"
+          className="touch-target relative p-2 rounded-xl text-slate-500 hover:text-slate-200 transition-colors flex items-center justify-center"
           aria-label={`${unread} notifications`}
         >
           <Bell size={17} />
@@ -327,7 +327,7 @@ function Header() {
         </button>
         <button
           onClick={() => supabase.auth.signOut()}
-          className="p-2 rounded-xl text-slate-500 hover:text-red-400 transition-colors"
+          className="touch-target p-2 rounded-xl text-slate-500 hover:text-red-400 transition-colors flex items-center justify-center"
           aria-label="Sign out"
           title="Sign out"
         >
@@ -419,12 +419,12 @@ function MainContent({ session }: { session: Session | null }) {
         ${sidebarOpen ? 'lg:pl-sidebar' : 'lg:pl-sidebar-sm'}
       `}
     >
-      <div className="p-4 md:p-6 animate-fade-in">
-        <div className="mx-auto w-full">{content}</div>
+      <div className="p-3 sm:p-4 md:p-6 animate-fade-in">
+        <div className="mx-auto w-full max-w-7xl">{content}</div>
       </div>
       <button
         onClick={toggleSidebar}
-        className="mobile-orbit-menu fixed z-40 lg:hidden rounded-2xl shadow-2xl flex items-center justify-center border border-white/10"
+        className="mobile-orbit-menu fixed z-40 lg:hidden rounded-2xl shadow-2xl flex items-center justify-center border border-white/10 touch-manipulation"
         style={{ width: '52px', height: '52px' }}
         aria-label="Open navigation"
       >

@@ -1,0 +1,42 @@
+{
+  "name": "Stellar Global Ops Center",
+  "short_name": "SGS Ops",
+  "description": "Internal operational control center and multi-agent AI workforce dashboard for Stellar Global Supplies.",
+  "start_url": "/",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone"],
+  "orientation": "any",
+  "theme_color": "#0f172a",
+  "background_color": "#0f172a",
+  "scope": "/",
+  "lang": "en-US",
+  "dir": "ltr",
+  "categories": ["business", "productivity"],
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [],
+  "shortcuts": [
+    {
+      "name": "AI Agents",
+      "short_name": "Agents",
+      "description": "Open the multi-agent AI workspace",
+      "url": "/agents",
+      "icons": [{ "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml" }]
+    },
+    {
+      "name": "Data Ingestion",
+      "short_name": "Ingest",
+      "description": "Upload sales and purchase data",
+      "url": "/ingest",
+      "icons": [{ "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml" }]
+    }
+  ],
+  "related_applications": [],
+  "prefer_related_applications": false
+}

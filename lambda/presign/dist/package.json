@@ -1,0 +1,22 @@
+{
+  "name": "stellar-lambda-presign",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Generates S3 pre-signed PUT URLs for secure direct browser uploads",
+  "scripts": {
+    "build": "esbuild src/handler.ts --bundle --platform=node --target=node22 --format=cjs --outfile=dist/handler.js --external:@aws-sdk/*",
+    "postbuild": "cp package.json dist/",
+    "dev": "ts-node src/handler.ts",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.600.0",
+    "@aws-sdk/s3-request-presigner": "^3.600.0"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.140",
+    "@types/node": "^20.14.9",
+    "esbuild": "^0.23.0",
+    "typescript": "^5.5.3"
+  }
+}

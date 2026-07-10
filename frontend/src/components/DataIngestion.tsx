@@ -269,7 +269,7 @@ function DropZone({ onFiles }: { onFiles: (files: File[]) => void }) {
       onClick={() => fileInputRef.current?.click()}
       className={`
         relative cursor-pointer select-none rounded-2xl border-2 border-dashed
-        transition-all duration-200 p-10 flex flex-col items-center justify-center gap-4
+        transition-all duration-200 p-6 sm:p-10 flex flex-col items-center justify-center gap-3 sm:gap-4
         ${dragging
           ? 'border-indigo-400 bg-indigo-950/40 scale-[1.01]'
           : 'border-slate-700 bg-slate-900/40 hover:border-slate-500 hover:bg-slate-900/60'
@@ -293,18 +293,18 @@ function DropZone({ onFiles }: { onFiles: (files: File[]) => void }) {
 
       <div
         className={`
-          w-16 h-16 rounded-2xl flex items-center justify-center transition-all duration-200
+          w-12 h-12 sm:w-16 sm:h-16 rounded-2xl flex items-center justify-center transition-all duration-200
           ${dragging ? 'bg-indigo-500/20 text-indigo-300 scale-110' : 'bg-slate-800 text-slate-400'}
         `}
       >
-        <CloudUpload size={28} />
+        <CloudUpload size={24} />
       </div>
 
-      <div className="text-center">
-        <p className="text-base font-semibold text-slate-200">
+      <div className="text-center px-4">
+        <p className="text-sm sm:text-base font-semibold text-slate-200">
           {dragging ? 'Drop to upload' : 'Drop files here'}
         </p>
-        <p className="text-sm text-slate-400 mt-1">
+        <p className="text-xs sm:text-sm text-slate-400 mt-1">
           or <span className="text-indigo-400 underline underline-offset-2">click to browse</span>
         </p>
         <p className="text-2xs text-slate-600 mt-2">
@@ -418,21 +418,22 @@ export default function DataIngestion() {
   const errorJobs     = jobs.filter((j) => j.status === 'error');
 
   return (
-    <div className="max-w-4xl space-y-6">
+    <div className="max-w-4xl space-y-4 sm:space-y-6">
       {/* Page header */}
       <div>
-        <h2 className="text-xl font-bold text-slate-100">Data Ingestion</h2>
-        <p className="text-sm text-slate-400 mt-0.5">
+        <h2 className="text-lg sm:text-xl font-bold text-slate-100">Data Ingestion</h2>
+        <p className="text-xs sm:text-sm text-slate-400 mt-0.5">
           Upload sales CSV or JSON files directly to S3 — Lambda parses and stores records in DynamoDB automatically.
         </p>
       </div>
 
       {/* Pipeline info banner */}
-      <div className="flex items-start gap-3 px-4 py-3 rounded-xl bg-indigo-950/40 border border-indigo-800/40">
-        <Info size={16} className="text-indigo-400 shrink-0 mt-0.5" />
+      <div className="flex items-start gap-3 px-3 sm:px-4 py-3 rounded-xl bg-indigo-950/40 border border-indigo-800/40">
+        <Info size={14} className="text-indigo-400 shrink-0 mt-0.5" />
         <div className="text-xs text-indigo-300/80 space-y-0.5">
           <p className="font-semibold text-indigo-300">Secure upload pipeline</p>
-          <p>Files are uploaded directly to S3 via a short-lived pre-signed URL — bypassing the API Gateway entirely for large files. The ingestion Lambda is triggered automatically via S3 ObjectCreated events and batch-writes records to DynamoDB.</p>
+          <p className="hidden sm:block">Files are uploaded directly to S3 via a short-lived pre-signed URL — bypassing the API Gateway entirely for large files. The ingestion Lambda is triggered automatically via S3 ObjectCreated events and batch-writes records to DynamoDB.</p>
+          <p className="sm:hidden">Upload directly to S3. Lambda automatically parses and stores in DynamoDB.</p>
         </div>
       </div>
 

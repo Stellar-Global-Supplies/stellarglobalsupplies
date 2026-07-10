@@ -1,0 +1,22 @@
+{
+  "name": "stellar-lambda-google-auth",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Handles Google OAuth 2.0 consent URL generation and callback token exchange for personal Calendar/Gmail access",
+  "scripts": {
+    "build": "esbuild src/handler.ts --bundle --platform=node --target=node22 --format=cjs --outfile=dist/handler.js --external:@aws-sdk/*",
+    "postbuild": "cp package.json dist/",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.600.0",
+    "@aws-sdk/client-ssm": "^3.600.0",
+    "@aws-sdk/lib-dynamodb": "^3.600.0"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.140",
+    "@types/node": "^20.14.9",
+    "esbuild": "^0.23.0",
+    "typescript": "^5.5.3"
+  }
+}
