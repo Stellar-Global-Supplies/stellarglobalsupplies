@@ -5,6 +5,7 @@
   "description": "S3-triggered Lambda that parses SGS accounting exports and upserts records to Supabase",
   "scripts": {
     "build": "esbuild src/handler.ts --bundle --platform=node --target=node22 --format=cjs --outfile=dist/handler.js --external:@aws-sdk/*",
+    "postbuild": "cp package.json dist/",
     "type-check": "tsc --noEmit"
   },
   "dependencies": {

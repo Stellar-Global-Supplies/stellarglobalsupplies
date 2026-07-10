@@ -5,6 +5,7 @@
   "description": "Handles Google OAuth 2.0 consent URL generation and callback token exchange for personal Calendar/Gmail access",
   "scripts": {
     "build": "esbuild src/handler.ts --bundle --platform=node --target=node22 --format=cjs --outfile=dist/handler.js --external:@aws-sdk/*",
+    "postbuild": "cp package.json dist/",
     "type-check": "tsc --noEmit"
   },
   "dependencies": {

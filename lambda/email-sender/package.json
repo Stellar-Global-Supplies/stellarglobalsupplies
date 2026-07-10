@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "build": "npx esbuild src/handler.ts --bundle --platform=node --target=node22 --outfile=dist/handler.js --external:@aws-sdk/*",
+    "postbuild": "cp package.json dist/",
     "prebuild": "rm -rf dist"
   },
   "dependencies": {

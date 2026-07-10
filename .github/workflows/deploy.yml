@@ -184,7 +184,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Download all four Lambda dist folders
+      # Download all Lambda dist folders
       - name: Download lambda-presign dist
         uses: actions/download-artifact@v4
         with:
@@ -208,6 +208,18 @@ jobs:
         with:
           name: lambda-email-sender-dist
           path: lambda/email-sender/dist/
+
+      - name: Download lambda-google-auth dist
+        uses: actions/download-artifact@v4
+        with:
+          name: lambda-google-auth-dist
+          path: lambda/google-auth/dist/
+
+      - name: Download lambda-social-poster dist
+        uses: actions/download-artifact@v4
+        with:
+          name: lambda-social-poster-dist
+          path: lambda/social-poster/dist/
 
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4

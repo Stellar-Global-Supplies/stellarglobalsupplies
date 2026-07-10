@@ -5,6 +5,7 @@
   "description": "Generates S3 pre-signed PUT URLs for secure direct browser uploads",
   "scripts": {
     "build": "esbuild src/handler.ts --bundle --platform=node --target=node22 --format=cjs --outfile=dist/handler.js --external:@aws-sdk/*",
+    "postbuild": "cp package.json dist/",
     "dev": "ts-node src/handler.ts",
     "type-check": "tsc --noEmit"
   },
