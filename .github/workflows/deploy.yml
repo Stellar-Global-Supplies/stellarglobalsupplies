@@ -221,10 +221,10 @@ jobs:
           name: lambda-social-poster-dist
           path: lambda/social-poster/dist/
       
-      - name: Download docs-drive dist
+      - name: Download lambda-doc-drive dist
         uses: actions/download-artifact@v4
         with:
-          name: lambda-drive-docs-dist
+          name: lambda-doc-drive-dist
           path: lambda/doc-drive/dist/
 
       - name: Configure AWS credentials (OIDC)
