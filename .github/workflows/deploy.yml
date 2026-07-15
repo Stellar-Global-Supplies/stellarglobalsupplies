@@ -124,7 +124,7 @@ jobs:
     strategy:
       fail-fast: false   # ← one Lambda failure must NOT cancel the others
       matrix:
-        lambda: [presign, ingest, agent-router, google-auth, email-sender, social-poster]
+        lambda: [presign, ingest, agent-router, google-auth, email-sender, social-poster, doc-drive]
 
     steps:
       - name: Checkout
