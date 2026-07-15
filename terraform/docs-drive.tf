@@ -215,8 +215,8 @@ resource "aws_iam_role_policy" "docs_drive_permissions" {
 # Zip the built handler (CI/CD builds lambda/docs-drive/dist/handler.js first)
 data "archive_file" "docs_drive" {
   type        = "zip"
-  source_dir  = "${path.module}/../lambda/docs-drive/dist"
-  output_path = "${path.module}/../lambda/docs-drive/docs-drive.zip"
+  source_dir  = "${path.module}/../lambda/doc-drive/dist"
+  output_path = "${path.module}/../lambda/doc-drive/doc-drive.zip"
 }
 
 resource "aws_lambda_function" "docs_drive" {
