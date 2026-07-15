@@ -183,6 +183,215 @@ stellarglobalsupplies/
 
 ---
 
+---
+
+## Design System & Theme
+
+Every page in this project follows a consistent dark-themed design system. Follow these conventions when creating new pages.
+
+### Color Palette
+
+| Token            | Tailwind Class       | Hex       | Usage                                    |
+|------------------|----------------------|-----------|------------------------------------------|
+| **Primary**      | `sgs-green`          | `#00B98E` | Brand color, active nav items, accents   |
+| **Secondary**    | `sgs-cyan`           | `#00E5FF` | Highlights, secondary accents            |
+| **Background**   | `sgs-navy`           | `#020617` | Main page background                     |
+| **Card BG**      | `slate-800/60`       | `#1e293b` | Glass card backgrounds (60% opacity)     |
+| **Text Primary** | `slate-100`          | `#f1f5f9` | Main body text, headings                 |
+| **Text Muted**   | `slate-400`          | `#94a3b8` | Secondary text, descriptions             |
+| **Text Dim**     | `slate-500`          | `#64748b` | Labels, metadata                         |
+| **Success**      | `emerald-400`        | `#34d399` | Positive statuses, delivered, accepted   |
+| **Warning**      | `amber-400`          | `#fbbf24` | In-progress statuses, sent, processing   |
+| **Error**        | `red-400`            | `#f87171` | Rejected, pending, failed statuses       |
+| **Info**         | `indigo-400`         | `#818cf8` | Informational badges, Order Received     |
+
+### Agent-Specific Colors
+
+| Agent               | Tailwind Class     | Hex       |
+|---------------------|--------------------|-----------|
+| Sales Analyst       | `agent-analyst`    | `#6366f1` |
+| Sales Strategist    | `agent-strategist` | `#8b5cf6` |
+| Business Analyst    | `agent-business`   | `#06b6d4` |
+| Cloud Engineer      | `agent-cloud`      | `#f59e0b` |
+| Marketing Manager   | `agent-marketing`  | `#10b981` |
+| Executive Assistant | `agent-executive`  | `#ef4444` |
+
+### Typography
+
+```css
+/* Font families */
+font-sans: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+font-mono: "JetBrains Mono", "Fira Code", Consolas, monospace;
+
+/* Font sizes */
+text-3xl: 30px / 36px → Page titles (h1)
+text-2xl: 24px / 32px → Section headers (h2)
+text-xl:  20px / 28px → Card titles (h3)
+text-sm:  14px / 20px → Body text
+text-xs:  12px / 16px → Table cells, secondary text
+text-2xs: 10px / 14px → Labels, badges, metadata
+
+/* Font weights */
+font-black  → 900  (headings)
+font-bold   → 700  (subheadings)
+font-medium → 500  (body text)
+font-normal → 400  (secondary text)
+```
+
+### Glass Card Pattern
+
+The standard card component used across all pages:
+
+```tsx
+// Standard card container
+<div className="glass-card p-5 space-y-4">
+  {/* content */}
+</div>
+
+// Card with glow effect (for KPI widgets)
+<div className="glass-card p-5 card-glow">
+  {/* KPI content */}
+</div>
+```
+
+These classes are defined in `frontend/src/index.css`:
+```css
+.glass-card {
+  background: rgba(15, 23, 42, 0.8);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(51, 65, 85, 0.4);
+  border-radius: 1rem;
+  box-shadow: 0 32px 96px rgba(0, 0, 0, 0.6);
+}
+
+.glass-card:hover {
+  border-color: rgba(0, 185, 142, 0.15);
+}
+```
+
+### Common Component Patterns
+
+**Buttons:**
+```tsx
+// Standard button
+<button className="flex items-center gap-2 px-3 py-1.5 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 transition-colors">
+  Label
+</button>
+
+// Primary action button (Refresh, Submit)
+<button className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-medium rounded-lg transition-colors">
+  Action
+</button>
+```
+
+**Data Tables:**
+```tsx
+<table className="w-full text-xs">
+  <thead>
+    <tr className="text-slate-500 text-left border-b border-slate-800">
+      <th className="p-3 font-medium">Column</th>
+      <th className="p-3 font-medium text-right">Amount</th>
+    </tr>
+  </thead>
+  <tbody>
+    {rows.map(row => (
+      <tr key={row.id} className="border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors">
+        <td className="p-3 text-slate-300">Value</td>
+        <td className="p-3 text-right text-slate-200 tabular-nums">₹1,234</td>
+      </tr>
+    ))}
+  </tbody>
+</table>
+```
+
+**Status Badges:**
+```tsx
+<span className="px-2 py-0.5 rounded text-2xs font-medium uppercase"
+  style={{ backgroundColor: `${color}20`, color: color }}>
+  STATUS
+</span>
+```
+
+**Search Bar:**
+```tsx
+<div className="flex items-center gap-3 px-4 py-2.5 bg-slate-800/60 rounded-xl border border-slate-700">
+  <Search size={16} className="text-slate-500 shrink-0" />
+  <input
+    type="text"
+    placeholder="Search..."
+    className="flex-1 bg-transparent text-sm text-slate-200 placeholder-slate-500 outline-none"
+  />
+</div>
+```
+
+**KPI Cards:**
+```tsx
+<div className="kpi-card p-5">
+  <div className="flex items-start justify-between mb-3">
+    <p className="text-xs font-medium text-slate-400 uppercase tracking-wide">Metric</p>
+    <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"
+      style={{ backgroundColor: '#10b98120', color: '#10b981' }}>
+      <Icon size={18} />
+    </div>
+  </div>
+  <p className="text-2xl font-bold text-slate-100 tabular-nums">₹1.2M</p>
+</div>
+```
+
+### Layout & Spacing
+
+```css
+/* Page container - always use this wrapper */
+<div className="space-y-6 max-w-7xl">
+
+/* Sidebar widths */
+w-sidebar:    268px (open)
+w-sidebar-sm: 68px  (collapsed)
+
+/* Header height */
+h-header: 64px
+
+/* Standard spacing */
+gap-4:  16px → Between cards in grids
+gap-3:  12px → Between related elements
+gap-2:  8px  → Between icons and labels
+p-5:   20px → Card padding
+p-3:   12px → Table cell padding
+p-4:   16px → Section padding
+space-y-6: 24px → Between sections
+```
+
+### Key Animations
+
+```css
+animate-fade-in:  0.35s ease-out → Page content entrance
+animate-slide-up: 0.30s ease-out → Notification toasts
+animate-shimmer:  2.2s linear    → Skeleton loading states
+animate-spin-slow: 6s linear     → Loading spinner
+```
+
+### Quick Reference: Tailwind Classes
+
+| Purpose              | Classes to Use                                     |
+|----------------------|----------------------------------------------------|
+| Page wrapper         | `space-y-6 max-w-7xl`                             |
+| Page title           | `text-xl font-bold text-slate-100`                |
+| Section description  | `text-sm text-slate-400 mt-0.5`                   |
+| Card container       | `glass-card p-5`                                   |
+| KPI card             | `kpi-card`                                          |
+| Table header cell    | `text-2xs font-medium text-slate-500 uppercase tracking-wider px-4 py-3` |
+| Table data cell      | `text-xs text-slate-300 px-4 py-3`                |
+| Right-aligned number | `text-right tabular-nums`                          |
+| Status badge         | `text-2xs px-2 py-0.5 rounded font-medium`        |
+| Monospace text       | `font-mono`                                        |
+| Search bar wrapper   | `flex items-center gap-3 px-4 py-2.5 bg-slate-800/60 rounded-xl border border-slate-700` |
+| Empty state          | `glass-card p-8 text-center`                       |
+| Loading skeleton     | `rounded-lg bg-slate-800`                          |
+| Error card           | `glass-card p-8 flex flex-col items-center gap-4` |
+| Buttons              | `px-3 py-1.5 text-xs bg-slate-800 hover:bg-slate-700 rounded-lg border border-slate-700 transition-colors` |
+| Form select          | `bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 outline-none text-2xs` |
+
+
 ## Adding New Features
 
 ### 1. Adding a New Frontend Page
