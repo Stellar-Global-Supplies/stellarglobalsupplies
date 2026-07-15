@@ -12,6 +12,16 @@ dist/
 build/
 .vite/
 
+# TypeScript build info
+*.tsbuildinfo
+
+# Generated Vite config
+vite.config.d.ts
+vite.config.js
+
+# Lambda build outputs
+lambda/*/dist/
+
 # Environment
 .env
 .env.local

@@ -1,0 +1,21 @@
+{
+  "name": "docs-drive",
+  "version": "1.0.0",
+  "description": "Documents Drive Lambda — list, upload, download, delete, folder ops",
+  "private": true,
+  "scripts": {
+    "build": "tsc && esbuild dist/handler.js --bundle --minify --platform=node --target=node22 --outfile=dist/handler.js --external:@aws-sdk/*",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.600.0",
+    "@aws-sdk/client-s3": "^3.600.0",
+    "@aws-sdk/lib-dynamodb": "^3.600.0",
+    "@aws-sdk/s3-request-presigner": "^3.600.0"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.140",
+    "esbuild": "^0.21.5",
+    "typescript": "^5.5.3"
+  }
+}

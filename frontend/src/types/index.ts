@@ -252,8 +252,6 @@ export interface UploadJob {
 // UI state
 // -----------------------------------------------------------
 
-export type NavSection = 'dashboard' | 'agents' | 'ingest' | 'analytics' | 'meta' | 'inventory' | 'registers' | 'tasks' | 'orders' | 'quotations' | 'web' | 'cloud' | 'monitoring' | 'supabase';
-
 // -----------------------------------------------------------
 // Analytics types (for web traffic and meta marketing)
 // -----------------------------------------------------------
@@ -466,3 +464,16 @@ export interface Quote {
   created_at: string;
   updated_at: string;
 }
+
+export type NavSection =
+  | 'dashboard'
+  | 'agents'
+  | 'ingest'
+  | 'inventory'
+  | 'analytics'
+  | 'registers'
+  | 'meta'
+  | 'tasks'
+  | 'orders'
+  | 'quotations'
+  | 'documents'; 

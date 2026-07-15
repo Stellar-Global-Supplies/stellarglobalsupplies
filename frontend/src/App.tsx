@@ -38,6 +38,7 @@ import AuthPage from '@/components/AuthPage';
 import TasksPage from '@/pages/tasks/TasksPage';
 import OrderSummaryDashboard from '@/components/OrderSummaryDashboard';
 import QuotationsDashboard from '@/components/QuotationsDashboard';
+import DocumentsDrive from './components/DocumentsDrive';
 
 interface NavItem {
   section: NavSection;
@@ -57,6 +58,13 @@ const CEO_ITEMS: NavItem[] = [
   { section: 'tasks',      label: 'Tasks',             Icon: CheckSquare      },
   { section: 'orders',     label: 'Order Summary',     Icon: ClipboardList    },
   { section: 'quotations', label: 'Quotations',        Icon: FileText         },
+  {
+    key: 'documents' as NavSection,
+    label: 'Documents',
+    icon: HardDrive,        // lucide-react icon
+    description: 'File storage & drive',
+  }
+  
 ];
 
 // ─── Notification Toasts ─────────────────────────────────────────────────────
@@ -390,6 +398,7 @@ function MainContent({ session }: { session: Session | null }) {
       case 'tasks':      return <TasksPage />;
       case 'orders':     return <OrderSummaryDashboard />;
       case 'quotations': return <QuotationsDashboard />;
+      case 'documents':  return <DocumentsDrive />;
       case 'web':
       case 'cloud':
       case 'monitoring':
