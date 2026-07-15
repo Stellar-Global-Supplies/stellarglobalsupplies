@@ -21,6 +21,7 @@ import {
   ClipboardList,
   Sun,
   Moon,
+  HardDrive,
 } from 'lucide-react';
 import type { Session } from '@supabase/supabase-js';
 import type { LucideIcon } from 'lucide-react';
@@ -58,12 +59,7 @@ const CEO_ITEMS: NavItem[] = [
   { section: 'tasks',      label: 'Tasks',             Icon: CheckSquare      },
   { section: 'orders',     label: 'Order Summary',     Icon: ClipboardList    },
   { section: 'quotations', label: 'Quotations',        Icon: FileText         },
-  {
-    key: 'documents' as NavSection,
-    label: 'Documents',
-    icon: HardDrive,        // lucide-react icon
-    description: 'File storage & drive',
-  }
+  { section: 'documents', label: 'Documents', Icon: HardDrive },
   
 ];
 
@@ -399,26 +395,6 @@ function MainContent({ session }: { session: Session | null }) {
       case 'orders':     return <OrderSummaryDashboard />;
       case 'quotations': return <QuotationsDashboard />;
       case 'documents':  return <DocumentsDrive />;
-      case 'web':
-      case 'cloud':
-      case 'monitoring':
-      case 'supabase':
-        return (
-          <div className="agent-card p-8 text-center max-w-md mx-auto">
-            <h3 className="text-lg font-semibold text-slate-200 mb-2">Observability Dashboard</h3>
-            <p className="text-sm text-slate-400 mb-4">
-              This dashboard has moved to <code>observe.stellarglobalsupplies.com</code>
-            </p>
-            <a
-              href="https://observe.stellarglobalsupplies.com"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-block px-4 py-2 bg-blue-500 hover:bg-blue-600 rounded-lg text-white text-sm transition-colors"
-            >
-              Open Observability Dashboard
-            </a>
-          </div>
-        );
       default:           return <Dashboard />;
     }
   })();
