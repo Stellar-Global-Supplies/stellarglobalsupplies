@@ -4,7 +4,7 @@
   "description": "Documents Drive Lambda — list, upload, download, delete, folder ops",
   "private": true,
   "scripts": {
-    "build": "tsc && esbuild dist/handler.js --bundle --minify --platform=node --target=node22 --outfile=dist/handler.js --external:@aws-sdk/*",
+    "build": "esbuild src/handler.ts --bundle --minify --platform=node --target=node22 --outfile=dist/handler.js --external:@aws-sdk/*",
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
