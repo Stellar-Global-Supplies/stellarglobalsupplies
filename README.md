@@ -11,228 +11,362 @@ business data and Supabase analytics.
 
 ---
 
-## 📁 Repository Structure
+## Table of Contents
+- [Project Structure](#project-structure)
+- [Tech Stack Overview](#tech-stack-overview)
+- [System Architecture](#system-architecture)
+- [Pages & Features](#pages--features)
+- [Adding New Features](#adding-new-features)
+  - [Adding a New Frontend Page](#1-adding-a-new-frontend-page)
+  - [Adding a New Lambda Function](#2-adding-a-new-lambda-function)
+  - [Adding New Infrastructure](#3-adding-new-infrastructure)
+  - [Adding a New Database Table](#4-adding-a-new-database-table)
+- [Local Development](#local-development)
+- [Deployment Pipeline](#deployment-pipeline)
+- [Security Notes](#security-notes)
+
+---
+
+## Project Structure
 
 ```
-stellar-ops/
-├── ARCHITECTURE.md              # DynamoDB schema + system diagrams
-├── DEPLOY.md                    # Complete deployment guide
-├── README.md                    # This file
-├── LINKEDIN_INTEGRATION.md      # LinkedIn OAuth setup guide
-├── SUPABASE_INGESTION.md        # Supabase data pipeline guide
-├── terraform/                   # Infrastructure as Code
-│   ├── main.tf
-│   ├── variables.tf
-│   ├── outputs.tf
-│   ├── backend.tfbackend.example
-│   └── terraform.tfvars.example
-├── lambda/
-│   ├── presign/                 # S3 pre-signed URL generator
-│   ├── ingest/                  # S3-triggered CSV/JSON → Supabase parser
-│   ├── agent-router/            # Multi-agent Bedrock router + analytics API
-│   ├── google-auth/             # Google OAuth 2.0 flow (Calendar + Gmail)
-│   ├── email-sender/            # SES bulk email via connected Google account
-│   ├── social-poster/           # LinkedIn & Facebook/Instagram posting
-│   ├── s3-cleanup/              # S3 lifecycle cleanup with per-bucket retention
-│   ├── dynamodb-cleanup/        # Old chat message TTL cleanup
-│   ├── aws-costs/               # AWS Cost Explorer API proxy
-│   ├── cur-processor/           # Cost & Usage Report processor
-│   └── api-metrics/             # API monitoring metrics
-├── frontend/                    # React + Vite + TypeScript PWA
+stellarglobalsupplies/
+│
+├── frontend/                         # React + Vite + TypeScript PWA
 │   ├── src/
-│   │   ├── components/          # Dashboard, AgentPanel, DataIngestion, Analytics
-│   │   │   ├── AuthPage.tsx          # Supabase login
-│   │   │   ├── Dashboard.tsx         # CEO sales & purchase dashboard
-│   │   │   ├── AgentPanel.tsx        # 7 AI agent chat workspace
-│   │   │   ├── AwsCostDashboard.tsx  # AWS cost tracking (current month)
-│   │   │   ├── WebTrafficDashboard.tsx # Website traffic (weekly view)
-│   │   │   ├── MetaMarketingDashboard.tsx # Meta ad intelligence
-│   │   │   ├── InventoryDashboard.tsx # Stock level monitoring
-│   │   │   ├── EmailCampaignWidget.tsx # Bulk email campaigns
-│   │   │   ├── LinkedInPostWidget.tsx  # LinkedIn company page posting
-│   │   │   └── InstagramPostWidget.tsx # Instagram posting
-│   │   ├── pages/tasks/TasksPage.tsx   # Marketing task center
-│   │   ├── services/             # Analytics & AWS cost services
-│   │   ├── api/client.ts         # Typed API client (all endpoints)
-│   │   ├── lib/supabase.ts       # Supabase client singleton
-│   │   ├── types/                # Shared TypeScript types
-│   │   ├── store.ts              # Zustand state (nav, notifications, chat)
-│   │   ├── sw.ts                 # Custom service worker logic
-│   │   └── App.tsx               # Root component with auth routing
+│   │   ├── components/               # UI pages & widgets
+│   │   │   ├── AgentPanel.tsx               # 7 AI agent chat workspace
+│   │   │   ├── Analytics.tsx                # Business analytics dashboard
+│   │   │   ├── AuthPage.tsx                 # Supabase login page
+│   │   │   ├── Dashboard.tsx                # CEO command center
+│   │   │   ├── DataIngestion.tsx            # CSV/JSON upload page
+│   │   │   ├── EmailCampaignWidget.tsx      # Bulk email campaigns
+│   │   │   ├── FacebookPostWidget.tsx       # Facebook posting
+│   │   │   ├── InstagramPostWidget.tsx      # Instagram posting
+│   │   │   ├── InventoryDashboard.tsx       # Stock level monitoring
+│   │   │   ├── LinkedInPostWidget.tsx       # LinkedIn posting
+│   │   │   ├── MetaMarketingDashboard.tsx   # Meta ad intelligence
+│   │   │   ├── OrderSummaryDashboard.tsx    # Order management
+│   │   │   ├── QuotationsDashboard.tsx      # Quotations management
+│   │   │   └── SalesPurchaseTable.tsx       # Sales & purchase register
+│   │   ├── pages/tasks/
+│   │   │   └── TasksPage.tsx          # Marketing task center
+│   │   ├── services/                  # API/data service layers
+│   │   │   ├── analytics.ts           # Supabase analytics queries
+│   │   │   ├── orders.ts              # Order CRUD operations
+│   │   │   └── quotes.ts              # Quotation CRUD operations
+│   │   ├── api/client.ts              # Typed API client for Lambda endpoints
+│   │   ├── lib/supabase.ts            # Supabase client singleton
+│   │   ├── types/index.ts             # Shared TypeScript type definitions
+│   │   ├── store.ts                   # Zustand state management
+│   │   ├── App.tsx                    # Root component + routing + sidebar
+│   │   ├── main.tsx                   # Entry point
+│   │   ├── index.css                  # Global styles
+│   │   └── sw.ts                      # Service worker (PWA)
 │   └── public/
-│       ├── manifest.json
-│       └── offline.html
-├── supabase/                    # Supabase schema & migrations
-└── .github/workflows/deploy.yml # CI/CD pipeline (13 Lambdas)
+│       ├── manifest.json              # PWA manifest
+│       └── offline.html               # Offline fallback
+│
+├── lambda/                             # 13 serverless Lambda functions
+│   ├── presign/                        # S3 pre-signed URL generator
+│   ├── ingest/                         # S3 → CSV/JSON parser → Supabase + DynamoDB
+│   ├── agent-router/                   # Multi-agent Bedrock router
+│   ├── google-auth/                    # Google OAuth 2.0 flow
+│   ├── email-sender/                   # SES bulk email
+│   ├── social-poster/                  # LinkedIn + Facebook/Instagram posting
+│   └── ... (other internal lambdas)
+│
+├── terraform/                          # Infrastructure as Code
+│   ├── main.tf                         # All AWS resource definitions
+│   ├── variables.tf                    # Input variables
+│   ├── outputs.tf                      # Output values
+│   └── terraform.tfvars.example        # Variable template
+│
+├── supabase/
+│   └── schema.sql                      # Complete Supabase schema (tables, views, RLS)
+│
+├── .github/workflows/
+│   └── deploy.yml                      # CI/CD pipeline
+│
+├── ai_context/                         # AI documentation for social posts
+│   ├── overview.md                     # Project overview
+│   ├── tech-stack.md                   # Technology breakdown
+│   ├── features.md                     # Core features
+│   ├── engineering.md                  # Architecture & decisions
+│   └── ui.md                          # UI documentation
+│
+├── ai_prompt.md                        # Guide for creating ai_context/ files
+├── ARCHITECTURE.md                     # DynamoDB schema & access patterns
+├── DEPLOY.md                           # Deployment guide
+├── LINKEDIN_INTEGRATION.md             # LinkedIn OAuth setup
+└── SUPABASE_INGESTION.md               # Data pipeline guide
 ```
 
 ---
 
-## 🏗️ Architecture Summary
+## Tech Stack Overview
 
-```
-Browser (PWA) → CloudFront → S3 (frontend — static assets)
-              → API Gateway (HTTP API v2) → Lambda (agent-router)
-              │                              → DynamoDB + Bedrock + Supabase
-              ├─► S3 (raw-ingest/) → Lambda (ingest) → Supabase
-              ├─► Lambda (google-auth) → Google OAuth → DynamoDB
-              └─► Lambda (social-poster) → LinkedIn/Meta APIs
-```
-
-### Recent Updates
-
-| Change | Description |
-|--------|-------------|
-| **Supabase auth in sidebar** | Sidebar now shows the actual logged-in user's name, initials, and email from Supabase instead of hardcoded "Manager" |
-| **Per-bucket S3 retention** | `stellarglobal-cf-logs` → 7 days; other buckets → 2 days |
-| **Web Traffic simplified** | Removed monthly toggle — always shows last 7 days (weekly view) |
-| **AWS Costs simplified** | Removed month/year selector — always shows current month data |
-| **13 Lambda functions** | Full serverless suite: presign, ingest, agent-router, google-auth, aws-costs, dynamodb-cleanup, email-sender, cur-processor, social-poster, api-metrics, s3-cleanup |
-| **Supabase data pipeline** | CSV/JSON uploads ingested to Supabase with authenticated read policies |
-| **Social media posting** | LinkedIn company page + Facebook/Instagram posting with OAuth connect flows |
-| **Bulk email campaigns** | SES-based bulk email with file attachments via connected Google account |
-
-See [`ARCHITECTURE.md`](./ARCHITECTURE.md) for the full DynamoDB single-table
-design, access patterns, and entity schemas.
+| Layer           | Technology                                        |
+|-----------------|---------------------------------------------------|
+| **Frontend**    | React 18.3.1, TypeScript 5.5, Vite 5.3.2, Tailwind CSS 3.4.6 |
+| **State**       | Zustand 4.5.4, React Query 5.45.0                |
+| **Backend**     | AWS Lambda (Node.js 22+, ARM64 Graviton2), API Gateway HTTP API v2 |
+| **Database 1**  | Supabase (PostgreSQL 16) — analytics & auth       |
+| **Database 2**  | DynamoDB — operational data & AI agent context    |
+| **Storage**     | S3 — frontend hosting + raw data ingestion        |
+| **AI/ML**       | AWS Bedrock — Claude Sonnet 4.5 / Amazon Nova Pro |
+| **Auth**        | Supabase Auth (email/password), Google OAuth 2.0  |
+| **Infrastructure** | Terraform ≥ 1.5, CloudFront CDN                 |
+| **CI/CD**       | GitHub Actions (13 Lambda zips + Terraform + frontend deploy) |
 
 ---
 
-## 🚀 One-Time Setup
+## System Architecture
 
-### 1. Prerequisites
+```
+┌────────────────────────────────────────────────────────────────────┐
+│                       Browser (PWA)                                │
+│   React + Vite + Tailwind CSS + Zustand + React Query              │
+└───────────┬────────────────────────────────────┬──────────────────┘
+            │ (HTTPS)                             │ (HTTPS)
+            ▼                                     ▼
+    ┌──────────────┐                    ┌──────────────────┐
+    │  CloudFront   │                    │  API Gateway v2  │
+    │    CDN        │                    │  HTTP API        │
+    └──────┬───────┘                    └────────┬─────────┘
+           │                                     │
+           ▼                                     ▼
+    ┌──────────────┐                    ┌──────────────────┐
+    │ S3 (Static   │                    │  Lambda Router   │
+    │   Assets)    │                    │  (agent-router)  │
+    └──────────────┘                    └────────┬─────────┘
+                                                 │
+          ┌──────────────────────────────────────┼──────────────────────┐
+          │                                      │                      │
+          ▼                                      ▼                      ▼
+  ┌──────────────┐                     ┌──────────────────┐   ┌──────────────┐
+  │  DynamoDB    │                     │  AWS Bedrock     │   │  Supabase    │
+  │  - Orders    │                     │  (Claude/Nova)   │   │  PostgreSQL  │
+  │  - Quotes    │                     │  Multi-agent     │   │  - Analytics │
+  │  - Chat MSG  │                     │  orchestration   │   │  - auth      │
+  │  - Inventory │                     └──────────────────┘   └──────────────┘
+  └──────────────┘
 
-- AWS account with permissions to create S3, CloudFront, Route53, API
-  Gateway, Lambda, DynamoDB, IAM, SSM resources
-- An existing **Route 53 hosted zone** for `stellarglobalsupplies.com`
-- An **ACM certificate** issued in **us-east-1** covering
-  `ops.stellarglobalsupplies.com` (required for CloudFront)
-- **AWS Bedrock access** (Claude Sonnet 4.5 model — uses IAM authentication, no API key needed)
-- Node.js 22+, Terraform ≥ 1.5, AWS CLI configured
+  Data Ingestion Pipeline:
+  S3 (raw-ingest/) → Lambda (ingest) → DynamoDB + Supabase
+```
 
-### 2. Terraform state backend
+### Data Flow
 
-Create an S3 bucket + DynamoDB table for Terraform state locking (one-time,
-can be done manually or via a small bootstrap script):
+1. **Static content**: CloudFront → S3 (React PWA bundle)
+2. **Analytics data**: Frontend → Supabase direct (read-only, RLS enforced)
+3. **Operational data**: Frontend → API Gateway → Lambda → DynamoDB
+4. **AI agent chat**: Frontend → API Gateway → agent-router Lambda → DynamoDB + Bedrock
+5. **Data ingestion**: CSV/JSON upload → S3 pre-signed URL → Lambda (ingest) → DynamoDB + Supabase
 
+---
+
+## Pages & Features
+
+| Page              | Route         | Purpose                                     |
+|-------------------|---------------|---------------------------------------------|
+| Command Center    | `/dashboard`  | CEO KPI dashboard with revenue charts       |
+| AI Agents         | `/agents`     | 7 specialized AI agent chat workspace       |
+| Data Ingest       | `/ingest`     | CSV/JSON file upload for data processing    |
+| Inventory         | `/inventory`  | Stock level monitoring with alerts          |
+| Analytics         | `/analytics`  | Business analytics with monthly breakdowns  |
+| Sales & Purchase  | `/registers`  | Transaction register with filters           |
+| Meta Marketing    | `/meta`       | Facebook/Instagram ad performance            |
+| Tasks             | `/tasks`      | Marketing task management                   |
+| Order Summary     | `/orders`     | Customer order tracking with GST            |
+| Quotations        | `/quotations` | Customer quotations with pricing & GST      |
+
+---
+
+## Adding New Features
+
+### 1. Adding a New Frontend Page
+
+**Step 1: Add TypeScript types** → `frontend/src/types/index.ts`
+```typescript
+export interface NewFeature {
+  id: string;
+  name: string;
+  // ... fields matching your database table
+}
+```
+
+**Step 2: Add the NavSection** → same file
+```typescript
+export type NavSection = 'dashboard' | 'agents' | ... | 'your-feature';
+```
+
+**Step 3: Create a service** → `frontend/src/services/your-feature.ts`
+```typescript
+import { supabase } from '@/lib/supabase';
+import type { NewFeature } from '@/types';
+
+export async function fetchYourFeature(): Promise<NewFeature[]> {
+  const { data, error } = await supabase
+    .from('your_table')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (error) throw new Error(error.message);
+  return data ?? [];
+}
+```
+
+**Step 4: Create the component** → `frontend/src/components/YourFeatureDashboard.tsx`
+- Follow the pattern from `OrderSummaryDashboard.tsx` or `QuotationsDashboard.tsx`
+- Use `@tanstack/react-query` for data fetching
+- Use the same glass-card design pattern
+
+**Step 5: Add routing** → `frontend/src/App.tsx`
+- Import your component
+- Add to `CEO_ITEMS` array with an appropriate `lucide-react` icon
+- Add a `case` in the `MainContent` switch statement
+
+### 2. Adding a New Lambda Function
+
+**Step 1: Create the Lambda directory**
 ```bash
-aws s3 mb s3://your-terraform-state-bucket --region ap-south-1
-aws s3api put-bucket-versioning --bucket your-terraform-state-bucket \
-  --versioning-configuration Status=Enabled
-
-aws dynamodb create-table \
-  --table-name your-terraform-lock-table \
-  --attribute-definitions AttributeName=LockID,AttributeType=S \
-  --key-schema AttributeName=LockID,KeyType=HASH \
-  --billing-mode PAY_PER_REQUEST \
-  --region ap-south-1
+mkdir -p lambda/your-function/src
+cd lambda/your-function
+npm init -y
+npm install --save @aws-sdk/client-dynamodb @aws-sdk/lib-dynamodb
+npm install --save-dev typescript @types/aws-lambda esbuild
 ```
 
-### 3. GitHub Secrets
+**Step 2: Add tsconfig.json**
+```json
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "commonjs",
+    "outDir": "dist",
+    "strict": true,
+    "esModuleInterop": true
+  },
+  "include": ["src"]
+}
+```
 
-Configure these in your repository's **Settings → Secrets and variables →
-Actions**:
+**Step 3: Create handler** → `lambda/your-function/src/handler.ts`
+```typescript
+import { Handler } from 'aws-lambda';
+export const handler: Handler = async (event) => {
+  return { statusCode: 200, body: JSON.stringify({ message: 'ok' }) };
+};
+```
 
-| Secret                       | Description                                      |
-|------------------------------|---------------------------------------------------|
-| `AWS_ACCESS_KEY_ID`          | IAM user/role access key with deploy permissions  |
-| `AWS_SECRET_ACCESS_KEY`      | Corresponding secret key                          |
-| `AWS_REGION`                 | e.g. `ap-south-1`                                  |
-| `TF_BACKEND_BUCKET`          | Terraform state S3 bucket name                    |
-| `TF_BACKEND_REGION`          | Region of the state bucket                        |
-| `TF_BACKEND_DYNAMODB_TABLE`  | Terraform lock table name                         |
-| `TF_VAR_route53_zone_id`     | Route53 hosted zone ID for stellarglobalsupplies.com |
-| `TF_VAR_acm_certificate_arn` | ACM cert ARN (us-east-1)                          |
-| `TF_VAR_bedrock_model_id`    | AWS Bedrock model ID (default: Claude Sonnet 4.5) |
-| `TF_VAR_google_oauth_client_id`     | Google OAuth 2.0 Client ID (see step 5 below)  |
-| `TF_VAR_google_oauth_client_secret` | Google OAuth 2.0 Client Secret                 |
+**Step 4: Add build script to package.json**
+```json
+{
+  "scripts": {
+    "build": "tsc && esbuild dist/handler.js --bundle --minify --outfile=dist/handler.js --platform=node --target=node22"
+  }
+}
+```
 
-### 4. Google OAuth — Executive Assistant Calendar/Gmail access
+**Step 5: Wire up in Terraform** → `terraform/main.tf`
+- Add a new `aws_lambda_function` resource
+- Add `data.archive_file` to zip the dist/
+- Add any needed IAM permissions
+- Add API Gateway route if exposing via HTTP
 
-The Executive Assistant agent can create real Google Calendar events and
-send real Gmail messages on your behalf, once you connect **your personal
-Google account**.
+**Step 6: Update CI/CD** → `.github/workflows/deploy.yml`
+- Add build step for the new Lambda
+- Add it to the deployment sequence
 
-1. Go to the [Google Cloud Console → Credentials](https://console.cloud.google.com/apis/credentials)
-   (create a new project if you don't have one — this can be a free,
-   personal Google Cloud project; no billing required for this usage tier)
-2. **Enable APIs**: APIs & Services → Library → enable the **Google Calendar
-   API** and the **Gmail API**
-3. **OAuth consent screen**: set User type to "External", fill in the basic
-   app info, and add your personal Gmail address as a **Test user** (this
-   keeps the app in "Testing" mode, which is fine for personal use — tokens
-   just need re-consent every 7 days unless you publish the app)
-4. **Create credentials** → OAuth client ID → Application type: **Web
-   application**
-5. You won't have the exact redirect URI until after the first deploy. Do a
-   first `terraform apply` (it will succeed even with a placeholder redirect
-   URI registered), then run:
-   ```bash
-   terraform output google_oauth_redirect_uri
-   ```
-   Copy that value into the OAuth client's **Authorized redirect URIs** list
-   in the Google Cloud Console, and save.
-6. Copy the generated **Client ID** and **Client Secret** into
-   `TF_VAR_google_oauth_client_id` / `TF_VAR_google_oauth_client_secret`
-   (GitHub Secrets) or `terraform.tfvars` for local runs.
+### 3. Adding New Infrastructure
 
-**Connecting your account in the app:** open the **AI Agents** tab → select
-**Executive Assistant** → click **Connect Google** in the banner at the top
-of the chat. You'll be redirected to Google's consent screen, then back to
-the app. From then on, the agent can:
+**Step 1: Edit Terraform** → `terraform/main.tf`
+```hcl
+# Example: Adding a new DynamoDB table
+resource "aws_dynamodb_table" "your_table" {
+  name         = "your-table-name"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "id"
 
-- `create_calendar_event` — schedule meetings on your primary calendar
-- `list_upcoming_calendar_events` — check your availability
-- `send_email` — send email via Gmail
-- `list_recent_emails` — read recent inbox messages for meeting synopses
+  attribute {
+    name = "id"
+    type = "S"
+  }
+}
+```
 
-Your refresh token is stored encrypted at rest in DynamoDB
-(`USER#<your-user-id> / GOOGLE_TOKEN#v0`), scoped to only these four actions —
-the agent **cannot** read your full mailbox, delete data, or change account
-settings. You can revoke access anytime via the **Disconnect** button in the
-same banner, or by removing the app at
-https://myaccount.google.com/permissions.
+**Step 2: Add dynamic names** → `terraform/variables.tf`
+```hcl
+variable "your_table_name" {
+  description = "Name for the new table"
+  type        = string
+  default     = "your-table-${terraform.workspace}"
+}
+```
 
-### 5. Deploy
+**Step 3: Output ARNs** → `terraform/outputs.tf`
+```hcl
+output "your_table_arn" {
+  value = aws_dynamodb_table.your_table.arn
+}
+```
 
-Push to `main` — the GitHub Actions workflow will:
-
-1. Build all 13 Lambda functions
-2. Run `terraform apply` to provision/update all AWS infrastructure
-3. Build the React PWA with the live API Gateway endpoint injected
-4. Sync the build to S3 with correct cache headers
-5. Invalidate the CloudFront cache
-
+**Step 4: Run Terraform**
 ```bash
-git push origin main
+cd terraform
+terraform plan   # Preview changes
+terraform apply  # Apply changes
 ```
 
-Or trigger manually via **Actions → Deploy → Run workflow**.
+### 4. Adding a New Database Table
+
+**Supabase (PostgreSQL)** — `supabase/schema.sql`
+```sql
+create table public.your_table (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+-- Add RLS
+alter table public.your_table enable row level security;
+create policy "Authenticated users can read" on public.your_table
+  for select to authenticated using (true);
+```
+
+**DynamoDB** — via Terraform (see Adding New Infrastructure above)
 
 ---
 
-## 🧪 Local Development
+## Local Development
 
 ### Frontend
 
 ```bash
 cd frontend
 npm install
-npm run dev
+npm run dev        # Vite dev server at localhost:5173
+npm run type-check # TypeScript type checking
+npm run build      # Production build
 ```
 
 Create `frontend/.env.local`:
 ```
 VITE_API_BASE_URL=https://your-api-id.execute-api.ap-south-1.amazonaws.com
+VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_SUPABASE_ANON_KEY=your-anon-key
 ```
 
-### Lambda functions
+### Lambda Functions
 
-Each Lambda has its own `package.json`:
+Each Lambda has its own `package.json` and build process:
 
 ```bash
-cd lambda/agent-router
+cd lambda/your-function
 npm install
-npm run build      # produces dist/handler.js (bundled, ready for zip)
+npm run build      # Produces dist/handler.js (bundled)
 npm run type-check
 ```
 
@@ -240,17 +374,52 @@ npm run type-check
 
 ```bash
 cd terraform
-cp terraform.tfvars.example terraform.tfvars   # fill in real values
-cp backend.tfbackend.example backend.tfbackend # fill in real values
+cp terraform.tfvars.example terraform.tfvars   # Fill in values
+cp backend.tfbackend.example backend.tfbackend # Fill in values
 
-# Build lambda dist/ folders first (terraform zips them)
+# Build all Lambda dist/ folders first (terraform zips them)
+./build-lambdas.sh  # or build each one manually
+
 terraform init -backend-config=backend.tfbackend
 terraform plan
+terraform apply
 ```
 
 ---
 
-## 🤖 AI Agents
+## Deployment Pipeline
+
+The GitHub Actions workflow (`.github/workflows/deploy.yml`) runs on every push to `main`:
+
+1. **Build all 13 Lambda functions** — `npm install && npm run build` for each
+2. **Terraform apply** — Provisions/updates all AWS infrastructure
+3. **Build React PWA** — `npm run build` with live API URL injection
+4. **S3 sync** — Upload built frontend to S3 with cache headers
+5. **CloudFront invalidation** — Clear CDN cache for immediate updates
+
+### Triggering Deploy
+
+```bash
+git push origin main                       # Auto-deploy
+# OR
+GitHub → Actions → Deploy → Run workflow   # Manual trigger
+```
+
+---
+
+## Security Notes
+
+- S3 buckets are **private** — frontend served only via CloudFront OAC
+- All IAM roles follow least-privilege per Lambda function
+- API Gateway CORS locked to `https://ops.stellarglobalsupplies.com`
+- Supabase RLS enforces row-level access control
+- Secrets stored in **AWS SSM Parameter Store** (encrypted at rest)
+- Google OAuth tokens stored encrypted in DynamoDB with 30-day TTL
+- HTTPS enforced via ACM certificate + CloudFront
+
+---
+
+## AI Agents
 
 | Agent                  | Focus                                                              |
 |------------------------|---------------------------------------------------------------------|
@@ -262,148 +431,33 @@ terraform plan
 | **Executive Assistant** | Meeting agendas, calendar scheduling, follow-up synopses, Gmail     |
 | **Demand Forecaster**   | Inventory requirements, seasonal trends, procurement timing         |
 
-Every agent prompt is dynamically grounded with a live summary of sales
-records, top SKUs, top customers, monthly revenue, and material split
-pulled directly from DynamoDB — preventing hallucinated figures.
+Each agent gets a **live data snapshot** (sales records, top customers, revenue) injected into the system prompt before every Bedrock call, preventing hallucinated figures.
 
 ---
 
-## 📊 Data Ingestion
+## Documentation Index
 
-Upload sales/purchase CSV or JSON files via the **Data Ingest** tab. Expected
-CSV columns:
-
-```
-Invoice_ID, Date, Customer_Name, Product_SKU, Quantity, Unit_Price, Total_Amount, Material_Type (SS/MS)
-```
-
-Pipeline: Frontend requests a pre-signed S3 URL → uploads directly to
-`raw-ingest/` → S3 `ObjectCreated` event triggers the `ingest` Lambda →
-streams and validates rows → batch-writes to DynamoDB → updates monthly
-analytics snapshots.
+| File | Description |
+|------|-------------|
+| `ARCHITECTURE.md` | DynamoDB single-table design & access patterns |
+| `DEPLOY.md` | One-time setup & deployment instructions |
+| `LINKEDIN_INTEGRATION.md` | LinkedIn OAuth configuration |
+| `SUPABASE_INGESTION.md` | Supabase data pipeline guide |
+| `ai_prompt.md` | Template for creating `ai_context/` files |
+| `ai_context/` | Project documentation for AI social posts |
 
 ---
 
-## 🔒 Security Notes
+## Quick Reference: Common Tasks
 
-- Both S3 buckets are fully private; the frontend bucket is only readable by
-  CloudFront via Origin Access Control (OAC)
-- AWS Bedrock uses IAM role-based authentication — no API key needed. The Lambda's
-  IAM role must have `bedrock:InvokeModel` permission
-- All IAM roles follow least-privilege — each Lambda can only access the
-  exact DynamoDB/S3/SSM resources it needs
-- API Gateway CORS is locked to `https://ops.stellarglobalsupplies.com`
-
----
-
-## 🛡️ Security Review & Best Practices
-
-### ✅ What's Already Secure
-
-1. **Authentication & Authorization**
-   - Supabase authentication with email/password — users must log in to access the app
-   - Row-level security policies in Supabase — users can only read their own data
-   - Anonymous Supabase key (`VITE_SUPABASE_ANON_KEY`) is client-side safe — it only allows access to public data
-   - Service role key (`VITE_SUPABASE_SERVICE_ROLE_KEY`) is stored as an environment variable and only used server-side in Lambda functions — never exposed to the browser
-
-2. **AWS Infrastructure**
-   - S3 buckets are **private** — no public access
-   - Frontend bucket served only through CloudFront with Origin Access Control (OAC)
-   - IAM roles follow least-privilege — each Lambda can only access its required resources
-   - Secrets (Google OAuth client ID/secret, Supabase URL, service role key) stored in **AWS SSM Parameter Store** with encryption at rest
-   - API Gateway CORS restricted to `https://ops.stellarglobalsupplies.com` — no wildcard
-
-3. **Data Protection**
-   - DynamoDB encryption at rest enabled by default
-   - Google OAuth refresh tokens stored encrypted in DynamoDB (SSE)
-   - S3 objects encrypted with SSE-S3 or SSE-KMS
-   - HTTPS enforced via CloudFront + ACM certificate in `us-east-1`
-
-4. **OAuth Scopes (Google Calendar/Gmail)**
-   - Minimal scopes requested: `calendar.events`, `gmail.send`, `gmail.readonly`, `openid`, `email`
-   - No full mailbox access, no delete permissions, no admin access
-   - Tokens automatically expire after 30 days (DynamoDB TTL on messages)
-
-5. **CI/CD Security**
-   - GitHub Actions secrets encrypted at rest
-   - No credentials committed to the repository
-   - Terraform state stored in encrypted S3 with DynamoDB locking
-
----
-
-### ⚠️ Areas for Improvement
-
-1. **No Rate Limiting on API Gateway**
-   - **Current**: API Gateway routes are open without rate limiting or throttling
-   - **Risk**: Vulnerable to abuse, DDoS, or brute-force attacks
-   - **Recommendation**: Enable API Gateway throttling (e.g., 100 requests/second per user) and consider AWS WAF for bot protection
-
-2. **No Input Sanitization on Chat Messages**
-   - **Current**: User messages are sent directly to Bedrock without content filtering
-   - **Risk**: Prompt injection attacks, XSS if chat messages are rendered without sanitization
-   - **Recommendation**: 
-     - Add input validation/sanitization before rendering user messages
-     - Consider AWS Bedrock Guardrails for content filtering
-     - Implement length limits on user messages (e.g., max 4,000 characters)
-
-3. **Broad CORS Configuration on S3 Cleanup Lambda**
-   - **Current**: `Access-Control-Allow-Origin: *`
-   - **Risk**: Any origin can make cross-origin requests to this endpoint
-   - **Recommendation**: Restrict CORS to `https://ops.stellarglobalsupplies.com`
-
-4. **No Audit Logging**
-   - **Current**: No centralized audit trail for user actions (login, data uploads, agent chats, OAuth connections)
-   - **Recommendation**: Enable CloudTrail for API Gateway, Lambda, and DynamoDB; log authentication events to CloudWatch or a dedicated audit table in DynamoDB
-
-5. **No MFA Enforcement**
-   - **Current**: Supabase login relies on email/password only — no MFA required
-   - **Risk**: Credential stuffing, phishing attacks
-   - **Recommendation**: Enable MFA in Supabase project settings (free feature)
-
-6. **Frontend API Keys Exposed**
-   - **Current**: `VITE_API_BASE_URL` and `VITE_SUPABASE_ANON_KEY` are embedded in the built JavaScript bundle
-   - **Risk**: Anyone can inspect the built frontend and extract these values
-   - **Note**: This is acceptable for public APIs when paired with proper backend authorization. The Supabase anon key is safe because Supabase row-level security enforces access control.
-
-7. **Google OAuth Token Scope is Minimal but Monitor for Abuse**
-   - **Current**: Restricted to Calendar events + Gmail send/readonly
-   - **Risk**: If token is compromised, attacker could send emails as the user
-   - **Recommendation**: 
-     - Monitor Gmail "Sent" folder for unexpected activity
-     - Implement a confirmation step before sending emails via the agent
-
-8. **No Content Security Policy (CSP) Headers**
-   - **Current**: No CSP headers configured
-   - **Risk**: XSS attacks via malicious scripts
-   - **Recommendation**: Add CSP headers via CloudFront response headers policy
-
-9. **AWS Cost Exposure**
-   - **Current**: No daily cost alerts or billing alerts configured
-   - **Risk**: Unexpected cost spikes from Bedrock API abuse
-   - **Recommendation**: Set up AWS Budgets alerts at 50%, 80%, and 100% of expected monthly spend
-
-10. **Lambda IAM Roles Overly Broad**
-    - **Current**: Some Lambdas may have broader permissions than needed (e.g., `agent-router` needs DynamoDB read/write + Bedrock + SSM + S3)
-    - **Recommendation**: Review Terraform IAM policies regularly; split `agent-router` into multiple smaller functions if possible
-
----
-
-### 📋 Security Checklist
-
-- [ ] Enable API Gateway throttling + AWS WAF
-- [x] Add input sanitization for chat messages
-- [x] Restrict S3 cleanup CORS to allowlisted domain
-- [ ] Enable CloudTrail + CloudWatch audit logging
-- [ ] Enable MFA for all Supabase users
-- [ ] Implement confirmation flow for email sending
-- [x] Add CSP headers via CloudFront
-- [ ] Set up AWS Budgets alerts
-- [ ] Review and tighten Lambda IAM policies
-- [ ] Implement rate limiting on `/agents/{id}/chat` endpoint
-- [ ] Add bot detection/captcha for login page
-- [ ] Regularly rotate SSM Parameter Store secrets
-
----
-
-**Last security review**: June 2026  
-**Next review recommended**: December 2026 (or after any major infrastructure changes)
+| Task | Command / Location |
+|------|--------------------|
+| Add a page | Create component in `frontend/src/components/` + add to `App.tsx` |
+| Add a Supabase query | Create service in `frontend/src/services/` |
+| Add a TypeScript type | Edit `frontend/src/types/index.ts` |
+| Add a Lambda | Create `lambda/your-function/` + add to `terraform/main.tf` |
+| Add infrastructure | Edit `terraform/main.tf` |
+| Run type-check | `cd frontend && npm run type-check` |
+| Run locally | `cd frontend && npm run dev` |
+| Deploy | Push to `main` (auto-deploys via GitHub Actions) |
+| Update Supabase schema | Edit `supabase/schema.sql` and run in Supabase SQL editor |
