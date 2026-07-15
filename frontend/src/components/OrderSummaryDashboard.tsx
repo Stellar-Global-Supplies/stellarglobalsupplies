@@ -121,68 +121,80 @@ function OrdersTable({ orders }: { orders: Order[] }) {
               <th className="p-3 font-medium">Material</th>
               <th className="p-3 font-medium text-right">Qty</th>
               <th className="p-3 font-medium text-right">Cost</th>
+              <th className="p-3 font-medium text-right">CGST</th>
+              <th className="p-3 font-medium text-right">SGST</th>
+              <th className="p-3 font-medium text-right">Total</th>
               <th className="p-3 font-medium">Payment</th>
               <th className="p-3 font-medium">Status</th>
               <th className="p-3 font-medium">Date</th>
             </tr>
           </thead>
           <tbody>
-            {orders.map((order) => (
-              <tr key={order.id} className="border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors">
-                <td className="p-3 font-mono text-slate-300">
-                  {order.id.slice(0, 8)}
-                </td>
-                <td className="p-3">
-                  <div>
-                    <p className="text-slate-200 font-medium">{order.customer_name}</p>
-                    <p className="text-2xs text-slate-500">{order.phone}</p>
-                  </div>
-                </td>
-                <td className="p-3 text-slate-300">{order.product_type}</td>
-                <td className="p-3">
-                  <span
-                    className="px-2 py-0.5 rounded text-2xs font-medium"
-                    style={{
-                      backgroundColor: order.material === 'SS' ? '#6366f120' : '#06b6d420',
-                      color: order.material === 'SS' ? '#818cf8' : '#22d3ee',
-                    }}
-                  >
-                    {order.material}
-                  </span>
-                </td>
-                <td className="p-3 text-right text-slate-300 tabular-nums">
-                  {order.quantity} {order.unit}
-                </td>
-                <td className="p-3 text-right text-slate-200 font-medium tabular-nums">
-                  {fmt(order.sale_cost)}
-                </td>
-                <td className="p-3">
-                  <span
-                    className="px-2 py-0.5 rounded text-2xs font-medium"
-                    style={{
-                      backgroundColor: `${getPaymentColor(order.payment_status)}20`,
-                      color: getPaymentColor(order.payment_status),
-                    }}
-                  >
-                    {order.payment_status}
-                  </span>
-                </td>
-                <td className="p-3">
-                  <span
-                    className="px-2 py-0.5 rounded text-2xs font-medium"
-                    style={{
-                      backgroundColor: `${getStatusColor(order.status)}20`,
-                      color: getStatusColor(order.status),
-                    }}
-                  >
-                    {order.status}
-                  </span>
-                </td>
-                <td className="p-3 text-slate-400 text-2xs">
-                  {format(parseISO(order.created_at), 'MMM dd, yyyy')}
-                </td>
-              </tr>
-            ))}
+              {orders.map((order) => (
+                <tr key={order.id} className="border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors">
+                  <td className="p-3 font-mono text-slate-300">
+                    {order.id.slice(0, 8)}
+                  </td>
+                  <td className="p-3">
+                    <div>
+                      <p className="text-slate-200 font-medium">{order.customer_name}</p>
+                      <p className="text-2xs text-slate-500">{order.phone}</p>
+                    </div>
+                  </td>
+                  <td className="p-3 text-slate-300">{order.product_type}</td>
+                  <td className="p-3">
+                    <span
+                      className="px-2 py-0.5 rounded text-2xs font-medium"
+                      style={{
+                        backgroundColor: order.material === 'SS' ? '#6366f120' : '#06b6d420',
+                        color: order.material === 'SS' ? '#818cf8' : '#22d3ee',
+                      }}
+                    >
+                      {order.material}
+                    </span>
+                  </td>
+                  <td className="p-3 text-right text-slate-300 tabular-nums">
+                    {order.quantity} {order.unit}
+                  </td>
+                  <td className="p-3 text-right text-slate-200 font-medium tabular-nums">
+                    {fmt(order.sale_cost)}
+                  </td>
+                  <td className="p-3 text-right text-slate-300 tabular-nums">
+                    {fmt(order.cgst_total)}
+                  </td>
+                  <td className="p-3 text-right text-slate-300 tabular-nums">
+                    {fmt(order.sgst_total)}
+                  </td>
+                  <td className="p-3 text-right text-slate-200 font-semibold tabular-nums">
+                    {fmt(order.sale_cost + order.cgst_total + order.sgst_total)}
+                  </td>
+                  <td className="p-3">
+                    <span
+                      className="px-2 py-0.5 rounded text-2xs font-medium"
+                      style={{
+                        backgroundColor: `${getPaymentColor(order.payment_status)}20`,
+                        color: getPaymentColor(order.payment_status),
+                      }}
+                    >
+                      {order.payment_status}
+                    </span>
+                  </td>
+                  <td className="p-3">
+                    <span
+                      className="px-2 py-0.5 rounded text-2xs font-medium"
+                      style={{
+                        backgroundColor: `${getStatusColor(order.status)}20`,
+                        color: getStatusColor(order.status),
+                      }}
+                    >
+                      {order.status}
+                    </span>
+                  </td>
+                  <td className="p-3 text-slate-400 text-2xs">
+                    {format(parseISO(order.created_at), 'MMM dd, yyyy')}
+                  </td>
+                </tr>
+              ))}
           </tbody>
         </table>
       </div>

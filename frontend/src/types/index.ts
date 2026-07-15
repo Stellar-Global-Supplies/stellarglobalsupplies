@@ -252,7 +252,7 @@ export interface UploadJob {
 // UI state
 // -----------------------------------------------------------
 
-export type NavSection = 'dashboard' | 'agents' | 'ingest' | 'analytics' | 'meta' | 'inventory' | 'registers' | 'tasks' | 'orders' | 'web' | 'cloud' | 'monitoring' | 'supabase';
+export type NavSection = 'dashboard' | 'agents' | 'ingest' | 'analytics' | 'meta' | 'inventory' | 'registers' | 'tasks' | 'orders' | 'quotations' | 'web' | 'cloud' | 'monitoring' | 'supabase';
 
 // -----------------------------------------------------------
 // Analytics types (for web traffic and meta marketing)
@@ -387,6 +387,8 @@ export interface Order {
   quantity:        number;
   unit:            UnitType;
   sale_cost:       number;
+  cgst_total:      number;
+  sgst_total:      number;
   payment_status:  PaymentStatus;
   delivery_timeline: string | null;  // ISO date string
   status:          OrderStatus;
@@ -412,4 +414,55 @@ export interface OrderFilters {
   year?: number;
   month?: number;
   status?: OrderStatus;
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Quotation Management types
+// ────────────────────────────────────────────────────────────────────────────
+
+export type QuoteStatus = 'draft' | 'sent' | 'accepted' | 'rejected';
+
+export interface QuoteCustomer {
+  id: string;
+  company_name: string;
+  gst_number: string;
+  address: string;
+  city?: string;
+  pin_code?: string;
+  state: string;
+  state_code: string;
+  contact_person?: string;
+  contact_number?: string;
+  email?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface QuoteItem {
+  name: string;
+  quantity: number;
+  unit_price: number;
+  amount: number;
+}
+
+export interface Quote {
+  id: string;
+  quote_number: string;
+  customer_id: string;
+  date: string;
+  expiry_date?: string;
+  items: QuoteItem[];
+  sub_total: number;
+  igst_rate: number;
+  cgst_rate: number;
+  sgst_rate: number;
+  igst_amount: number;
+  cgst_amount: number;
+  sgst_amount: number;
+  grand_total: number;
+  notes?: string;
+  status: QuoteStatus;
+  quote_customers?: QuoteCustomer;
+  created_at: string;
+  updated_at: string;
 }
