@@ -22,6 +22,7 @@ import {
   Sun,
   Moon,
   HardDrive,
+  Activity,
 } from 'lucide-react';
 import type { Session } from '@supabase/supabase-js';
 import type { LucideIcon } from 'lucide-react';
@@ -40,6 +41,7 @@ import TasksPage from '@/pages/tasks/TasksPage';
 import OrderSummaryDashboard from '@/components/OrderSummaryDashboard';
 import QuotationsDashboard from '@/components/QuotationsDashboard';
 import DocumentsDrive from './components/DocumentsDrive';
+import WorkflowAnalytics from '@/components/WorkflowAnalytics';
 
 interface NavItem {
   section: NavSection;
@@ -60,7 +62,7 @@ const CEO_ITEMS: NavItem[] = [
   { section: 'orders',     label: 'Order Summary',     Icon: ClipboardList    },
   { section: 'quotations', label: 'Quotations',        Icon: FileText         },
   { section: 'documents', label: 'Documents', Icon: HardDrive },
-  
+  { section: 'workflow-analytics', label: 'Workflow Analytics', Icon: Activity },
 ];
 
 // ─── Notification Toasts ─────────────────────────────────────────────────────
@@ -395,6 +397,7 @@ function MainContent({ session }: { session: Session | null }) {
       case 'orders':     return <OrderSummaryDashboard />;
       case 'quotations': return <QuotationsDashboard />;
       case 'documents':  return <DocumentsDrive />;
+      case 'workflow-analytics': return <WorkflowAnalytics />;
       default:           return <Dashboard />;
     }
   })();

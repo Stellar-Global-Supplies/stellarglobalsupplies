@@ -476,4 +476,79 @@ export type NavSection =
   | 'tasks'
   | 'orders'
   | 'quotations'
-  | 'documents'; 
+  | 'documents'
+  | 'workflow-analytics';
+
+// ────────────────────────────────────────────────────────────────────────────
+// Workflow Analytics types
+// ────────────────────────────────────────────────────────────────────────────
+
+export interface WorkflowAnalyticsData {
+  leads: {
+    total: number;
+    recent30: number;
+    by_status: Record<string, number>;
+    conversion_rate: number;
+    by_industry: { industry: string; count: number }[];
+    daily_30: { date: string; count: number }[];
+    emails_sent: number;
+    follow_ups: number;
+    initial_emails: number;
+  };
+  social_posts: {
+    total: number;
+    by_status: Record<string, number>;
+    by_type: Record<string, number>;
+    platform_counts: Record<string, number>;
+    published_week: number;
+    in_pipeline: number;
+    ready_to_publish: number;
+    weekly_8: { week: string; count: number }[];
+  };
+  blog_posts: {
+    total: number;
+    by_status: Record<string, number>;
+    published_rate: number;
+    top_tags: { tag: string; count: number }[];
+    monthly_6: { month: string; count: number }[];
+  };
+  approvals: {
+    pending: number;
+    approval_rate: number;
+    avg_review_hours: number;
+    expired: number;
+    by_workflow_type: Record<string, number>;
+    daily_30: { date: string; approved: number; rejected: number }[];
+  };
+  workflow_runs: {
+    total: number;
+    succeeded: number;
+    failed: number;
+    running: number;
+    success_rate_by_type: { workflow_type: string; succeeded: number; total: number; rate: number }[];
+    avg_duration_min: number;
+    active_runs: { workflow_type: string; started_at: string }[];
+    recent_failed: { workflow_type: string; started_at: string }[];
+    daily_30: { date: string; succeeded: number; failed: number; running: number }[];
+  };
+  schedules: {
+    total: number;
+    active: number;
+    paused: number;
+    by_frequency: Record<string, number>;
+    by_type: Record<string, number>;
+    list: WorkflowScheduleEntry[];
+  };
+}
+
+export interface WorkflowScheduleEntry {
+  id: string;
+  label: string;
+  workflow_type: string;
+  frequency: string;
+  enabled: boolean;
+  run_time: string;
+  days_of_week: string[] | null;
+  day_of_month: number | null;
+  created_at: string;
+}
