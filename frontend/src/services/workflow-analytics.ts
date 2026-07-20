@@ -61,7 +61,7 @@ export async function fetchDashboard(): Promise<DashboardData> {
     // Workflow runs
     supabase
       .from('workflow_runs')
-      .select('id, workflow_type, status, started_at, completed_at, duration_ms, cost_usd, error_message')
+      .select('id, workflow_type, status, started_at, completed_at, cost_usd')
       .order('started_at', { ascending: false })
       .limit(500),
   ]);
@@ -163,7 +163,7 @@ export async function fetchWorkflowAnalytics(
 
     supabase
       .from('workflow_runs')
-      .select('id, workflow_type, status, started_at, completed_at')
+      .select('id, workflow_type, status, started_at, completed_at, cost_usd')
       .order('started_at', { ascending: false })
       .limit(500),
   ]);
@@ -306,6 +306,16 @@ export async function fetchWorkflowAnalytics(
     .filter(r => r.status === 'failed' && new Date(r.started_at) >= new Date(weekAgo))
     .map(r => ({ workflow_type: r.workflow_type, started_at: r.started_at }));
 
+  // Transform workflow runs to match WorkflowAnalyticsData type
+  const transformedWorkflowRuns = workflowRuns.slice(0, 20).map((run) => ({
+    id: run.id,
+    workflow_type: run.workflow_type,
+    status: run.status,
+    started_at: run.started_at,
+    completed_at: run.completed_at || undefined,
+    cost_usd: run.cost_usd || undefined,
+  }));
+
   // Daily run volume (last 30 days)
   const dailyRunMap: Record<string, { succeeded: number; failed: number; running: number }> = {};
   for (const r of workflowRuns) {
@@ -384,7 +394,7 @@ export async function fetchWorkflowAnalytics(
       active_runs: activeRuns,
       recent_failed: recentFailed,
       daily_30: runDaily30,
-      recent: workflowRuns.slice(0, 20),
+      recent: transformedWorkflowRuns,
     },
     schedules,
   };
