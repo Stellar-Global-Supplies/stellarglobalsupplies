@@ -47,7 +47,10 @@ export async function fetchOrderSummary(filters?: OrderFilters): Promise<OrderSu
 
   // Calculate summary metrics
   const totalOrders = orders.length;
-  const totalRevenue = orders.reduce((sum, o) => sum + o.sale_cost, 0);
+  // Total sales = sale_cost + cgst_total + sgst_total + igst_total
+  const totalRevenue = orders.reduce((sum, o) => 
+    sum + o.sale_cost + o.cgst_total + o.sgst_total + (o.igst_total ?? 0), 0
+  );
   const pendingOrders = orders.filter(o => o.status === 'Order Received' || o.status === 'Processing').length;
   const deliveredOrders = orders.filter(o => o.status === 'Delivered').length;
   const avgOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;

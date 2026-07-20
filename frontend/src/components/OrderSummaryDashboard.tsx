@@ -123,6 +123,7 @@ function OrdersTable({ orders }: { orders: Order[] }) {
               <th className="p-3 font-medium text-right">Cost</th>
               <th className="p-3 font-medium text-right">CGST</th>
               <th className="p-3 font-medium text-right">SGST</th>
+              <th className="p-3 font-medium text-right">IGST</th>
               <th className="p-3 font-medium text-right">Total</th>
               <th className="p-3 font-medium">Payment</th>
               <th className="p-3 font-medium">Status</th>
@@ -165,8 +166,11 @@ function OrdersTable({ orders }: { orders: Order[] }) {
                   <td className="p-3 text-right text-slate-300 tabular-nums">
                     {fmt(order.sgst_total)}
                   </td>
+                  <td className="p-3 text-right text-slate-300 tabular-nums">
+                    {fmt(order.igst_total ?? 0)}
+                  </td>
                   <td className="p-3 text-right text-slate-200 font-semibold tabular-nums">
-                    {fmt(order.sale_cost + order.cgst_total + order.sgst_total)}
+                    {fmt(order.sale_cost + order.cgst_total + order.sgst_total + (order.igst_total ?? 0))}
                   </td>
                   <td className="p-3">
                     <span

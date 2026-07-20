@@ -387,6 +387,7 @@ export interface Order {
   sale_cost:       number;
   cgst_total:      number;
   sgst_total:      number;
+  igst_total?:     number;  // Optional - for inter-state sales
   payment_status:  PaymentStatus;
   delivery_timeline: string | null;  // ISO date string
   status:          OrderStatus;
