@@ -61,7 +61,7 @@ export async function fetchDashboard(): Promise<DashboardData> {
     // Workflow runs
     supabase
       .from('workflow_runs')
-      .select('workflow_type, status, started_at, completed_at, duration_ms, cost_usd, error_message')
+      .select('id, workflow_type, status, started_at, completed_at, duration_ms, cost_usd, error_message')
       .order('started_at', { ascending: false })
       .limit(500),
   ]);
@@ -101,109 +101,16 @@ export async function fetchDashboard(): Promise<DashboardData> {
 
   // Approval stats
   const pendingApprovals = approvals.filter(a => a.status === 'pending').length;
-  const reviewed = approvals.filter(a => ['approved', 'rejected'].includes(a.status));
-  const approvedAll = approvals.filter(a => a.status === 'approved');
-  const approvalRate = reviewed.length > 0
-    ? (approvedAll.length / reviewed.length * 100)
-    : 0;
 
-  const reviewTimes = reviewed
-    .filter(a => a.reviewed_at)
-    .map(a => new Date(a.reviewed_at!).getTime() - new Date(a.created_at).getTime());
-  const avgReviewMs = reviewTimes.length > 0
-    ? reviewTimes.reduce((s, t) => s + t, 0) / reviewTimes.length
-    : 0;
-  const avgReviewHrs = avgReviewMs / 1000 / 60 / 60;
-
-  // Workflow run stats
-  const succeededRuns = workflowRuns.filter((r) => r.status === 'succeeded').length;
-  const failedRuns = workflowRuns.filter((r) => r.status === 'failed').length;
-  const runningRuns = workflowRuns.filter((r) => r.status === 'running').length;
-  const totalRuns = workflowRuns.length;
-
-  const successRateMap: Record<string, { succeeded: number; total: number }> = {};
-  for (const r of workflowRuns) {
-    if (!successRateMap[r.workflow_type]) {
-      successRateMap[r.workflow_type] = { succeeded: 0, total: 0 };
-    }
-    successRateMap[r.workflow_type].total++;
-    if (r.status === 'succeeded') successRateMap[r.workflow_type].succeeded++;
-  }
-  const successRateByType = Object.entries(successRateMap).map(([workflow_type, data]) => ({
-    workflow_type,
-    ...data,
-    rate: data.total > 0 ? (data.succeeded / data.total) * 100 : 0,
+  // Transform workflow runs to match DashboardData type
+  const transformedWorkflowRuns = workflowRuns.slice(0, 20).map((run) => ({
+    id: run.id,
+    workflow_type: run.workflow_type,
+    status: run.status,
+    started_at: run.started_at,
+    completed_at: run.completed_at || undefined,
+    cost_usd: run.cost_usd || undefined,
   }));
-
-  const completedRuns = workflowRuns.filter(r => r.completed_at && r.started_at);
-  const durations = completedRuns.map(r =>
-    new Date(r.completed_at!).getTime() - new Date(r.started_at).getTime()
-  );
-  const avgDurationMs = durations.length > 0
-    ? durations.reduce((s, d) => s + d, 0) / durations.length
-    : 0;
-  const avgDurationMin = avgDurationMs / 1000 / 60;
-
-  const activeRuns = workflowRuns
-    .filter(r => r.status === 'running')
-    .map(r => ({ workflow_type: r.workflow_type, started_at: r.started_at }));
-
-  const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-  const recentFailed = workflowRuns
-    .filter(r => r.status === 'failed' && new Date(r.started_at) >= new Date(weekAgo))
-    .map(r => ({ workflow_type: r.workflow_type, started_at: r.started_at }));
-
-  // Daily run volume (last 30 days)
-  const dailyRunMap: Record<string, { succeeded: number; failed: number; running: number }> = {};
-  for (const r of workflowRuns) {
-    const day = r.started_at?.slice(0, 10);
-    if (!day) continue;
-    if (!dailyRunMap[day]) dailyRunMap[day] = { succeeded: 0, failed: 0, running: 0 };
-    if (r.status === 'succeeded') dailyRunMap[day].succeeded++;
-    if (r.status === 'failed') dailyRunMap[day].failed++;
-    if (r.status === 'running') dailyRunMap[day].running++;
-  }
-  const runDaily30: { date: string; succeeded: number; failed: number; running: number }[] = [];
-  for (let i = 29; i >= 0; i--) {
-    const d = new Date(Date.now() - i * 24 * 60 * 60 * 1000);
-    const key = d.toISOString().slice(0, 10);
-    const entry = dailyRunMap[key] || { succeeded: 0, failed: 0, running: 0 };
-    runDaily30.push({ date: key, ...entry });
-  }
-
-  // Email stats (placeholder - would need email_drafts table)
-  const sentEmails = 0;
-  const followUps = 0;
-  const initialEmails = 0;
-
-  // Recent leads (last 30 days)
-  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-  const recentLeads = leads.filter(l => new Date(l.created_at) >= new Date(thirtyDaysAgo)).length;
-
-  // Conversion rate
-  const conversionRate = totalLeads > 0
-    ? (byStatus.converted || 0) / totalLeads * 100
-    : 0;
-
-  // Published this week
-  const weekAgoDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-  const publishedWeek = socialPosts.filter(p => p.posted_at && new Date(p.posted_at) >= new Date(weekAgoDate)).length;
-
-  const inPipeline = (postByStatus.pending_approval || 0) + (postByStatus.publishing || 0);
-  const readyToPublish = postByStatus.approved_manual || 0;
-
-  const publishedBlogs = blogByStatus.published || 0;
-  const blogPublishedRate = totalBlogs > 0 ? (publishedBlogs / totalBlogs) * 100 : 0;
-
-  // Build empty schedules (not provided by current schema)
-  const schedules = {
-    total: 0,
-    active: 0,
-    paused: 0,
-    by_frequency: {},
-    by_type: {},
-    list: [],
-  };
 
   return {
     leads: {
@@ -223,7 +130,7 @@ export async function fetchDashboard(): Promise<DashboardData> {
       total_usd: 0,
       by_type: {},
     },
-    workflow_runs: workflowRuns.slice(0, 20),
+    workflow_runs: transformedWorkflowRuns,
   };
 }
 
@@ -256,7 +163,7 @@ export async function fetchWorkflowAnalytics(
 
     supabase
       .from('workflow_runs')
-      .select('workflow_type, status, started_at, completed_at')
+      .select('id, workflow_type, status, started_at, completed_at')
       .order('started_at', { ascending: false })
       .limit(500),
   ]);
@@ -416,6 +323,15 @@ export async function fetchWorkflowAnalytics(
     const entry = dailyRunMap[key] || { succeeded: 0, failed: 0, running: 0 };
     runDaily30.push({ date: key, ...entry });
   }
+
+  const schedules = {
+    total: 0,
+    active: 0,
+    paused: 0,
+    by_frequency: {},
+    by_type: {},
+    list: [],
+  };
 
   return {
     leads: {
