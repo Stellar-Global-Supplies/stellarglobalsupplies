@@ -45,8 +45,8 @@ export async function fetchDashboard(): Promise<DashboardData> {
 
     // Social posts
     supabase
-      .from('social_posts')
-      .select('type, platform, platforms, status, created_at, posted_at'),
+      .from('ops_social_posts')
+      .select('type, platform, platforms, status, created_at, posted_at, video_url, media_type'),
 
     // Blogs
     supabase
@@ -150,8 +150,8 @@ export async function fetchWorkflowAnalytics(
       .select('status, created_at, industry'),
 
     supabase
-      .from('social_posts')
-      .select('type, platform, platforms, status, created_at, posted_at'),
+      .from('ops_social_posts')
+      .select('type, platform, platforms, status, created_at, posted_at, video_url, media_type'),
 
     supabase
       .from('blog_posts')

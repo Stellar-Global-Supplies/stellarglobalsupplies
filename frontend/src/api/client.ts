@@ -134,16 +134,22 @@ export async function uploadFileToS3(
   });
 }
 
-// Upload an image (for Instagram/Facebook/LinkedIn posts) and return a
-// publicly-fetchable URL. Meta's Graph API fetches image_url itself from
+// Upload media (image or video) for Instagram/Facebook/LinkedIn posts and return a
+// publicly-fetchable URL. Meta's Graph API fetches the URL itself from
 // the public internet, so a private S3 key alone won't work — this returns
 // a presigned GET URL valid for 30 minutes, which is enough time to publish.
-export async function uploadImageForSocialPost(
+export async function uploadMediaForSocialPost(
   file: File,
   onProgress?: (pct: number) => void,
 ): Promise<string> {
-  const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
-  const contentType = allowedTypes.includes(file.type) ? file.type : 'image/jpeg';
+  const imageTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+  const videoTypes = ['video/mp4', 'video/quicktime', 'video/webm', 'video/mpeg', 'video/x-msvideo', 'video/x-ms-wmv'];
+  
+  let contentType = file.type;
+  if (!imageTypes.includes(file.type) && !videoTypes.includes(file.type)) {
+    // Default to image/jpeg for unknown types
+    contentType = 'image/jpeg';
+  }
 
   const presign = await requestPresignedUrl({
     filename: file.name,
@@ -158,6 +164,9 @@ export async function uploadImageForSocialPost(
   }
   return presign.read_url;
 }
+
+// Keep the old function name for backward compatibility
+export const uploadImageForSocialPost = uploadMediaForSocialPost;
 
 export { ApiError };
 
@@ -386,18 +395,26 @@ export async function getFacebookStatus(): Promise<FacebookConnectionStatus> {
   return request<FacebookConnectionStatus>('/social/facebook/status');
 }
 
-export async function postToFacebook(message: string, imageUrl?: string): Promise<{ success: boolean; postId?: string; platform: string }> {
+export async function postToFacebook(message: string, mediaUrl?: string, mediaType?: 'image' | 'video'): Promise<{ success: boolean; postId?: string; platform: string }> {
   return request<{ success: boolean; postId?: string; platform: string }>('/social/facebook/post', {
     method: 'POST',
-    body: JSON.stringify({ message, image_url: imageUrl }),
+    body: JSON.stringify({ 
+      message, 
+      media_url: mediaUrl,
+      media_type: mediaType || 'image'
+    }),
   });
 }
 
 // Instagram (via Facebook Graph API with same token)
-export async function postToInstagram(caption: string, imageUrl: string): Promise<{ success: boolean; postId?: string; platform: string }> {
+export async function postToInstagram(caption: string, mediaUrl: string, mediaType?: 'image' | 'video'): Promise<{ success: boolean; postId?: string; platform: string }> {
   return request<{ success: boolean; postId?: string; platform: string }>('/social/instagram/post', {
     method: 'POST',
-    body: JSON.stringify({ caption, image_url: imageUrl }),
+    body: JSON.stringify({ 
+      caption, 
+      media_url: mediaUrl,
+      media_type: mediaType || 'image'
+    }),
   });
 }
 

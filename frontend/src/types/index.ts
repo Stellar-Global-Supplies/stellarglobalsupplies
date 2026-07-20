@@ -100,7 +100,7 @@ export interface ChatSession {
 
 export interface PresignRequest {
   filename:     string;
-  content_type: 'text/csv' | 'application/json' | 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif';
+  content_type: 'text/csv' | 'application/json' | 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif' | 'video/mp4' | 'video/quicktime' | 'video/webm' | 'video/mpeg' | 'video/x-msvideo' | 'video/x-ms-wmv';
   file_size:    number;
 }
 

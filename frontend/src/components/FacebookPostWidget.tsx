@@ -1,17 +1,19 @@
 import { useState, useCallback } from 'react';
 import { Facebook, Upload, Send, Loader2, XCircle } from 'lucide-react';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { getFacebookStatus, postToFacebook, uploadImageForSocialPost } from '@/api/client';
+import { getFacebookStatus, postToFacebook, uploadMediaForSocialPost } from '@/api/client';
 
 type FacebookPostData = {
   message: string;
-  imageFile?: File | null;
+  mediaFile?: File | null;
+  mediaType?: 'image' | 'video';
 };
 
 export default function FacebookPostWidget() {
   const [message, setMessage] = useState('');
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [mediaFile, setMediaFile] = useState<File | null>(null);
+  const [mediaPreview, setMediaPreview] = useState<string | null>(null);
+  const [mediaType, setMediaType] = useState<'image' | 'video'>('image');
   const [isUploading, setIsUploading] = useState(false);
 
   // Check Facebook connection status (static token - no OAuth)
@@ -20,45 +22,51 @@ export default function FacebookPostWidget() {
     queryFn: () => getFacebookStatus(),
   });
 
-  const handleImageUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleMediaUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (!file.type.startsWith('image/')) {
-      alert('Please select an image file');
+    const isImage = file.type.startsWith('image/');
+    const isVideo = file.type.startsWith('video/');
+    
+    if (!isImage && !isVideo) {
+      alert('Please select an image or video file');
       return;
     }
 
-    setImageFile(file);
-    setImagePreview(URL.createObjectURL(file));
+    setMediaFile(file);
+    setMediaType(isVideo ? 'video' : 'image');
+    setMediaPreview(URL.createObjectURL(file));
     e.target.value = '';
   }, []);
 
-  const removeImage = useCallback(() => {
-    if (imagePreview) {
-      URL.revokeObjectURL(imagePreview);
+  const removeMedia = useCallback(() => {
+    if (mediaPreview) {
+      URL.revokeObjectURL(mediaPreview);
     }
-    setImageFile(null);
-    setImagePreview(null);
-  }, [imagePreview]);
+    setMediaFile(null);
+    setMediaPreview(null);
+    setMediaType('image');
+  }, [mediaPreview]);
 
   const postMutation = useMutation({
     mutationFn: async (data: FacebookPostData) => {
-      let imageUrl: string | undefined;
-      if (data.imageFile) {
+      let mediaUrl: string | undefined;
+      if (data.mediaFile) {
         setIsUploading(true);
         try {
-          imageUrl = await uploadImageForSocialPost(data.imageFile);
+          mediaUrl = await uploadMediaForSocialPost(data.mediaFile);
         } finally {
           setIsUploading(false);
         }
       }
-      return postToFacebook(data.message, imageUrl);
+      return postToFacebook(data.message, mediaUrl, data.mediaType);
     },
     onSuccess: () => {
       setMessage('');
-      setImageFile(null);
-      setImagePreview(null);
+      setMediaFile(null);
+      setMediaPreview(null);
+      setMediaType('image');
     },
     onError: (error: any) => {
       alert(`Failed to post: ${error?.message ?? 'Unknown error'}`);
@@ -75,7 +83,8 @@ export default function FacebookPostWidget() {
 
     postMutation.mutate({
       message: message.trim(),
-      imageFile,
+      mediaFile,
+      mediaType,
     });
   };
 
@@ -122,32 +131,40 @@ export default function FacebookPostWidget() {
           </p>
         </div>
 
-        {/* Image Upload (optional) */}
+        {/* Media Upload (optional) */}
         <div>
           <label className="block text-sm font-medium text-slate-300 mb-2">
-            Image (Optional)
+            Media (Image or Video - Optional)
           </label>
-          {!imageFile ? (
+          {!mediaFile ? (
             <label className="flex items-center gap-2 px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg cursor-pointer hover:border-emerald-400/50 transition-colors">
               <Upload size={14} className="text-slate-400" />
-              <span className="text-xs text-slate-300">Upload image</span>
+              <span className="text-xs text-slate-300">Upload image or video</span>
               <input
                 type="file"
-                accept="image/*"
-                onChange={handleImageUpload}
+                accept="image/*,video/*"
+                onChange={handleMediaUpload}
                 className="hidden"
               />
             </label>
           ) : (
             <div className="relative bg-slate-800/50 border border-slate-700 rounded-lg p-2">
-              <img
-                src={imagePreview!}
-                alt="Preview"
-                className="w-full h-32 object-cover rounded"
-              />
+              {mediaType === 'video' ? (
+                <video
+                  src={mediaPreview!}
+                  controls
+                  className="w-full h-32 object-cover rounded"
+                />
+              ) : (
+                <img
+                  src={mediaPreview!}
+                  alt="Preview"
+                  className="w-full h-32 object-cover rounded"
+                />
+              )}
               <button
                 type="button"
-                onClick={removeImage}
+                onClick={removeMedia}
                 className="absolute top-2 right-2 p-1 bg-red-500/80 hover:bg-red-500 rounded-full"
               >
                 <XCircle size={14} className="text-white" />
@@ -155,7 +172,7 @@ export default function FacebookPostWidget() {
             </div>
           )}
           <p className="text-2xs text-slate-500 mt-1">
-            Add an image to make your post more engaging
+            Add media to make your post more engaging
           </p>
         </div>
 
@@ -168,7 +185,7 @@ export default function FacebookPostWidget() {
           {postMutation.isPending ? (
             <>
               <Loader2 size={16} className="animate-spin" />
-              {isUploading ? 'Uploading image...' : 'Publishing...'}
+              {isUploading ? 'Uploading media...' : 'Publishing...'}
             </>
           ) : (
             <>

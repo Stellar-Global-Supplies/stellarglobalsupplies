@@ -268,7 +268,7 @@ async function handleFacebookStatus(_event: APIGatewayProxyEventV2): Promise<API
 
 async function handlePostToFacebook(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyResultV2> {
   const body: any = event.body ? JSON.parse(event.body) : {};
-  const { message, image_url } = body;
+  const { message, media_url, media_type } = body;
   if (!message) return clientError('Missing message');
 
   const pageToken = await getSsmParam(FACEBOOK_PAGE_TOKEN_PARAM);
@@ -279,38 +279,43 @@ async function handlePostToFacebook(event: APIGatewayProxyEventV2): Promise<APIG
 
   let postId: string;
 
-  if (image_url) {
+  if (media_url) {
     try {
-      const s3Image = await s3.send(new GetObjectCommand({
+      const s3Media = await s3.send(new GetObjectCommand({
         Bucket: ATTACHMENTS_BUCKET,
-        Key: extractAttachmentKey(image_url),
+        Key: extractAttachmentKey(media_url),
       }));
-      const imageBuffer = await s3Image.Body?.transformToByteArray();
+      const mediaBuffer = await s3Media.Body?.transformToByteArray();
 
-      if (imageBuffer) {
+      if (mediaBuffer) {
         const formData = new FormData();
         formData.append('access_token', pageToken);
         formData.append('message', message);
-        formData.append('source', new Blob([imageBuffer]));
+        formData.append('source', new Blob([mediaBuffer]));
         formData.append('published', 'true');
 
-        const photoResp = await fetch(`https://graph.facebook.com/v20.0/${pageId}/photos`, {
+        // Use /videos endpoint for videos, /photos for images
+        const endpoint = media_type === 'video' 
+          ? `https://graph.facebook.com/v20.0/${pageId}/videos`
+          : `https://graph.facebook.com/v20.0/${pageId}/photos`;
+
+        const mediaResp = await fetch(endpoint, {
           method: 'POST',
           body: formData,
         });
 
-        if (!photoResp.ok) {
-          const errBody = await photoResp.text();
+        if (!mediaResp.ok) {
+          const errBody = await mediaResp.text();
           throw new Error(errBody);
         }
 
-        const photoData: any = await photoResp.json();
-        postId = photoData.id;
+        const mediaData: any = await mediaResp.json();
+        postId = mediaData.id;
       } else {
-        throw new Error('Failed to read image from S3');
+        throw new Error('Failed to read media from S3');
       }
     } catch (e) {
-      console.error('Facebook photo post failed, falling back to text:', e);
+      console.error('Facebook media post failed, falling back to text:', e);
       const feedResp = await fetch(`https://graph.facebook.com/v20.0/${pageId}/feed`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -341,8 +346,8 @@ async function handlePostToFacebook(event: APIGatewayProxyEventV2): Promise<APIG
 
 async function handlePostToInstagram(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyResultV2> {
   const body: any = event.body ? JSON.parse(event.body) : {};
-  const { caption, image_url } = body;
-  if (!caption || !image_url) return clientError('Missing caption or image_url');
+  const { caption, media_url, media_type } = body;
+  if (!caption || !media_url) return clientError('Missing caption or media_url');
 
   const pageToken = await getSsmParam(FACEBOOK_PAGE_TOKEN_PARAM);
   const instagramBusinessId = await getSsmParam(INSTAGRAM_BUSINESS_ID_PARAM);
@@ -352,14 +357,24 @@ async function handlePostToInstagram(event: APIGatewayProxyEventV2): Promise<API
 
   try {
     // Step 1: Create media container on Instagram (using Instagram Business ID, NOT Facebook Page ID)
+    // For videos, use video_url and media_type: 'VIDEO'
+    // For images, use image_url
+    const mediaPayload: any = {
+      caption,
+      access_token: pageToken,
+    };
+
+    if (media_type === 'video') {
+      mediaPayload.video_url = media_url;
+      mediaPayload.media_type = 'VIDEO';
+    } else {
+      mediaPayload.image_url = media_url;
+    }
+
     const mediaResp = await fetch(`https://graph.facebook.com/v20.0/${instagramBusinessId}/media`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        image_url,
-        caption,
-        access_token: pageToken,
-      }),
+      body: JSON.stringify(mediaPayload),
     });
 
     if (!mediaResp.ok) {

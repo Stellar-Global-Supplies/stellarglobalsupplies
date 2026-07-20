@@ -1,12 +1,13 @@
 import { useState, useCallback } from 'react';
 import { Instagram, Upload, Send, Loader2, XCircle } from 'lucide-react';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { getFacebookStatus, postToInstagram, uploadImageForSocialPost } from '@/api/client';
+import { getFacebookStatus, postToInstagram, uploadMediaForSocialPost } from '@/api/client';
 
 export default function InstagramPostWidget() {
   const [caption, setCaption] = useState('');
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [mediaFile, setMediaFile] = useState<File | null>(null);
+  const [mediaPreview, setMediaPreview] = useState<string | null>(null);
+  const [mediaType, setMediaType] = useState<'image' | 'video'>('image');
 
   // Check Facebook/Instagram connection status
   const { data: connectionStatus } = useQuery({
@@ -14,44 +15,50 @@ export default function InstagramPostWidget() {
     queryFn: () => getFacebookStatus(),
   });
 
-  const handleImageUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleMediaUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (!file.type.startsWith('image/')) {
-      alert('Please select an image file');
+    const isImage = file.type.startsWith('image/');
+    const isVideo = file.type.startsWith('video/');
+    
+    if (!isImage && !isVideo) {
+      alert('Please select an image or video file');
       return;
     }
 
-    setImageFile(file);
-    setImagePreview(URL.createObjectURL(file));
+    setMediaFile(file);
+    setMediaType(isVideo ? 'video' : 'image');
+    setMediaPreview(URL.createObjectURL(file));
     e.target.value = '';
   }, []);
 
-  const removeImage = useCallback(() => {
-    if (imagePreview) {
-      URL.revokeObjectURL(imagePreview);
+  const removeMedia = useCallback(() => {
+    if (mediaPreview) {
+      URL.revokeObjectURL(mediaPreview);
     }
-    setImageFile(null);
-    setImagePreview(null);
-  }, [imagePreview]);
+    setMediaFile(null);
+    setMediaPreview(null);
+    setMediaType('image');
+  }, [mediaPreview]);
 
   const [isUploading, setIsUploading] = useState(false);
 
   const postMutation = useMutation({
-    mutationFn: async (data: { caption: string; imageFile: File }) => {
+    mutationFn: async (data: { caption: string; mediaFile: File; mediaType: 'image' | 'video' }) => {
       setIsUploading(true);
       try {
-        const imageUrl = await uploadImageForSocialPost(data.imageFile);
-        return await postToInstagram(data.caption, imageUrl);
+        const mediaUrl = await uploadMediaForSocialPost(data.mediaFile);
+        return await postToInstagram(data.caption, mediaUrl, data.mediaType);
       } finally {
         setIsUploading(false);
       }
     },
     onSuccess: () => {
       setCaption('');
-      setImageFile(null);
-      setImagePreview(null);
+      setMediaFile(null);
+      setMediaPreview(null);
+      setMediaType('image');
     },
     onError: (error: any) => {
       alert(`Failed to post: ${error?.message ?? 'Unknown error'}`);
@@ -65,18 +72,19 @@ export default function InstagramPostWidget() {
       alert('Please enter a caption');
       return;
     }
-    if (!imageFile) {
-      alert('Please upload an image (required for Instagram)');
+    if (!mediaFile) {
+      alert('Please upload an image or video (required for Instagram)');
       return;
     }
 
     postMutation.mutate({
       caption: caption.trim(),
-      imageFile,
+      mediaFile,
+      mediaType,
     });
   };
 
-  const isValid = caption.trim().length > 0 && imageFile !== null;
+  const isValid = caption.trim().length > 0 && mediaFile !== null;
 
   return (
     <div className="agent-card p-6">
@@ -119,33 +127,41 @@ export default function InstagramPostWidget() {
           </p>
         </div>
 
-        {/* Image Upload (required) */}
+        {/* Media Upload (required) */}
         <div>
           <label className="block text-sm font-medium text-slate-300 mb-2">
-            Image (Required)
+            Media (Image or Video Required)
           </label>
-          {!imageFile ? (
+          {!mediaFile ? (
             <label className="flex items-center gap-2 px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg cursor-pointer hover:border-emerald-400/50 transition-colors">
               <Upload size={14} className="text-slate-400" />
-              <span className="text-xs text-slate-300">Upload image</span>
+              <span className="text-xs text-slate-300">Upload image or video</span>
               <input
                 type="file"
-                accept="image/*"
-                onChange={handleImageUpload}
+                accept="image/*,video/*"
+                onChange={handleMediaUpload}
                 className="hidden"
                 required
               />
             </label>
           ) : (
             <div className="relative bg-slate-800/50 border border-slate-700 rounded-lg p-2">
-              <img
-                src={imagePreview!}
-                alt="Preview"
-                className="w-full h-32 object-cover rounded"
-              />
+              {mediaType === 'video' ? (
+                <video
+                  src={mediaPreview!}
+                  controls
+                  className="w-full h-32 object-cover rounded"
+                />
+              ) : (
+                <img
+                  src={mediaPreview!}
+                  alt="Preview"
+                  className="w-full h-32 object-cover rounded"
+                />
+              )}
               <button
                 type="button"
-                onClick={removeImage}
+                onClick={removeMedia}
                 className="absolute top-2 right-2 p-1 bg-red-500/80 hover:bg-red-500 rounded-full"
               >
                 <XCircle size={14} className="text-white" />
@@ -153,7 +169,7 @@ export default function InstagramPostWidget() {
             </div>
           )}
           <p className="text-2xs text-slate-500 mt-1">
-            Image is required for Instagram posts
+            {mediaType === 'video' ? 'Video is required for Instagram posts' : 'Image is required for Instagram posts'}
           </p>
         </div>
 
@@ -166,7 +182,7 @@ export default function InstagramPostWidget() {
           {postMutation.isPending ? (
             <>
               <Loader2 size={16} className="animate-spin" />
-              {isUploading ? 'Uploading image...' : 'Publishing...'}
+              {isUploading ? 'Uploading media...' : 'Publishing...'}
             </>
           ) : (
             <>
