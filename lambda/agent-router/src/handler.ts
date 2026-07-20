@@ -1478,6 +1478,50 @@ async function handleMetaAnalytics(event: APIGatewayProxyEventV2): Promise<APIGa
 }
 
 // ────────────────────────────────────────────────────────────────────────────
+// Route: GET /data/dashboard
+// Returns workflow analytics dashboard data (leads, social posts, blogs,
+// pending approvals, AI costs, and recent workflow runs).
+// Currently returns empty data structure — integrate with your workflow
+// platform's API or database to populate real values.
+// ────────────────────────────────────────────────────────────────────────────
+async function handleDashboard(): Promise<APIGatewayProxyResultV2> {
+  try {
+    // TODO: Replace with actual workflow data source
+    // This could be:
+    // - Direct database queries to a workflow execution table
+    // - Calls to an external workflow platform API
+    // - Queries to a DynamoDB table storing workflow run history
+    // For now, returning empty structure to unblock the frontend
+
+    const dashboardData = {
+      leads: {
+        total: 0,
+        by_status: {},
+      },
+      social_posts: {
+        total: 0,
+        by_status: {},
+      },
+      blogs: {
+        total: 0,
+        by_status: {},
+      },
+      pending_approvals: 0,
+      cost: {
+        total_usd: 0,
+        by_type: {},
+      },
+      workflow_runs: [],
+    };
+
+    return respond(200, dashboardData);
+  } catch (err) {
+    console.error('[agent-router] dashboard error', err);
+    return respond(500, { error: 'Failed to fetch dashboard data.' });
+  }
+}
+
+// ────────────────────────────────────────────────────────────────────────────
 // Main Lambda handler — request router
 // ────────────────────────────────────────────────────────────────────────────
 export const handler = async (
@@ -1515,6 +1559,11 @@ export const handler = async (
   // ── Route: GET /analytics/meta ──────────────────────────────────────────
   if (method === 'GET' && rawPath === '/analytics/meta') {
     return handleMetaAnalytics(event);
+  }
+
+  // ── Route: GET /data/dashboard ──────────────────────────────────────────
+  if (method === 'GET' && rawPath === '/data/dashboard') {
+    return handleDashboard();
   }
 
   // ── Route: GET /auth/google/status ──────────────────────────────────────
