@@ -1,515 +1,255 @@
-# Analytics Page — Stellar Global Supplies Ops Dashboard
+# Stellar Global Supplies — Ops Dashboard
 
-## Overview
-
-Add an **Analytics** page (`/analytics`) to the ops dashboard that gives a full picture of workflow performance across leads, social posts, blogs, approvals, and schedules.
-
-The page uses the existing **Supabase client** (already set up in `src/lib/supabase.js`) and the existing **API service** (`src/services/api.js`). All queries run directly against Supabase using the `supabase` client — no new backend Lambda needed.
+A standalone read-only ops dashboard that mirrors the internal workflow platform. Useful for sharing with non-technical stakeholders or displaying on a wall screen without giving access to the main app.
 
 ---
 
-## Database Schema Reference
+## What it shows
 
-### `leads`
-| Column | Type | Notes |
-|---|---|---|
-| `id` | uuid | PK |
-| `company_name` | text | |
-| `email` | text | unique |
-| `industry` | text | |
-| `status` | text | `pending \| emailed \| followed_up \| converted \| rejected` |
-| `source` | text | `ai_generated` etc |
-| `created_at` | timestamptz | |
-| `updated_at` | timestamptz | |
-
-### `email_drafts`
-| Column | Type | Notes |
-|---|---|---|
-| `id` | uuid | PK |
-| `lead_id` | uuid | FK → leads |
-| `status` | text | `draft \| approved \| sent \| rejected` |
-| `is_followup` | boolean | |
-| `sent_at` | timestamptz | |
-| `created_at` | timestamptz | |
-
-### `social_posts`
-| Column | Type | Notes |
-|---|---|---|
-| `id` | uuid | PK |
-| `type` | text | `product \| tech` |
-| `platform` | text | `linkedin \| facebook \| instagram` |
-| `platforms` | jsonb | `{"facebook":bool, "instagram":bool, "linkedin":bool}` |
-| `status` | text | `pending_approval \| approved_manual \| publishing \| published \| rejected \| publish_failed` |
-| `caption` | text | |
-| `title` | text | |
-| `image_url` | text | |
-| `posted_at` | timestamptz | |
-| `created_at` | timestamptz | |
-
-### `blog_posts`
-| Column | Type | Notes |
-|---|---|---|
-| `id` | uuid | PK |
-| `title` | text | |
-| `status` | text | `draft \| approved \| pr_created \| published \| rejected` |
-| `tags` | jsonb | array of strings |
-| `pr_url` | text | GitHub PR link |
-| `created_at` | timestamptz | |
-
-### `approval_queue`
-| Column | Type | Notes |
-|---|---|---|
-| `id` | uuid | PK |
-| `workflow_type` | text | `lead_email \| lead_followup \| social_product \| social_tech \| blog` |
-| `status` | text | `pending \| approved \| rejected \| expired` |
-| `reviewed_at` | timestamptz | |
-| `created_at` | timestamptz | |
-
-### `workflow_runs`
-| Column | Type | Notes |
-|---|---|---|
-| `id` | uuid | PK |
-| `workflow_type` | text | `lead_generation \| lead_email_existing \| social_product \| social_tech \| blog` |
-| `status` | text | `running \| succeeded \| failed \| stopped \| timed_out` |
-| `started_at` | timestamptz | |
-| `completed_at` | timestamptz | |
-
-### `workflow_schedules`
-| Column | Type | Notes |
-|---|---|---|
-| `id` | uuid | PK |
-| `label` | text | user-defined name |
-| `workflow_type` | text | `lead-generation \| social-product \| social-tech \| blog` |
-| `frequency` | text | `daily \| weekly \| monthly` |
-| `enabled` | boolean | |
-| `run_time` | text | `HH:MM` in IST |
-| `days_of_week` | text[] | for weekly schedules |
-| `day_of_month` | integer | for monthly schedules |
-| `created_at` | timestamptz | |
+- Live counts: leads, social posts, blog posts, pending approvals
+- Workflow run history with status and duration
+- AI cost breakdown by workflow type (Nova Pro tokens)
+- Social post status breakdown
+- Lead pipeline status breakdown
 
 ---
 
-## Supabase Queries
+## Data source
 
-Use `supabase` from `src/lib/supabase.js`. All queries use `.from()` with appropriate filters.
-
-### 1. Lead Generation Stats
-
-```js
-// Total leads + breakdown by status
-const { data: leads } = await supabase
-  .from('leads')
-  .select('status, created_at')
-
-// Leads created in last 30 days
-const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
-const { data: recentLeads } = await supabase
-  .from('leads')
-  .select('status, created_at')
-  .gte('created_at', thirtyDaysAgo)
-  .order('created_at', { ascending: true })
-
-// Conversion rate
-// converted = leads where status = 'converted'
-const conversionRate = leads.filter(l => l.status === 'converted').length / leads.length
-
-// Leads by industry
-const byIndustry = await supabase
-  .from('leads')
-  .select('industry')
-  // Group client-side: leads.reduce(...)
-
-// Email performance
-const { data: emails } = await supabase
-  .from('email_drafts')
-  .select('status, is_followup, sent_at, created_at')
-
-// Sent emails (both initial + follow-up)
-const sentEmails    = emails.filter(e => e.status === 'sent')
-const followUps     = emails.filter(e => e.is_followup && e.status === 'sent')
-const initialEmails = emails.filter(e => !e.is_followup && e.status === 'sent')
-```
-
-**Metrics to display:**
-- Total leads generated (all time + last 30 days)
-- Status funnel: pending → emailed → followed_up → converted
-- Conversion rate % (converted / total)
-- Emails sent (initial vs follow-up)
-- Top 5 industries by lead count (bar chart)
-- Leads over time — daily count for last 30 days (line chart)
+All data comes from the same `/data/dashboard` API endpoint the main app uses.
+No write access — purely GET requests.
 
 ---
 
-### 2. Social Post Stats
+## Setup
 
-```js
-// All social posts
-const { data: posts } = await supabase
-  .from('social_posts')
-  .select('type, platform, platforms, status, created_at, posted_at')
+### 1. Environment variables
 
-// Posts by status
-const byStatus = posts.reduce((acc, p) => {
-  acc[p.status] = (acc[p.status] || 0) + 1
-  return acc
-}, {})
-
-// Posts by type (product vs tech)
-const byType = posts.reduce((acc, p) => {
-  acc[p.type] = (acc[p.type] || 0) + 1
-  return acc
-}, {})
-
-// Platform distribution (from platforms JSONB)
-// Count posts where each platform is true
-const platformCounts = posts.reduce((acc, p) => {
-  const plt = p.platforms || {}
-  if (plt.linkedin)  acc.linkedin  = (acc.linkedin  || 0) + 1
-  if (plt.facebook)  acc.facebook  = (acc.facebook  || 0) + 1
-  if (plt.instagram) acc.instagram = (acc.instagram || 0) + 1
-  return acc
-}, {})
-
-// Published this week
-const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
-const { data: recentPosts } = await supabase
-  .from('social_posts')
-  .select('type, platform, status, posted_at')
-  .gte('created_at', weekAgo)
-
-// Posts in pipeline (pending save or pending publish)
-const inPipeline = posts.filter(p =>
-  ['pending_approval', 'publishing'].includes(p.status)
-).length
-
-// Ready to publish
-const readyToPublish = posts.filter(p => p.status === 'approved_manual').length
+```env
+VITE_API_URL=https://your-api-gateway-url.execute-api.us-east-1.amazonaws.com/prod
 ```
 
-**Metrics to display:**
-- Total posts: published / approved (ready) / pending / rejected
-- Pipeline badge: X posts ready to publish (link to /content)
-- Product vs Tech split (donut chart)
-- Platform distribution: LinkedIn / Facebook / Instagram (bar chart)
-- Posts published per week — last 8 weeks (bar chart)
-- Post status funnel: pending_approval → approved_manual → publishing → published
+### 2. Component: `OpsDashboard.jsx`
 
----
+```jsx
+import { useQuery } from '@tanstack/react-query'
+import { getDashboard } from '../services/api'
+import { formatDistanceToNow } from 'date-fns'
 
-### 3. Blog Post Stats
-
-```js
-const { data: blogs } = await supabase
-  .from('blog_posts')
-  .select('status, tags, created_at')
-
-// By status
-const blogsByStatus = blogs.reduce((acc, b) => {
-  acc[b.status] = (acc[b.status] || 0) + 1
-  return acc
-}, {})
-
-// Published rate
-const publishedRate = blogs.filter(b => b.status === 'published').length / blogs.length
-
-// Top tags — flatten tags JSONB array and count
-const tagCounts = blogs.reduce((acc, b) => {
-  const tags = Array.isArray(b.tags) ? b.tags : []
-  tags.forEach(t => { acc[t] = (acc[t] || 0) + 1 })
-  return acc
-}, {})
-const topTags = Object.entries(tagCounts)
-  .sort((a, b) => b[1] - a[1])
-  .slice(0, 8)
-
-// Blogs over time
-const { data: blogTimeline } = await supabase
-  .from('blog_posts')
-  .select('created_at, status')
-  .order('created_at', { ascending: true })
-```
-
-**Metrics to display:**
-- Total blogs: draft / approved / PR created / published / rejected
-- Published rate %
-- Top 8 tags (horizontal bar chart)
-- Blogs created per month — last 6 months (bar chart)
-
----
-
-### 4. Approval Queue Stats
-
-```js
-const { data: approvals } = await supabase
-  .from('approval_queue')
-  .select('workflow_type, status, created_at, reviewed_at')
-
-// Currently pending
-const pending = approvals.filter(a => a.status === 'pending')
-
-// Approval rate
-const reviewed    = approvals.filter(a => ['approved','rejected'].includes(a.status))
-const approvedAll = approvals.filter(a => a.status === 'approved')
-const approvalRate = reviewed.length > 0
-  ? (approvedAll.length / reviewed.length * 100).toFixed(1)
-  : 0
-
-// Average time to review (for approved/rejected items with reviewed_at)
-const reviewTimes = reviewed
-  .filter(a => a.reviewed_at)
-  .map(a => new Date(a.reviewed_at) - new Date(a.created_at))
-const avgReviewMs  = reviewTimes.reduce((s, t) => s + t, 0) / reviewTimes.length
-const avgReviewHrs = (avgReviewMs / 1000 / 60 / 60).toFixed(1)
-
-// By workflow type
-const byWorkflowType = approvals.reduce((acc, a) => {
-  acc[a.workflow_type] = (acc[a.workflow_type] || 0) + 1
-  return acc
-}, {})
-
-// Expired approvals
-const expired = approvals.filter(a => a.status === 'expired').length
-```
-
-**Metrics to display:**
-- Currently pending (with link to /approvals — alert if > 0)
-- Approval rate % (approved vs rejected)
-- Average time to review (hours)
-- Expired approvals count (warning if > 0)
-- Approvals by workflow type (donut chart)
-- Approval volume over time — last 30 days (line chart)
-
----
-
-### 5. Workflow Run Stats
-
-```js
-const { data: runs } = await supabase
-  .from('workflow_runs')
-  .select('workflow_type, status, started_at, completed_at')
-  .order('started_at', { ascending: false })
-  .limit(500)
-
-// Success rate by workflow type
-const successRate = runs.reduce((acc, r) => {
-  if (!acc[r.workflow_type]) acc[r.workflow_type] = { succeeded: 0, total: 0 }
-  acc[r.workflow_type].total++
-  if (r.status === 'succeeded') acc[r.workflow_type].succeeded++
-  return acc
-}, {})
-
-// Average duration (completed runs only)
-const completedRuns = runs.filter(r => r.completed_at && r.started_at)
-const durations = completedRuns.map(r =>
-  new Date(r.completed_at) - new Date(r.started_at)
-)
-const avgDurationMs  = durations.reduce((s, d) => s + d, 0) / durations.length
-const avgDurationMin = (avgDurationMs / 1000 / 60).toFixed(1)
-
-// Currently running
-const { data: activeRuns } = await supabase
-  .from('workflow_runs')
-  .select('workflow_type, started_at')
-  .eq('status', 'running')
-
-// Failed runs in last 7 days
-const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
-const { data: recentFailed } = await supabase
-  .from('workflow_runs')
-  .select('workflow_type, started_at, error_msg')
-  .eq('status', 'failed')
-  .gte('started_at', weekAgo)
-```
-
-**Metrics to display:**
-- Currently running workflows (live badge)
-- Total runs: succeeded / failed / running (stat cards)
-- Success rate per workflow type (grouped bar chart)
-- Average run duration in minutes
-- Failed runs this week (warning list with workflow_type + started_at)
-- Run volume over time — last 30 days (line chart, coloured by status)
-
----
-
-### 6. Schedule Stats
-
-```js
-const { data: schedules } = await supabase
-  .from('workflow_schedules')
-  .select('workflow_type, label, frequency, enabled, run_time, days_of_week, day_of_month, created_at')
-
-// Active vs paused
-const active = schedules.filter(s => s.enabled)
-const paused = schedules.filter(s => !s.enabled)
-
-// By frequency
-const byFrequency = schedules.reduce((acc, s) => {
-  acc[s.frequency] = (acc[s.frequency] || 0) + 1
-  return acc
-}, {})
-
-// By workflow type
-const schedulesByType = schedules.reduce((acc, s) => {
-  acc[s.workflow_type] = (acc[s.workflow_type] || 0) + 1
-  return acc
-}, {})
-```
-
-**Metrics to display:**
-- Total schedules: active / paused
-- Schedule list table: label / type / frequency / next run / status
-- By workflow type breakdown (donut chart)
-- By frequency breakdown: daily / weekly / monthly
-
----
-
-## Page Layout Recommendation
-
-```
-/analytics
-│
-├── Header: "Analytics" + date range picker (7d / 30d / 90d / all time)
-│
-├── Row 1 — Top KPI cards (6 cards)
-│   ├── Total Leads (+ last 30d delta)
-│   ├── Conversion Rate %
-│   ├── Posts Published
-│   ├── Blogs Published
-│   ├── Approval Rate %
-│   └── Active Schedules
-│
-├── Row 2 — Lead Generation section
-│   ├── Lead Funnel (horizontal funnel: pending→emailed→followed_up→converted)
-│   └── Leads Over Time (line chart, 30 days)
-│
-├── Row 3 — Social Posts section
-│   ├── Post Status Breakdown (donut)
-│   ├── Platform Distribution (bar)
-│   └── Posts Per Week (bar chart, 8 weeks)
-│
-├── Row 4 — Blog + Approval side by side
-│   ├── Blog Status Breakdown (donut) + Top Tags (horizontal bar)
-│   └── Approval Queue Health (pending count, approval rate, avg review time)
-│
-├── Row 5 — Workflow Runs
-│   ├── Success Rate by Type (grouped bar)
-│   └── Run Volume Over Time (line chart, 30 days)
-│
-└── Row 6 — Schedules Table
-    └── Full schedule list with status indicators
-```
-
----
-
-## Implementation Notes
-
-### Data fetching
-- Use `@tanstack/react-query` (already installed) with `queryKey: ['analytics', dateRange]`
-- Fetch all tables in parallel with `Promise.all([...])`
-- Cache for 5 minutes: `staleTime: 5 * 60 * 1000`
-- Add a Refresh button to manually refetch
-
-### Charts
-- Use **Recharts** (already installed as a dependency)
-- Recommended chart types:
-  - `LineChart` — leads over time, run volume over time
-  - `BarChart` — platform distribution, posts per week, success rates, top tags
-  - `PieChart` / `Cell` — status donuts (post types, blog status, approval types)
-  - Custom divs with width % — lead funnel, status breakdowns
-
-### Date range filter
-```js
-const [range, setRange] = useState(30) // days
-const since = new Date(Date.now() - range * 24 * 60 * 60 * 1000).toISOString()
-
-// Pass `since` to all .gte('created_at', since) filters
-```
-
-### Colour palette (matches existing app)
-```js
-const COLOURS = {
-  navy:      '#0A2547',
-  royal:     '#1565C0',
-  amber:     '#F59E0B',
-  emerald:   '#10B981',
-  red:       '#EF4444',
-  slate:     '#94A3B8',
-  linkedin:  '#0A66C2',
-  facebook:  '#1877F2',
-  instagram: '#E1306C',
+const WF_LABELS = {
+  lead_generation:      'Lead Generation',
+  lead_email_existing:  'Lead Re-email',
+  social_product:       'Product Post',
+  social_tech:          'Tech Post',
+  blog:                 'Blog Post',
 }
 
-// Status colours
-const STATUS_COLOURS = {
-  pending_approval: '#F59E0B',
-  approved_manual:  '#10B981',
-  published:        '#0A2547',
-  rejected:         '#EF4444',
-  publish_failed:   '#EF4444',
-  publishing:       '#1565C0',
+const STATUS_COLOR = {
+  succeeded: '#22c55e',
+  running:   '#3b82f6',
+  failed:    '#ef4444',
+  stopped:   '#94a3b8',
+  timed_out: '#f59e0b',
+}
+
+function StatCard({ label, value, sub, color = '#0A2547' }) {
+  return (
+    <div style={{
+      background: '#fff', borderRadius: 16, padding: '20px 24px',
+      border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.06)'
+    }}>
+      <div style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
+        {label}
+      </div>
+      <div style={{ fontSize: 32, fontWeight: 700, color, lineHeight: 1 }}>{value ?? '—'}</div>
+      {sub && <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 4 }}>{sub}</div>}
+    </div>
+  )
+}
+
+function CostBar({ label, cost, totalCost }) {
+  const pct = totalCost > 0 ? (cost / totalCost) * 100 : 0
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
+      <div style={{ width: 120, fontSize: 12, color: '#64748b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</div>
+      <div style={{ flex: 1, background: '#f1f5f9', borderRadius: 4, height: 8 }}>
+        <div style={{ width: `${pct}%`, height: 8, borderRadius: 4, background: '#0A2547', transition: 'width 0.4s' }} />
+      </div>
+      <div style={{ width: 60, textAlign: 'right', fontSize: 12, fontWeight: 600, color: '#0A2547' }}>${cost.toFixed(4)}</div>
+    </div>
+  )
+}
+
+function RunRow({ run }) {
+  const dot = STATUS_COLOR[run.status] || '#94a3b8'
+  const duration = run.completed_at
+    ? `${Math.round((new Date(run.completed_at) - new Date(run.started_at)) / 1000)}s`
+    : 'running…'
+  const cost = parseFloat(run.cost_usd || 0)
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 20px', borderBottom: '1px solid #f1f5f9' }}>
+      <div style={{ width: 8, height: 8, borderRadius: '50%', background: dot, flexShrink: 0 }} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 13, fontWeight: 500, color: '#0A2547' }}>
+          {WF_LABELS[run.workflow_type] || run.workflow_type}
+        </div>
+        <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>
+          {formatDistanceToNow(new Date(run.started_at), { addSuffix: true })} · {duration}
+          {cost > 0 && ` · $${cost.toFixed(4)}`}
+        </div>
+      </div>
+      <div style={{
+        fontSize: 11, fontWeight: 500, padding: '2px 8px', borderRadius: 20,
+        background: run.status === 'succeeded' ? '#f0fdf4' : run.status === 'failed' ? '#fef2f2' : '#f8fafc',
+        color: run.status === 'succeeded' ? '#16a34a' : run.status === 'failed' ? '#dc2626' : '#64748b',
+        border: `1px solid ${run.status === 'succeeded' ? '#bbf7d0' : run.status === 'failed' ? '#fecaca' : '#e2e8f0'}`,
+      }}>
+        {run.status}
+      </div>
+    </div>
+  )
+}
+
+export default function OpsDashboard() {
+  const { data, isLoading, dataUpdatedAt } = useQuery({
+    queryKey: ['ops-dashboard'],
+    queryFn:  getDashboard,
+    refetchInterval: 60_000,
+  })
+
+  const stats    = data || {}
+  const cost     = stats.cost || {}
+  const totalCost = cost.total_usd || 0
+  const costByType = cost.by_type || {}
+  const runs     = stats.workflow_runs || []
+
+  const lastUpdated = dataUpdatedAt
+    ? new Date(dataUpdatedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
+    : '—'
+
+  return (
+    <div style={{ minHeight: '100vh', background: '#f8fafc', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' }}>
+
+      {/* Header */}
+      <div style={{ background: '#0A2547', padding: '16px 32px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ width: 32, height: 32, borderRadius: 10, background: '#F59E0B', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, color: '#0A2547', fontSize: 16 }}>S</div>
+          <div>
+            <div style={{ color: '#fff', fontWeight: 700, fontSize: 16 }}>Stellar Global Supplies</div>
+            <div style={{ color: '#94a3b8', fontSize: 12 }}>Ops Dashboard · Live</div>
+          </div>
+        </div>
+        <div style={{ color: '#64748b', fontSize: 12 }}>Last updated: {lastUpdated} IST · auto-refreshes every 60s</div>
+      </div>
+
+      <div style={{ padding: '32px', maxWidth: 1200, margin: '0 auto' }}>
+
+        {/* Stat cards */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 32 }}>
+          <StatCard label="Total Leads"    value={stats.leads?.total ?? '—'}        sub={`${stats.leads?.by_status?.emailed ?? 0} emailed`}      color="#1565C0" />
+          <StatCard label="Social Posts"   value={stats.social_posts?.total ?? '—'} sub={`${stats.social_posts?.by_status?.posted ?? 0} posted`}  color="#0A2547" />
+          <StatCard label="Blog Posts"     value={stats.blogs?.total ?? '—'}         sub={`${stats.blogs?.by_status?.pr_created ?? 0} PRs open`}   color="#d97706" />
+          <StatCard label="Pending Review" value={stats.pending_approvals ?? '—'}   sub="awaiting approval"                                         color="#dc2626" />
+        </div>
+
+        {/* Middle row */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16, marginBottom: 32 }}>
+
+          {/* Lead pipeline */}
+          <div style={{ background: '#fff', borderRadius: 16, padding: 20, border: '1px solid #e2e8f0' }}>
+            <div style={{ fontWeight: 600, color: '#0A2547', fontSize: 14, marginBottom: 16 }}>Lead Pipeline</div>
+            {Object.entries(stats.leads?.by_status || {}).map(([status, count]) => (
+              <div key={status} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                <span style={{ fontSize: 12, color: '#64748b', textTransform: 'capitalize' }}>{status.replace(/_/g, ' ')}</span>
+                <span style={{ fontWeight: 700, color: '#0A2547', fontSize: 14 }}>{count}</span>
+              </div>
+            ))}
+            {!Object.keys(stats.leads?.by_status || {}).length && (
+              <div style={{ fontSize: 12, color: '#cbd5e1', textAlign: 'center', padding: '20px 0' }}>No leads yet</div>
+            )}
+          </div>
+
+          {/* Social posts */}
+          <div style={{ background: '#fff', borderRadius: 16, padding: 20, border: '1px solid #e2e8f0' }}>
+            <div style={{ fontWeight: 600, color: '#0A2547', fontSize: 14, marginBottom: 16 }}>Social Posts</div>
+            {Object.entries(stats.social_posts?.by_status || {}).map(([status, count]) => (
+              <div key={status} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                <span style={{ fontSize: 12, color: '#64748b', textTransform: 'capitalize' }}>{status.replace(/_/g, ' ')}</span>
+                <span style={{ fontWeight: 700, color: '#0A2547', fontSize: 14 }}>{count}</span>
+              </div>
+            ))}
+            {!Object.keys(stats.social_posts?.by_status || {}).length && (
+              <div style={{ fontSize: 12, color: '#cbd5e1', textAlign: 'center', padding: '20px 0' }}>No posts yet</div>
+            )}
+          </div>
+
+          {/* AI Cost */}
+          <div style={{ background: '#fff', borderRadius: 16, padding: 20, border: '1px solid #e2e8f0' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+              <div style={{ fontWeight: 600, color: '#0A2547', fontSize: 14 }}>AI Costs</div>
+              <div style={{ fontSize: 11, color: '#94a3b8' }}>Nova Pro · all time</div>
+            </div>
+            {totalCost > 0 ? (
+              <>
+                <div style={{ fontSize: 28, fontWeight: 700, color: '#0A2547', marginBottom: 16 }}>${totalCost.toFixed(4)}</div>
+                {Object.entries(costByType).sort(([,a],[,b]) => b - a).map(([type, cost]) => (
+                  <CostBar key={type} label={WF_LABELS[type] || type} cost={cost} totalCost={totalCost} />
+                ))}
+                <div style={{ fontSize: 11, color: '#cbd5e1', marginTop: 12, textAlign: 'center' }}>FLUX images via Gradio = free</div>
+              </>
+            ) : (
+              <div style={{ fontSize: 12, color: '#cbd5e1', textAlign: 'center', padding: '24px 0' }}>
+                No cost data yet — run a workflow first
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Recent runs */}
+        <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
+          <div style={{ padding: '16px 20px', borderBottom: '1px solid #f1f5f9', fontWeight: 600, color: '#0A2547', fontSize: 14 }}>
+            Recent Workflow Runs
+          </div>
+          {runs.length === 0 ? (
+            <div style={{ padding: 32, textAlign: 'center', color: '#cbd5e1', fontSize: 13 }}>No runs yet</div>
+          ) : (
+            runs.map(run => <RunRow key={run.id} run={run} />)
+          )}
+        </div>
+
+      </div>
+    </div>
+  )
 }
 ```
 
-### Nav item to add in `Layout.jsx`
-```jsx
-import { BarChart2 } from 'lucide-react'
+### 3. Add to router (App.jsx)
 
-// Add to NAV array (after Dashboard, before Leads):
-{ to: '/analytics', icon: BarChart2, label: 'Analytics' }
+```jsx
+import OpsDashboard from './pages/OpsDashboard'
+
+// Inside <Routes>:
+<Route path="/ops" element={<OpsDashboard />} />
 ```
 
-### Route to add in `App.jsx`
-```jsx
-import Analytics from './pages/Analytics'
+### 4. Optional: public route (no auth)
 
-// Inside Routes:
-<Route path="analytics" element={<Analytics />} />
+If you want the ops dashboard accessible without login (e.g. wall screen), wrap it separately outside the `<AuthGuard>` component in App.jsx:
+
+```jsx
+<Routes>
+  <Route path="/ops" element={<OpsDashboard />} />   {/* public */}
+  <Route element={<AuthGuard />}>
+    {/* all other routes */}
+  </Route>
+</Routes>
 ```
 
 ---
 
-## Quick-win Supabase Views (optional)
+## Notes
 
-If you want to simplify the queries, create these views in Supabase SQL editor:
-
-```sql
--- Lead funnel summary
-CREATE OR REPLACE VIEW vw_lead_funnel AS
-SELECT status, COUNT(*) as count FROM leads GROUP BY status;
-
--- Social post summary
-CREATE OR REPLACE VIEW vw_social_summary AS
-SELECT
-  type,
-  status,
-  COUNT(*) as count,
-  COUNT(*) FILTER (WHERE posted_at IS NOT NULL) as posted_count
-FROM social_posts
-GROUP BY type, status;
-
--- Workflow run performance
-CREATE OR REPLACE VIEW vw_workflow_performance AS
-SELECT
-  workflow_type,
-  status,
-  COUNT(*) as count,
-  AVG(EXTRACT(EPOCH FROM (completed_at - started_at))/60) as avg_duration_minutes
-FROM workflow_runs
-WHERE completed_at IS NOT NULL
-GROUP BY workflow_type, status;
-
--- Approval health
-CREATE OR REPLACE VIEW vw_approval_health AS
-SELECT
-  workflow_type,
-  status,
-  COUNT(*) as count,
-  AVG(EXTRACT(EPOCH FROM (reviewed_at - created_at))/3600) as avg_review_hours
-FROM approval_queue
-GROUP BY workflow_type, status;
-```
-
-Then query views directly:
-```js
-const { data } = await supabase.from('vw_lead_funnel').select('*')
-```
+- Refreshes every 60 seconds automatically
+- Reads from the same API as the main app — no extra backend needed
+- Cost data only appears after running `005_cost_tracking.sql` migration
+- To display on a wall screen: open `/ops` in a browser in fullscreen mode

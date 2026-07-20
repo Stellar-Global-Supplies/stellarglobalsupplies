@@ -520,6 +520,10 @@ export interface WorkflowAnalyticsData {
     by_workflow_type: Record<string, number>;
     daily_30: { date: string; approved: number; rejected: number }[];
   };
+  cost: {
+    total_usd: number;
+    by_type: Record<string, number>;
+  };
   workflow_runs: {
     total: number;
     succeeded: number;
@@ -530,6 +534,14 @@ export interface WorkflowAnalyticsData {
     active_runs: { workflow_type: string; started_at: string }[];
     recent_failed: { workflow_type: string; started_at: string }[];
     daily_30: { date: string; succeeded: number; failed: number; running: number }[];
+    recent: Array<{
+      id: string;
+      workflow_type: string;
+      status: string;
+      started_at: string;
+      completed_at?: string;
+      cost_usd?: string;
+    }>;
   };
   schedules: {
     total: number;

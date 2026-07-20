@@ -702,6 +702,131 @@ function BlogMonthlyTimeline({ data }: { data: WorkflowAnalyticsData['blog_posts
 }
 
 // ────────────────────────────────────────────────────────────────────────────
+// AI Cost Breakdown
+// ────────────────────────────────────────────────────────────────────────────
+
+const WF_LABELS: Record<string, string> = {
+  lead_generation:      'Lead Generation',
+  lead_email_existing:  'Lead Re-email',
+  social_product:       'Product Post',
+  social_tech:          'Tech Post',
+  blog:                 'Blog Post',
+};
+
+function AICostPanel({ data }: { data: WorkflowAnalyticsData['cost'] }) {
+  const totalCost = data.total_usd || 0;
+  const costByType = data.by_type || {};
+  const entries = Object.entries(costByType)
+    .sort(([, a], [, b]) => b - a);
+
+  return (
+    <div className="glass-card p-5">
+      <SectionHeader
+        title="AI Costs"
+        subtitle="Nova Pro · all time"
+      />
+      {totalCost > 0 ? (
+        <>
+          <div className="text-3xl font-bold text-emerald-400 mb-4 tabular-nums">
+            ${totalCost.toFixed(4)}
+          </div>
+          <div className="space-y-2.5">
+            {entries.map(([type, cost]) => {
+              const pct = (cost / totalCost) * 100;
+              return (
+                <div key={type}>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs text-slate-400">{WF_LABELS[type] || type}</span>
+                    <span className="text-xs font-medium text-slate-200 tabular-nums">${cost.toFixed(4)}</span>
+                  </div>
+                  <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
+                    <div
+                      className="h-full rounded-full transition-all duration-700"
+                      style={{ width: `${pct}%`, backgroundColor: COLOURS.royal }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <p className="text-2xs text-slate-500 mt-4">FLUX images via Gradio = free</p>
+        </>
+      ) : (
+        <div className="text-sm text-slate-500 text-center py-6">
+          No cost data yet — run a workflow first
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Recent Workflow Runs List
+// ────────────────────────────────────────────────────────────────────────────
+
+const RUN_STATUS_COLOR: Record<string, string> = {
+  succeeded: '#22c55e',
+  running:   '#3b82f6',
+  failed:    '#ef4444',
+  stopped:   '#94a3b8',
+  timed_out: '#f59e0b',
+};
+
+function RecentWorkflowRuns({ data }: { data: WorkflowAnalyticsData['workflow_runs']['recent'] }) {
+  if (!data || data.length === 0) return null;
+
+  return (
+    <div className="glass-card p-5">
+      <SectionHeader title="Recent Workflow Runs" />
+      <div className="space-y-0 divide-y divide-slate-800/60">
+        {data.map((run) => {
+          const dotColor = RUN_STATUS_COLOR[run.status] || '#94a3b8';
+          const duration = run.completed_at
+            ? `${Math.round((new Date(run.completed_at).getTime() - new Date(run.started_at).getTime()) / 1000)}s`
+            : 'running…';
+          const cost = parseFloat(run.cost_usd || '0');
+
+          return (
+            <div key={run.id} className="flex items-center gap-3 py-3">
+              <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: dotColor }} />
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium text-slate-200">
+                  {WF_LABELS[run.workflow_type] || run.workflow_type}
+                </p>
+                <p className="text-2xs text-slate-500 mt-0.5">
+                  {new Date(run.started_at).toLocaleString('en-IN')} · {duration}
+                  {cost > 0 && ` · $${cost.toFixed(4)}`}
+                </p>
+              </div>
+              <span
+                className="text-2xs font-medium px-2 py-0.5 rounded-full capitalize"
+                style={{
+                  backgroundColor:
+                    run.status === 'succeeded' ? 'rgba(34,197,94,0.12)' :
+                    run.status === 'failed' ? 'rgba(239,68,68,0.12)' :
+                    'rgba(100,116,139,0.12)',
+                  color:
+                    run.status === 'succeeded' ? '#22c55e' :
+                    run.status === 'failed' ? '#ef4444' :
+                    '#94a3b8',
+                  border: `1px solid ${
+                    run.status === 'succeeded' ? 'rgba(34,197,94,0.25)' :
+                    run.status === 'failed' ? 'rgba(239,68,68,0.25)' :
+                    'rgba(100,116,139,0.25)'
+                  }`,
+                }}
+              >
+                {run.status}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────────
 // Main Component
 // ────────────────────────────────────────────────────────────────────────────
 
@@ -730,10 +855,13 @@ export default function WorkflowAnalytics() {
       pending: 0, approval_rate: 0, avg_review_hours: 0, expired: 0,
       by_workflow_type: {}, daily_30: [],
     },
+    cost: {
+      total_usd: 0, by_type: {},
+    },
     workflow_runs: {
       total: 0, succeeded: 0, failed: 0, running: 0,
       success_rate_by_type: [], avg_duration_min: 0,
-      active_runs: [], recent_failed: [], daily_30: [],
+      active_runs: [], recent_failed: [], daily_30: [], recent: [],
     },
     schedules: {
       total: 0, active: 0, paused: 0, by_frequency: {}, by_type: {}, list: [],
@@ -905,7 +1033,10 @@ export default function WorkflowAnalytics() {
             <PostsPerWeek data={wf.social_posts} />
           </div>
 
-          {/* Row 4 — Blog + Approval */}
+          {/* Row 4 — AI Costs */}
+          <AICostPanel data={wf.cost} />
+
+          {/* Row 5 — Blog + Approval */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
             <div className="space-y-3 sm:space-y-4">
               <BlogStatusDonut data={wf.blog_posts} />
@@ -917,7 +1048,7 @@ export default function WorkflowAnalytics() {
             </div>
           </div>
 
-          {/* Row 5 — Workflow Runs */}
+          {/* Row 6 — Workflow Runs */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
             <SuccessRateByType data={wf.workflow_runs} />
             <RunVolumeOverTime data={wf.workflow_runs} />
@@ -966,7 +1097,10 @@ export default function WorkflowAnalytics() {
             )}
           </div>
 
-          {/* Row 6 — Schedules Table */}
+          {/* Row 7 — Recent Workflow Runs List */}
+          <RecentWorkflowRuns data={wf.workflow_runs.recent} />
+
+          {/* Row 8 — Schedules Table */}
           <SchedulesTable data={wf.schedules} />
         </>
       )}
