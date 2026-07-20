@@ -1151,6 +1151,12 @@ resource "aws_apigatewayv2_route" "analytics_meta" {
   target    = "integrations/${aws_apigatewayv2_integration.agent_router.id}"
 }
 
+resource "aws_apigatewayv2_route" "dashboard" {
+  api_id    = aws_apigatewayv2_api.ops.id
+  route_key = "GET /data/dashboard"
+  target    = "integrations/${aws_apigatewayv2_integration.agent_router.id}"
+}
+
 resource "aws_apigatewayv2_route" "sessions_get" {
   api_id    = aws_apigatewayv2_api.ops.id
   route_key = "GET /sessions/{sessionId}"
