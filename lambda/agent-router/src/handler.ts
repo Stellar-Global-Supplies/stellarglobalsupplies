@@ -1464,15 +1464,39 @@ async function handleWebAnalytics(event: APIGatewayProxyEventV2): Promise<APIGat
 
 async function handleMetaAnalytics(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyResultV2> {
   const period = event.queryStringParameters?.period ?? 'weekly';
-  const keys   = period === 'monthly'
-    ? ['meta/monthly.json', 'meta_monthly.json', 'monthly.json']
-    : ['meta/weekly.json', 'meta_weekly.json', 'weekly.json'];
 
   try {
-    const data = await readFirstAnalyticsS3(keys);
-    return respond(200, data);
+    const supabase = getSupabaseClient();
+    // Query the latest cached meta analytics for the requested period
+    const { data, error } = await supabase
+      .from('observe_meta_analytics_cache')
+      .select('instagram, ads, facebook, cached_at, period')
+      .eq('period', period)
+      .order('cached_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (error) {
+      console.error('[agent-router] metaAnalytics Supabase query failed', { period, error });
+      return respond(503, { error: 'Meta analytics data temporarily unavailable.' });
+    }
+
+    if (!data) {
+      return respond(503, { error: 'No meta analytics data cached yet. Trigger a refresh via POST /api/admin/refresh-meta-analytics.' });
+    }
+
+    // Return the data in the expected format
+    const result = {
+      period: data.period,
+      generated_at: data.cached_at,
+      instagram: data.instagram,
+      ads: data.ads,
+      facebook: data.facebook,
+    };
+
+    return respond(200, result);
   } catch (err) {
-    console.error('[agent-router] metaAnalytics S3 read failed', { keys, err });
+    console.error('[agent-router] metaAnalytics error', err);
     return respond(503, { error: 'Meta analytics data temporarily unavailable.' });
   }
 }

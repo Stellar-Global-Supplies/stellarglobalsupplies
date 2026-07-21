@@ -179,3 +179,27 @@ variable "instagram_business_id" {
   type        = string
   sensitive   = true
 }
+
+# ─────────────────────────────────────────────────────────────────────────
+# Meta Analytics — Credentials for meta-processor Lambda
+# ─────────────────────────────────────────────────────────────────────────
+variable "meta_access_token" {
+  description = "Meta Graph API User Access Token (long-lived) for analytics"
+  type        = string
+  sensitive   = true
+}
+
+variable "ig_user_id" {
+  description = "Instagram Business Account ID for analytics"
+  type        = string
+}
+
+variable "ad_account_id" {
+  description = "Meta Ad Account ID (act_XXXXXXXXX) for analytics"
+  type        = string
+}
+
+variable "fb_page_id" {
+  description = "Facebook Page ID for analytics"
+  type        = string
+}

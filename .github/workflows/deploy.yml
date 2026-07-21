@@ -151,6 +151,9 @@ jobs:
             cd ../..
           done
           echo "✓ All Lambdas built successfully"
+          
+          # meta-processor is Python - no build needed, but ensure the zip is created
+          echo "  meta-processor is Python (no build step required)"
 
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4

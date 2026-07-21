@@ -435,3 +435,12 @@ export async function fetchMetaAnalytics(period: AnalyticsPeriod = 'weekly'): Pr
     return fallback.json() as Promise<MetaAnalyticsData>;
   }
 }
+
+// ────────────────────────────────────────────────────────────────────────────
+// Meta Analytics Refresh — triggers the meta-processor Lambda to fetch fresh data
+// ────────────────────────────────────────────────────────────────────────────
+export async function refreshMetaAnalytics(): Promise<{ success: boolean; message?: string }> {
+  return request<{ success: boolean; message?: string }>('/api/admin/refresh-meta-analytics', {
+    method: 'POST',
+  });
+}

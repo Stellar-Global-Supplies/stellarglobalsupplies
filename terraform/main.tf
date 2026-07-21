@@ -532,6 +532,19 @@ resource "aws_ssm_parameter" "instagram_business_id" {
   value       = var.instagram_business_id
   tags        = var.tags
 }
+
+# ────────────────────────────────────────────────────────────────────────────────
+# SSM PARAMETER STORE — META ANALYTICS CREDENTIALS (for meta-processor Lambda)
+# Uses existing parameters from /sgs-quote and /stellar-wf namespaces
+# ────────────────────────────────────────────────────────────────────────────────
+# These parameters are pre-existing in SSM and referenced by the meta-processor Lambda
+# /sgs-quote/supabase_url
+# /sgs-quote/supabase_service_role_key
+# /stellar-wf/facebook/page_id
+# /stellar-wf/instagram/access_token
+# /stellar-wf/instagram/account_id
+# /stellar-wf/facebook/access_token
+
 # ────────────────────────────────────────────────────────────────────────────────
 # IAM — SHARED LAMBDA TRUST POLICY
 # ────────────────────────────────────────────────────────────────────────────────
@@ -1300,6 +1313,98 @@ resource "aws_lambda_permission" "apigw_google_auth" {
   statement_id  = "AllowAPIGWInvokeGoogleAuth"
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.google_auth.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_apigatewayv2_api.ops.execution_arn}/*/*"
+}
+
+# ────────────────────────────────────────────────────────────────────────────────
+# LAMBDA: meta-processor  — fetches Meta insights, writes to Supabase
+# ────────────────────────────────────────────────────────────────────────────────
+resource "aws_iam_role" "meta_processor" {
+  name               = "${local.prefix}-meta-processor-role"
+  assume_role_policy = data.aws_iam_policy_document.lambda_trust.json
+}
+
+resource "aws_iam_role_policy" "meta_processor" {
+  name = "${local.prefix}-meta-processor-policy"
+  role = aws_iam_role.meta_processor.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "SSMRead"
+        Effect = "Allow"
+        Action = ["ssm:GetParameter"]
+        Resource = [
+          "arn:aws:ssm:*:*:parameter/sgs-quote/supabase_url",
+          "arn:aws:ssm:*:*:parameter/sgs-quote/supabase_service_role_key",
+          "arn:aws:ssm:*:*:parameter/stellar-wf/facebook/page_id",
+          "arn:aws:ssm:*:*:parameter/stellar-wf/instagram/access_token",
+          "arn:aws:ssm:*:*:parameter/stellar-wf/instagram/account_id",
+          "arn:aws:ssm:*:*:parameter/stellar-wf/facebook/access_token",
+          "arn:aws:ssm:*:*:parameter/stellar-wf/ad_account_id",
+        ]
+      },
+      {
+        Sid      = "Logs"
+        Effect   = "Allow"
+        Action   = ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"]
+        Resource = "arn:aws:logs:*:*:*"
+      }
+    ]
+  })
+}
+
+resource "aws_cloudwatch_log_group" "meta_processor" {
+  name              = "/aws/lambda/${local.prefix}-meta-processor"
+  retention_in_days = var.log_retention_days
+}
+
+# Python Lambda — no build step needed, source is the .py file directly
+data "archive_file" "meta_processor" {
+  type        = "zip"
+  source_dir  = "${local.lambda_dir}/meta-processor"
+  output_path = "${path.module}/.terraform-build/meta-processor.zip"
+}
+
+resource "aws_lambda_function" "meta_processor" {
+  function_name    = "${local.prefix}-meta-processor"
+  role             = aws_iam_role.meta_processor.arn
+  handler          = "meta_processor.handler"
+  runtime          = "python3.12"
+  filename         = data.archive_file.meta_processor.output_path
+  source_code_hash = data.archive_file.meta_processor.output_base64sha256
+  memory_size      = 512
+  timeout          = 120
+
+  environment {
+    variables = {
+      ENVIRONMENT = var.environment
+    }
+  }
+
+  depends_on = [aws_cloudwatch_log_group.meta_processor]
+}
+
+# API Gateway integration + route + permission for on-demand meta analytics refresh
+resource "aws_apigatewayv2_integration" "meta_processor" {
+  api_id                 = aws_apigatewayv2_api.ops.id
+  integration_type       = "AWS_PROXY"
+  integration_uri        = aws_lambda_function.meta_processor.invoke_arn
+  payload_format_version = "2.0"
+  timeout_milliseconds   = 25000
+}
+
+resource "aws_apigatewayv2_route" "meta_processor_refresh" {
+  api_id    = aws_apigatewayv2_api.ops.id
+  route_key = "POST /api/admin/refresh-meta-analytics"
+  target    = "integrations/${aws_apigatewayv2_integration.meta_processor.id}"
+}
+
+resource "aws_lambda_permission" "apigw_meta_processor" {
+  statement_id  = "AllowAPIGWInvokeMetaProcessor"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.meta_processor.function_name
   principal     = "apigateway.amazonaws.com"
   source_arn    = "${aws_apigatewayv2_api.ops.execution_arn}/*/*"
 }

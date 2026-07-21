@@ -38,7 +38,7 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
-import { fetchMetaAnalytics } from '@/api/client';
+import { fetchMetaAnalytics, refreshMetaAnalytics } from '@/api/client';
 import type { AnalyticsPeriod, GeoEntry, MetaAnalyticsData, TopPage } from '@/types';
 import { useNavStore } from '@/store';
 
@@ -820,6 +820,19 @@ export default function MetaMarketingDashboard() {
   const pageRows = useMemo(() => channelPages(safeData, channel), [safeData, channel]);
   const insights = useMemo(() => nativeInsights(safeData), [safeData]);
 
+  const handleRefresh = async () => {
+    try {
+      // Trigger the meta-processor Lambda to fetch fresh data
+      await refreshMetaAnalytics();
+      // Then refetch the cached data
+      await refetch();
+    } catch (err) {
+      console.error('Failed to refresh meta analytics:', err);
+      // Still try to refetch in case data exists
+      await refetch();
+    }
+  };
+
   return (
     <div className="max-w-7xl">
       <div className="workspace-frame -m-1 md:m-0 min-h-[calc(100vh-var(--header-height)-2rem)]">
@@ -842,7 +855,7 @@ export default function MetaMarketingDashboard() {
               {safeData.generated_at ? `Updated ${format(parseISO(safeData.generated_at), 'HH:mm')}` : 'Updates daily'}
             </span>
             <button
-              onClick={() => refetch()}
+              onClick={handleRefresh}
               disabled={isFetching}
               className="h-10 w-10 rounded-xl border border-white/10 bg-white/5 text-slate-400 hover:text-slate-100 hover:bg-white/10 flex items-center justify-center shadow-sm disabled:opacity-50"
               aria-label="Refresh Meta analytics"
