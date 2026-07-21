@@ -59,13 +59,22 @@ function sanitizeFilename(name: string): string {
 }
 
 const IMAGE_CONTENT_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+const VIDEO_CONTENT_TYPES = ['video/mp4', 'video/quicktime', 'video/webm', 'video/mpeg', 'video/x-msvideo', 'video/x-ms-wmv'];
 
 function isImageUpload(ct: string): boolean {
   return IMAGE_CONTENT_TYPES.includes(ct);
 }
 
+function isVideoUpload(ct: string): boolean {
+  return VIDEO_CONTENT_TYPES.includes(ct);
+}
+
+function isMediaUpload(ct: string): boolean {
+  return IMAGE_CONTENT_TYPES.includes(ct) || VIDEO_CONTENT_TYPES.includes(ct);
+}
+
 function validateContentType(ct: string): boolean {
-  return ['text/csv', 'application/json', 'text/plain', ...IMAGE_CONTENT_TYPES].includes(ct);
+  return ['text/csv', 'application/json', 'text/plain', ...IMAGE_CONTENT_TYPES, ...VIDEO_CONTENT_TYPES].includes(ct);
 }
 
 function getFileExtension(filename: string, contentType: string): string | null {
@@ -75,6 +84,10 @@ function getFileExtension(filename: string, contentType: string): string | null 
   if (isImageUpload(contentType)) {
     if (ext && ['jpg', 'jpeg', 'png', 'webp', 'gif'].includes(ext)) return ext;
     return contentType.split('/')[1] || 'jpg';
+  }
+  if (isVideoUpload(contentType)) {
+    if (ext && ['mp4', 'mov', 'webm', 'mpeg', 'avi', 'wmv'].includes(ext)) return ext;
+    return contentType.split('/')[1] || 'mp4';
   }
   return null;
 }
@@ -121,7 +134,7 @@ export const handler = async (
   // Validate content type
   if (!validateContentType(content_type)) {
     return respond(415, {
-      error: `Unsupported content type "${content_type}". Only text/csv, application/json, and image/* (jpeg, png, webp, gif) are accepted.`,
+      error: `Unsupported content type "${content_type}". Only text/csv, application/json, image/* (jpeg, png, webp, gif), and video/* (mp4, mov, webm, mpeg, avi, wmv) are accepted.`,
     });
   }
 
@@ -141,13 +154,13 @@ export const handler = async (
     });
   }
 
-  // Build S3 key — images go to the attachments bucket so they can be
+  // Build S3 key — images and videos go to the attachments bucket so they can be
   // fetched by external services (Meta Graph API / LinkedIn); data files
   // go to the private data bucket for ingestion.
   const uploadId  = randomUUID();
-  const isImage   = isImageUpload(content_type);
-  const bucket    = isImage ? ATTACHMENTS_BUCKET : DATA_BUCKET;
-  const key       = isImage
+  const isMedia   = isMediaUpload(content_type);
+  const bucket    = isMedia ? ATTACHMENTS_BUCKET : DATA_BUCKET;
+  const key       = isMedia
     ? `attachments/${uploadId}/${safeFilename}`
     : `raw-ingest/${uploadId}/${safeFilename}`;
 
@@ -178,11 +191,11 @@ export const handler = async (
       expires_in: PRESIGN_TTL,
     };
 
-    // For images, also hand back a presigned GET URL so the frontend can
+    // For images and videos, also hand back a presigned GET URL so the frontend can
     // pass a publicly-fetchable link straight to /social/instagram/post or
     // /social/facebook/post — these buckets stay private, the URL itself
     // carries the (time-limited) auth.
-    if (isImage) {
+    if (isMedia) {
       responseBody.read_url = await getSignedUrl(
         s3,
         new GetObjectCommand({ Bucket: bucket, Key: key }),

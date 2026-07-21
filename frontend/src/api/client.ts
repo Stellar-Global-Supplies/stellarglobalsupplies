@@ -145,9 +145,10 @@ export async function uploadMediaForSocialPost(
   const imageTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
   const videoTypes = ['video/mp4', 'video/quicktime', 'video/webm', 'video/mpeg', 'video/x-msvideo', 'video/x-ms-wmv'];
   
+  // Use the file's actual content type if it's a supported image or video type
+  // Otherwise default to image/jpeg for unknown types
   let contentType = file.type;
   if (!imageTypes.includes(file.type) && !videoTypes.includes(file.type)) {
-    // Default to image/jpeg for unknown types
     contentType = 'image/jpeg';
   }
 

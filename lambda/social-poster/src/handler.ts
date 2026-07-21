@@ -287,17 +287,20 @@ async function handlePostToFacebook(event: APIGatewayProxyEventV2): Promise<APIG
       }));
       const mediaBuffer = await s3Media.Body?.transformToByteArray();
 
-      if (mediaBuffer) {
-        const formData = new FormData();
-        formData.append('access_token', pageToken);
-        formData.append('message', message);
-        formData.append('source', new Blob([mediaBuffer]));
-        formData.append('published', 'true');
+       if (mediaBuffer) {
+         const formData = new FormData();
+         formData.append('access_token', pageToken);
+         formData.append('message', message);
+         // Set appropriate content type for video vs image
+         const blobContentType = media_type === 'video' ? 'video/mp4' : 'image/jpeg';
+         // Use Uint8Array directly - it works with Blob in Node.js
+         formData.append('source', new Blob([new Uint8Array(mediaBuffer)], { type: blobContentType }));
+         formData.append('published', 'true');
 
-        // Use /videos endpoint for videos, /photos for images
-        const endpoint = media_type === 'video' 
-          ? `https://graph.facebook.com/v20.0/${pageId}/videos`
-          : `https://graph.facebook.com/v20.0/${pageId}/photos`;
+         // Use /videos endpoint for videos, /photos for images
+         const endpoint = media_type === 'video' 
+           ? `https://graph.facebook.com/v20.0/${pageId}/videos`
+           : `https://graph.facebook.com/v20.0/${pageId}/photos`;
 
         const mediaResp = await fetch(endpoint, {
           method: 'POST',
