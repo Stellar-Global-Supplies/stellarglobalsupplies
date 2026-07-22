@@ -364,3 +364,38 @@ for insert to authenticated with check (true);
 create policy "Service role can update meta analytics cache" on public.observe_meta_analytics_cache
 for update to authenticated using (true);
 
+-- Migration: Add `insights` column to observe_meta_analytics_cache
+-- and create a unique constraint so the meta-processor can upsert
+-- (one row per period) rather than append forever.
+-- ─────────────────────────────────────────────────────────────────────────────
+ 
+-- 1. Add the insights JSONB column (stores AI-generated recommendation block)
+alter table public.observe_meta_analytics_cache
+  add column if not exists insights jsonb;
+ 
+-- 2. Keep only the two most-recent rows per period (clean up stale duplicates)
+--    before adding the unique constraint.
+delete from public.observe_meta_analytics_cache a
+using (
+  select id,
+         row_number() over (partition by period order by cached_at desc) as rn
+  from public.observe_meta_analytics_cache
+) b
+where a.id = b.id and b.rn > 1;
+ 
+-- 3. Add unique constraint so ON CONFLICT (period) DO UPDATE works.
+alter table public.observe_meta_analytics_cache
+  drop constraint if exists observe_meta_analytics_cache_period_key;
+ 
+alter table public.observe_meta_analytics_cache
+  add constraint observe_meta_analytics_cache_period_key unique (period);
+ 
+-- 4. Ensure the service-role upsert policy covers UPDATE correctly.
+drop policy if exists "Service role can update meta analytics cache" on public.observe_meta_analytics_cache;
+ 
+create policy "Service role can upsert meta analytics cache"
+  on public.observe_meta_analytics_cache
+  for all
+  to service_role
+  using (true)
+  with check (true);

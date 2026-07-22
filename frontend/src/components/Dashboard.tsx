@@ -14,7 +14,7 @@ import {
   Factory,
   ReceiptText,
 } from 'lucide-react';
-import DataFlowDiagram from './DataFlowDiagram';
+import CtoSavings from './CtoSavings';
 import {
   AreaChart,
   Area,
@@ -629,9 +629,9 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Data Flow Diagram */}
+      {/* CTO Cost Intelligence */}
       <div className="mb-6">
-        <DataFlowDiagram />
+        <CtoSavings />
       </div>
 
       {/* KPI cards */}

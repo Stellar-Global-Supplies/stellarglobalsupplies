@@ -1166,7 +1166,10 @@ export default function MetaMarketingDashboard() {
     queryKey: ['meta-analytics', period],
     queryFn: () => fetchMetaAnalytics(period),
     select: (response) => normalizeMetaData(response, period),
-    staleTime: 30 * 60 * 1000,
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
+    refetchOnReconnect: false,
     retry: 2,
   });
 
@@ -1214,10 +1217,11 @@ export default function MetaMarketingDashboard() {
             <button
               onClick={handleRefresh}
               disabled={isFetching}
-              className="h-10 w-10 rounded-xl border border-white/10 bg-white/5 text-slate-400 hover:text-slate-100 hover:bg-white/10 flex items-center justify-center shadow-sm disabled:opacity-50"
+              className="flex items-center gap-2 px-3.5 py-2 rounded-xl border border-white/10 bg-white/5 text-slate-400 hover:text-slate-100 hover:bg-white/10 text-xs font-medium shadow-sm disabled:opacity-50 transition-all"
               aria-label="Refresh Meta analytics"
             >
-              <RefreshCw size={15} className={isFetching ? 'animate-spin' : ''} />
+              <RefreshCw size={13} className={isFetching ? 'animate-spin' : ''} />
+              {isFetching ? 'Refreshing…' : 'Refresh'}
             </button>
             <PeriodToggle value={period} onChange={setPeriod} />
           </div>
