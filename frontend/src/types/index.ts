@@ -323,6 +323,7 @@ export interface MetaAnalyticsData {
     age_gender?: Record<string, number>;
     city?: Record<string, number>;
     online_hours?: Record<string, number>;
+    post_type_perf?: Record<string, { engagement?: number; reach?: number; count?: number }>;
     top_posts?: Array<{ id?: string; caption?: string; media_type?: string; impressions?: number; reach?: number; engagements?: number; likes?: number; comments?: number }>;
   };
   facebook?: {

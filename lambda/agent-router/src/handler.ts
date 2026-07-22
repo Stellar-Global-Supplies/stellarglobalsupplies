@@ -1467,10 +1467,11 @@ async function handleMetaAnalytics(event: APIGatewayProxyEventV2): Promise<APIGa
 
   try {
     const supabase = getSupabaseClient();
-    // Query the latest cached meta analytics for the requested period
+    // Query the latest cached meta analytics for the requested period.
+    // `insights` stores the AI recommendation block persisted by meta-processor.
     const { data, error } = await supabase
       .from('observe_meta_analytics_cache')
-      .select('instagram, ads, facebook, cached_at, period')
+      .select('instagram, ads, facebook, insights, cached_at, period')
       .eq('period', period)
       .order('cached_at', { ascending: false })
       .limit(1)
@@ -1485,13 +1486,16 @@ async function handleMetaAnalytics(event: APIGatewayProxyEventV2): Promise<APIGa
       return respond(503, { error: 'No meta analytics data cached yet. Trigger a refresh via POST /api/admin/refresh-meta-analytics.' });
     }
 
-    // Return the data in the expected format
+    // Return the full payload including the insights block.
+    // The frontend MetaMarketingDashboard reads insights.recommendation,
+    // insights.best_campaign, insights.best_region, etc.
     const result = {
       period: data.period,
       generated_at: data.cached_at,
       instagram: data.instagram,
       ads: data.ads,
       facebook: data.facebook,
+      insights: data.insights ?? {},
     };
 
     return respond(200, result);

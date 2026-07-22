@@ -1,0 +1,64 @@
+{
+  "period": "monthly",
+  "label": "Last 30 Days",
+  "generated_at": "2025-01-01T00:00:00Z",
+  "summary": {
+    "total_requests": 15439,
+    "unique_ips": 1499,
+    "avg_daily": 514,
+    "top_country": "USA",
+    "mobile_pct": 0,
+    "desktop_pct": 100,
+    "bounce_rate": 85,
+    "peak_hour": "14:00"
+  },
+  "traffic_over_time": [],
+  "top_pages": [
+    { "page": "/", "visits": 1993, "bounce_pct": 45 },
+    { "page": "/products", "visits": 1200, "bounce_pct": 30 },
+    { "page": "/contact", "visits": 800, "bounce_pct": 20 }
+  ],
+  "geo_distribution": [
+    { "country": "USA", "requests": 5250, "pct": 34 },
+    { "country": "Netherlands", "requests": 2640, "pct": 17 },
+    { "country": "India", "requests": 770, "pct": 5 }
+  ],
+  "device_split": [
+    { "device": "Desktop", "pct": 100 },
+    { "device": "Mobile", "pct": 0 }
+  ],
+  "peak_hours": [
+    { "hour": 0, "requests": 100 },
+    { "hour": 1, "requests": 80 },
+    { "hour": 2, "requests": 60 },
+    { "hour": 3, "requests": 50 },
+    { "hour": 4, "requests": 40 },
+    { "hour": 5, "requests": 30 },
+    { "hour": 6, "requests": 25 },
+    { "hour": 7, "requests": 20 },
+    { "hour": 8, "requests": 15 },
+    { "hour": 9, "requests": 10 },
+    { "hour": 10, "requests": 8 },
+    { "hour": 11, "requests": 6 },
+    { "hour": 12, "requests": 5 },
+    { "hour": 13, "requests": 4 },
+    { "hour": 14, "requests": 10 },
+    { "hour": 15, "requests": 8 },
+    { "hour": 16, "requests": 6 },
+    { "hour": 17, "requests": 5 },
+    { "hour": 18, "requests": 4 },
+    { "hour": 19, "requests": 3 },
+    { "hour": 20, "requests": 2 },
+    { "hour": 21, "requests": 2 },
+    { "hour": 22, "requests": 1 },
+    { "hour": 23, "requests": 1 }
+  ],
+  "meta_insights": {
+    "recommended_objective": "Brand Awareness",
+    "top_locations": ["USA", "Netherlands", "India"],
+    "best_placement": "Feed + Right Column",
+    "best_ad_time": "00:00–03:00 UTC",
+    "warm_audience_size": 4631,
+    "high_intent_visits": 83
+  }
+}

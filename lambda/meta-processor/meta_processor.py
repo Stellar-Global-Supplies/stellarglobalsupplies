@@ -550,7 +550,13 @@ def _make_recommendation(ad_s, ig_s, fb_s, ctr_good, top_type):
 
 
 def persist_to_supabase(report, period):
-    """Write the report to Supabase table observe-meta_analytics_cache."""
+    """
+    Upsert the report to Supabase observe_meta_analytics_cache.
+    Uses ON CONFLICT (period) DO UPDATE so there is always exactly one
+    row per period rather than an ever-growing append log.
+    Stores the `insights` block so the agent-router can return it
+    alongside instagram/ads/facebook without recomputing.
+    """
     if not SUPABASE_URL or not SUPABASE_KEY:
         print("WARNING: Supabase credentials not configured")
         return
@@ -562,6 +568,7 @@ def persist_to_supabase(report, period):
         'instagram': report.get('instagram', {}),
         'ads': report.get('ads', {}),
         'facebook': report.get('facebook', {}),
+        'insights': report.get('insights', {}),
     }
 
     req = urllib.request.Request(
@@ -571,17 +578,22 @@ def persist_to_supabase(report, period):
             'apikey': SUPABASE_KEY,
             'Authorization': f'Bearer {SUPABASE_KEY}',
             'Content-Type': 'application/json',
-            'Prefer': 'return=minimal',
+            # Upsert: if a row with this `period` already exists, update it.
+            'Prefer': 'resolution=merge-duplicates,return=minimal',
         },
         method='POST',
     )
 
     try:
         with urllib.request.urlopen(req, timeout=30) as resp:
-            if resp.status >= 200 and resp.status < 300:
-                print(f"Saved meta analytics to Supabase: {SUPABASE_TABLE}")
+            if 200 <= resp.status < 300:
+                print(f"Upserted {period} meta analytics → Supabase:{SUPABASE_TABLE}")
             else:
-                print(f"Supabase insert failed: {resp.status}")
+                body = resp.read().decode('utf-8', errors='replace')
+                print(f"Supabase upsert failed: HTTP {resp.status} — {body[:300]}")
+    except urllib.error.HTTPError as e:
+        body = e.read().decode('utf-8', errors='replace')
+        print(f"Supabase upsert HTTP error {e.code}: {body[:300]}")
     except Exception as e:
         print(f"Supabase write error: {e}")
 

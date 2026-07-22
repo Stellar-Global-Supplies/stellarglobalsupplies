@@ -28,13 +28,17 @@ import {
   Globe2,
   Heart,
   Instagram,
+  Layers,
   Megaphone,
   MousePointerClick,
   RefreshCw,
   Send,
+  Star,
   Target,
+  TrendingDown,
   TrendingUp,
   Users,
+  Zap,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
@@ -786,6 +790,359 @@ function DeviceAndPlan({ data, channel }: { data: MetaAnalyticsData; channel: Ch
   );
 }
 
+// ─── Age / Gender breakdown ───────────────────────────────────────────────────
+function AgeGenderChart({ data, channel }: { data: MetaAnalyticsData; channel: Channel }) {
+  const native = asNative(data);
+  const raw: Record<string, number> =
+    channel === 'instagram'
+      ? (native.instagram?.age_gender ?? {})
+      : channel === 'facebook'
+      ? (native.facebook?.fan_age_gender ?? {})
+      : {};
+
+  if (!Object.keys(raw).length) return null;
+
+  const cfg = CHANNELS[channel];
+  // Group by gender
+  const grouped: Record<string, { age: string; M: number; F: number; U: number }> = {};
+  Object.entries(raw).forEach(([key, val]) => {
+    // key format: "25-34 M" or "25-34 F" or "35-44 female" etc.
+    const parts = key.split(' ');
+    const ageRange = parts[0] ?? key;
+    const genderRaw = (parts[1] ?? 'U').toLowerCase();
+    const gender: 'M' | 'F' | 'U' = genderRaw.startsWith('m') ? 'M' : genderRaw.startsWith('f') ? 'F' : 'U';
+    if (!grouped[ageRange]) grouped[ageRange] = { age: ageRange, M: 0, F: 0, U: 0 };
+    grouped[ageRange][gender] += Number(val ?? 0);
+  });
+
+  const chartData = Object.values(grouped)
+    .sort((a, b) => a.age.localeCompare(b.age))
+    .slice(0, 8);
+
+  const hasUnknown = chartData.some((d) => d.U > 0);
+
+  return (
+    <Panel
+      title="Audience Age & Gender"
+      subtitle={`${CHANNELS[channel].label} follower demographics breakdown`}
+    >
+      <ResponsiveContainer width="100%" height={220}>
+        <BarChart data={chartData} margin={{ top: 4, right: 12, bottom: 0, left: 0 }}>
+          <CartesianGrid stroke="rgba(148,163,184,0.14)" vertical={false} />
+          <XAxis dataKey="age" tick={{ fill: '#94a3b8', fontSize: 11 }} axisLine={false} tickLine={false} />
+          <YAxis tickFormatter={fmt} tick={{ fill: '#94a3b8', fontSize: 11 }} axisLine={false} tickLine={false} width={46} />
+          <Tooltip {...DARK_TOOLTIP} formatter={(value: number, name: string) => [fmt(value), name === 'M' ? 'Male' : name === 'F' ? 'Female' : 'Other']} />
+          <Legend verticalAlign="top" height={28} formatter={(v) => <span className="text-xs text-slate-400">{v === 'M' ? 'Male' : v === 'F' ? 'Female' : 'Other'}</span>} />
+          <Bar dataKey="M" fill={cfg.accent} radius={[3, 3, 0, 0]} maxBarSize={16} />
+          <Bar dataKey="F" fill="#e879f9" radius={[3, 3, 0, 0]} maxBarSize={16} />
+          {hasUnknown && <Bar dataKey="U" fill="#64748b" radius={[3, 3, 0, 0]} maxBarSize={16} />}
+        </BarChart>
+      </ResponsiveContainer>
+    </Panel>
+  );
+}
+
+// ─── Post type performance (Instagram) ────────────────────────────────────────
+function PostTypeChart({ data }: { data: MetaAnalyticsData }) {
+  const native = asNative(data);
+  const raw = native.instagram?.post_type_perf ?? {};
+  if (!Object.keys(raw).length) return null;
+
+  type PostTypeRow = { type: string; engagement: number; reach: number; count: number };
+  const rows: PostTypeRow[] = Object.entries(raw).map(([type, stats]) => ({
+    type,
+    engagement: Number((stats as { engagement?: number }).engagement ?? 0),
+    reach: Number((stats as { reach?: number }).reach ?? 0),
+    count: Number((stats as { count?: number }).count ?? 0),
+  })).sort((a, b) => b.engagement - a.engagement);
+
+  const best = rows[0];
+
+  return (
+    <Panel title="Content Format Performance" subtitle="Instagram post type engagement comparison">
+      <div className="flex items-center gap-2 mb-3">
+        <Zap size={13} className="text-amber-400" />
+        <span className="text-xs font-semibold text-amber-300">Best format: {best?.type ?? '—'}</span>
+      </div>
+      <ResponsiveContainer width="100%" height={200}>
+        <BarChart data={rows} margin={{ top: 4, right: 12, bottom: 0, left: 0 }}>
+          <CartesianGrid stroke="rgba(148,163,184,0.14)" vertical={false} />
+          <XAxis dataKey="type" tick={{ fill: '#94a3b8', fontSize: 11 }} axisLine={false} tickLine={false} />
+          <YAxis tickFormatter={fmt} tick={{ fill: '#94a3b8', fontSize: 11 }} axisLine={false} tickLine={false} width={46} />
+          <Tooltip {...DARK_TOOLTIP} formatter={(value: number, name: string) => [fmt(value), name === 'engagement' ? 'Engagements' : 'Reach']} />
+          <Legend verticalAlign="top" height={28} formatter={(v) => <span className="text-xs text-slate-400">{v === 'engagement' ? 'Engagements' : 'Reach'}</span>} />
+          <Bar dataKey="engagement" fill="#e1306c" radius={[3, 3, 0, 0]} maxBarSize={36} />
+          <Bar dataKey="reach" fill="#8b5cf620" radius={[3, 3, 0, 0]} maxBarSize={36} />
+        </BarChart>
+      </ResponsiveContainer>
+      <div className="grid grid-cols-3 gap-2 mt-3">
+        {rows.map((row) => (
+          <div key={row.type} className="rounded-xl bg-white/5 border border-white/10 p-2.5 text-center">
+            <p className="text-2xs uppercase tracking-wide text-slate-500">{row.type}</p>
+            <p className="text-base font-black text-slate-50 mt-1">{row.count}</p>
+            <p className="text-2xs text-slate-500">posts</p>
+          </div>
+        ))}
+      </div>
+    </Panel>
+  );
+}
+
+// ─── Campaign table with leads ─────────────────────────────────────────────────
+function CampaignTable({ data }: { data: MetaAnalyticsData }) {
+  const native = asNative(data);
+  const campaigns = native.ads?.campaigns ?? [];
+  if (!campaigns.length) return null;
+
+  type Campaign = typeof campaigns[number];
+
+  return (
+    <Panel title="Campaign Breakdown" subtitle="Spend, CTR, and leads by campaign" className="lg:col-span-2">
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="border-b border-white/10">
+              {['Campaign', 'Status', 'Spend', 'Impressions', 'Clicks', 'CTR', 'CPC', 'Leads'].map((h) => (
+                <th key={h} className="pb-2 text-left text-slate-500 font-semibold pr-4 last:pr-0 whitespace-nowrap">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {campaigns.slice(0, 10).map((c: Campaign, i: number) => {
+              const name = String(c.name ?? c.campaign_name ?? `Campaign ${i + 1}`);
+              const status = String((c as { status?: string }).status ?? 'ACTIVE');
+              const spend = Number((c as { spend?: number }).spend ?? 0);
+              const impr = Number((c as { impressions?: number }).impressions ?? 0);
+              const clicks = Number((c as { clicks?: number }).clicks ?? 0);
+              const ctr = Number((c as { ctr?: number }).ctr ?? 0);
+              const cpc = Number((c as { cpc?: number }).cpc ?? 0);
+              const leads = Number((c as { leads?: number }).leads ?? 0);
+              return (
+                <tr key={i} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                  <td className="py-2 pr-4 text-slate-200 font-medium max-w-[160px] truncate">{name}</td>
+                  <td className="py-2 pr-4">
+                    <span className={`agent-chip text-2xs ${status === 'ACTIVE' ? 'text-emerald-300 bg-emerald-500/10 border-emerald-500/20' : 'text-slate-400 bg-white/5 border-white/10'}`}>
+                      {status}
+                    </span>
+                  </td>
+                  <td className="py-2 pr-4 text-slate-300 tabular-nums">{money(spend)}</td>
+                  <td className="py-2 pr-4 text-slate-300 tabular-nums">{fmt(impr)}</td>
+                  <td className="py-2 pr-4 text-slate-300 tabular-nums">{fmt(clicks)}</td>
+                  <td className="py-2 pr-4 tabular-nums">
+                    <span className={ctr >= 0.01 ? 'text-emerald-400' : 'text-amber-400'}>{pct(ctr)}</span>
+                  </td>
+                  <td className="py-2 pr-4 text-slate-300 tabular-nums">{money(cpc)}</td>
+                  <td className="py-2 text-slate-300 tabular-nums font-semibold">{leads > 0 ? <span className="text-emerald-400">{leads}</span> : '—'}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </Panel>
+  );
+}
+
+// ─── Placements breakdown (Ads) ───────────────────────────────────────────────
+function PlacementsChart({ data }: { data: MetaAnalyticsData }) {
+  const native = asNative(data);
+  const raw = (native.ads?.placements ?? {}) as Record<string, { clicks?: number; spend?: number; impressions?: number }>;
+  if (!Object.keys(raw).length) return null;
+
+  const rows = Object.entries(raw)
+    .map(([key, val]) => ({
+      placement: key.length > 22 ? `${key.slice(0, 21)}…` : key,
+      clicks: Number(val.clicks ?? 0),
+      spend: Number(val.spend ?? 0),
+    }))
+    .sort((a, b) => b.clicks - a.clicks)
+    .slice(0, 8);
+
+  return (
+    <Panel title="Ad Placement Breakdown" subtitle="Clicks and spend by publisher/position">
+      <ResponsiveContainer width="100%" height={230}>
+        <BarChart data={rows} layout="vertical" margin={{ top: 0, right: 12, bottom: 0, left: 4 }}>
+          <CartesianGrid stroke="rgba(148,163,184,0.14)" horizontal={false} />
+          <XAxis type="number" tickFormatter={fmt} tick={{ fill: '#94a3b8', fontSize: 11 }} axisLine={false} tickLine={false} />
+          <YAxis type="category" dataKey="placement" tick={{ fill: '#64748b', fontSize: 10 }} axisLine={false} tickLine={false} width={130} />
+          <Tooltip {...DARK_TOOLTIP} formatter={(value: number, name: string) => [name === 'spend' ? money(value) : fmt(value), name === 'clicks' ? 'Clicks' : 'Spend']} />
+          <Legend verticalAlign="top" height={28} formatter={(v) => <span className="text-xs text-slate-400">{v === 'clicks' ? 'Clicks' : 'Spend'}</span>} />
+          <Bar dataKey="clicks" fill="#1677ff" radius={[0, 4, 4, 0]} maxBarSize={16} />
+          <Bar dataKey="spend" fill="#f59e0b60" radius={[0, 4, 4, 0]} maxBarSize={16} />
+        </BarChart>
+      </ResponsiveContainer>
+    </Panel>
+  );
+}
+
+// ─── Fan net growth chart (Facebook) ──────────────────────────────────────────
+function FanGrowthChart({ data }: { data: MetaAnalyticsData }) {
+  const native = asNative(data);
+  const fanNet = native.facebook?.fan_net_daily ?? [];
+  if (!fanNet.length) return null;
+
+  const chartData = fanNet.map((d) => ({
+    label: format(parseISO(d.date), 'MMM d'),
+    net: d.value,
+  }));
+
+  const totalNet = fanNet.reduce((sum, d) => sum + d.value, 0);
+
+  return (
+    <Panel title="Fan Net Growth" subtitle="Daily followers gained minus unfollowed">
+      <div className="flex items-center gap-2 mb-3">
+        {totalNet >= 0
+          ? <TrendingUp size={13} className="text-emerald-400" />
+          : <TrendingDown size={13} className="text-red-400" />}
+        <span className={`text-xs font-semibold ${totalNet >= 0 ? 'text-emerald-300' : 'text-red-300'}`}>
+          Net {totalNet >= 0 ? '+' : ''}{totalNet} fans this period
+        </span>
+      </div>
+      <ResponsiveContainer width="100%" height={190}>
+        <BarChart data={chartData} margin={{ top: 4, right: 12, bottom: 0, left: 0 }}>
+          <CartesianGrid stroke="rgba(148,163,184,0.14)" vertical={false} />
+          <XAxis dataKey="label" tick={{ fill: '#94a3b8', fontSize: 11 }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
+          <YAxis tick={{ fill: '#94a3b8', fontSize: 11 }} axisLine={false} tickLine={false} width={38} />
+          <Tooltip {...DARK_TOOLTIP} formatter={(value: number) => [value >= 0 ? `+${value}` : String(value), 'Net fans']} />
+          <Bar dataKey="net" radius={[3, 3, 0, 0]} maxBarSize={20}>
+            {chartData.map((d, i) => (
+              <Cell key={i} fill={d.net >= 0 ? '#10b981' : '#ef4444'} />
+            ))}
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+    </Panel>
+  );
+}
+
+// ─── Top posts grid ────────────────────────────────────────────────────────────
+function TopPostsGrid({ data, channel }: { data: MetaAnalyticsData; channel: Channel }) {
+  const native = asNative(data);
+  const posts =
+    channel === 'instagram'
+      ? (native.instagram?.top_posts ?? [])
+      : (native.facebook?.top_posts ?? []);
+  if (!posts.length) return null;
+
+  const cfg = CHANNELS[channel];
+
+  return (
+    <Panel title="Top Posts" subtitle={`Best performing ${cfg.label} content this period`} className="lg:col-span-2">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {posts.slice(0, 6).map((post, i) => {
+          const isIG = channel === 'instagram';
+          const igPost = post as { id?: string; caption?: string; type?: string; media_type?: string; likes?: number; comments?: number; reach?: number; engagement?: number; permalink?: string };
+          const fbPost = post as { id?: string; message?: string; likes?: number; comments?: number; shares?: number; engagement?: number; permalink?: string };
+          const text = isIG ? (igPost.caption || `Post ${i + 1}`) : (fbPost.message || `Post ${i + 1}`);
+          const eng = Number(isIG ? (igPost.engagement ?? (igPost.likes ?? 0) + (igPost.comments ?? 0)) : fbPost.engagement ?? 0);
+          const reach = Number(isIG ? (igPost.reach ?? 0) : 0);
+          const shares = !isIG ? Number(fbPost.shares ?? 0) : 0;
+          const permalink = isIG ? igPost.permalink : fbPost.permalink;
+          return (
+            <div key={post.id ?? i} className="rounded-2xl bg-white/5 border border-white/10 p-3 hover:bg-white/8 transition-colors">
+              <div className="flex items-start justify-between gap-2 mb-2">
+                <div className="flex items-center gap-1.5">
+                  <Star size={11} className="text-amber-400 shrink-0" />
+                  <span className="text-2xs text-amber-300 font-semibold">#{i + 1}</span>
+                  {isIG && igPost.type && (
+                    <span className="agent-chip text-2xs" style={{ color: cfg.accent, borderColor: `${cfg.accent}30`, backgroundColor: `${cfg.accent}10` }}>{igPost.type}</span>
+                  )}
+                </div>
+                {permalink && (
+                  <a href={permalink} target="_blank" rel="noreferrer" className="text-slate-500 hover:text-slate-300 shrink-0">
+                    <ExternalLink size={12} />
+                  </a>
+                )}
+              </div>
+              <p className="text-xs text-slate-300 leading-relaxed mb-2 line-clamp-2">{text}</p>
+              <div className="flex items-center gap-3 text-2xs text-slate-400">
+                <span className="flex items-center gap-1"><Heart size={10} className="text-pink-400" /> {fmt(isIG ? (igPost.likes ?? 0) : (fbPost.likes ?? 0))}</span>
+                <span className="flex items-center gap-1"><Users size={10} /> {fmt(isIG ? (igPost.comments ?? 0) : (fbPost.comments ?? 0))}</span>
+                {reach > 0 && <span className="flex items-center gap-1"><Eye size={10} /> {fmt(reach)}</span>}
+                {shares > 0 && <span className="flex items-center gap-1"><Send size={10} /> {fmt(shares)}</span>}
+                <span className="ml-auto font-semibold text-slate-200">Eng {fmt(eng)}</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </Panel>
+  );
+}
+
+// ─── Performance scorecards ────────────────────────────────────────────────────
+function PerformanceScorecard({ data, channel }: { data: MetaAnalyticsData; channel: Channel }) {
+  const native = asNative(data);
+  const cfg = CHANNELS[channel];
+
+  const scores: Array<{ label: string; value: string; status: 'good' | 'warn' | 'bad' | 'info'; hint: string }> = [];
+
+  if (channel === 'ads') {
+    const s = native.ads?.summary;
+    const ctr = Number(s?.ctr ?? 0);
+    const freq = Number(s?.frequency ?? 0);
+    const roas = Number(s?.roas ?? 0);
+    scores.push(
+      { label: 'CTR Score', value: pct(ctr), status: ctr >= 0.02 ? 'good' : ctr >= 0.01 ? 'warn' : 'bad', hint: ctr >= 0.02 ? 'Excellent — above 2%' : ctr >= 0.01 ? 'Average — target 2%+' : 'Low — refresh creatives' },
+      { label: 'Frequency', value: `${freq.toFixed(2)}×`, status: freq <= 2 ? 'good' : freq <= 3.5 ? 'warn' : 'bad', hint: freq <= 2 ? 'Fresh — low fatigue risk' : freq <= 3.5 ? 'Moderate fatigue risk' : 'High — expand audience' },
+      { label: 'Leads', value: fmt(Number(s?.leads ?? 0)), status: Number(s?.leads ?? 0) > 0 ? 'good' : 'warn', hint: Number(s?.leads ?? 0) > 0 ? 'Lead gen converting' : 'No leads tracked yet' },
+      { label: 'ROAS', value: `${roas.toFixed(2)}×`, status: roas >= 2 ? 'good' : roas > 0 ? 'warn' : 'info', hint: roas >= 2 ? 'Strong return' : roas > 0 ? 'Review spend allocation' : 'Not tracked' },
+    );
+  } else if (channel === 'instagram') {
+    const s = native.instagram?.summary;
+    const eng = Number(s?.engagement_rate ?? 0);
+    const clicks = Number(s?.website_clicks ?? 0);
+    const reach = Number(s?.total_reach ?? 0);
+    scores.push(
+      { label: 'Engagement Rate', value: pct(eng), status: eng >= 3 ? 'good' : eng >= 1 ? 'warn' : 'bad', hint: eng >= 3 ? 'Strong — above avg' : eng >= 1 ? 'Moderate — post more Reels' : 'Low — diversify content' },
+      { label: 'Website Clicks', value: fmt(clicks), status: clicks > 50 ? 'good' : clicks > 10 ? 'warn' : 'info', hint: clicks > 50 ? 'Good link-in-bio traffic' : clicks > 10 ? 'Growing traffic' : 'Optimise bio link CTA' },
+      { label: 'Reach', value: fmt(reach), status: reach > 1000 ? 'good' : reach > 200 ? 'warn' : 'info', hint: reach > 1000 ? 'Wide organic reach' : 'Consider boosting posts' },
+      { label: 'Profile Views', value: fmt(Number(s?.profile_views ?? 0)), status: 'info', hint: 'Measures content discovery' },
+    );
+  } else {
+    const s = native.facebook?.summary;
+    const fans = Number(native.facebook?.profile?.fans ?? 0);
+    const added = Number(s?.fans_added ?? 0);
+    const removed = Number(s?.fans_removed ?? 0);
+    const netGrowth = added - removed;
+    const videoViews = Number(s?.video_views ?? 0);
+    scores.push(
+      { label: 'Fan Growth', value: `${netGrowth >= 0 ? '+' : ''}${netGrowth}`, status: netGrowth > 0 ? 'good' : netGrowth === 0 ? 'warn' : 'bad', hint: netGrowth > 0 ? 'Page is growing' : netGrowth === 0 ? 'Flat — run Page Like ads' : 'Losing fans' },
+      { label: 'Page Reach', value: fmt(Number(s?.total_reach ?? 0)), status: Number(s?.total_reach ?? 0) > 500 ? 'good' : 'warn', hint: 'Unique accounts reached' },
+      { label: 'Video Views', value: fmt(videoViews), status: videoViews > 100 ? 'good' : 'info', hint: videoViews > 100 ? 'Video content resonating' : 'Add video to boost reach' },
+      { label: 'Total Fans', value: fmt(fans), status: 'info', hint: 'Cumulative page fans' },
+    );
+  }
+
+  const statusColor: Record<string, string> = { good: '#10b981', warn: '#f59e0b', bad: '#ef4444', info: '#64748b' };
+
+  return (
+    <Panel title="Performance Health" subtitle="Key metric ratings for this period">
+      <div className="space-y-3">
+        {scores.map((score) => (
+          <div key={score.label} className="flex items-center gap-3">
+            <div className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: statusColor[score.status] }} />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs text-slate-400">{score.label}</span>
+                <span className="text-xs font-bold text-slate-100 tabular-nums">{score.value}</span>
+              </div>
+              <p className="text-2xs text-slate-500 mt-0.5">{score.hint}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="mt-4 rounded-xl bg-white/5 border border-white/10 p-3">
+        <div className="flex items-center gap-2 mb-1">
+          <Layers size={12} style={{ color: cfg.accent }} />
+          <span className="text-2xs font-semibold text-slate-300">AI Recommendation</span>
+        </div>
+        <p className="text-2xs text-slate-400 leading-relaxed">{nativeInsights(data).recommendation}</p>
+      </div>
+    </Panel>
+  );
+}
+
 function ErrorCard({ message, onRetry }: { message: string; onRetry: () => void }) {
   return (
     <div className="agent-card p-6 flex items-center gap-4">
@@ -885,19 +1242,51 @@ export default function MetaMarketingDashboard() {
             <Hero data={safeData} channel={channel} />
             <CardGrid cards={model.cards} />
 
+            {/* Primary trend + performance health */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
               <PrimaryTrend data={safeData} channel={channel} />
-              <DeviceAndPlan data={safeData} channel={channel} />
+              <PerformanceScorecard data={safeData} channel={channel} />
             </div>
 
+            {/* Geo + pages/campaigns */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
               <GeoChart geo={geoRows} />
               <PagesChart pages={pageRows} />
             </div>
 
+            {/* Age/gender demographics */}
+            <AgeGenderChart data={safeData} channel={channel} />
+
+            {/* Instagram-only: post type + top posts */}
+            {channel === 'instagram' && (
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+                <PostTypeChart data={safeData} />
+                <TopPostsGrid data={safeData} channel={channel} />
+              </div>
+            )}
+
+            {/* Facebook-only: fan growth + top posts */}
+            {channel === 'facebook' && (
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+                <FanGrowthChart data={safeData} />
+                <TopPostsGrid data={safeData} channel={channel} />
+              </div>
+            )}
+
+            {/* Ads-only: campaign table + placements */}
+            {channel === 'ads' && (
+              <>
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+                  <CampaignTable data={safeData} />
+                  <PlacementsChart data={safeData} />
+                </div>
+              </>
+            )}
+
+            {/* Hours + media plan */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
               <HourChart data={safeData} channel={channel} />
-              <Panel title="Audience Quality" subtitle="Signals available from the S3 Meta analytics JSON">
+              <Panel title="Audience Quality" subtitle="Signals from Meta analytics feed">
                 <div className="grid grid-cols-2 gap-3 mb-4">
                   <div className="rounded-2xl bg-white/5 border border-white/10 p-4">
                     <div className="flex items-center gap-2 text-slate-400 text-xs font-semibold uppercase tracking-wide">
@@ -920,9 +1309,9 @@ export default function MetaMarketingDashboard() {
                       <Globe2 size={17} />
                     </div>
                     <div>
-                      <p className="text-sm font-bold text-slate-100">Recommended Objective: {safeData.meta_insights.recommended_objective}</p>
+                      <p className="text-sm font-bold text-slate-100">Recommended: {safeData.meta_insights.recommended_objective}</p>
                       <p className="text-xs text-slate-400 mt-1">
-                        {insights.recommendation} Prioritize {geoRows.map((entry) => entry.country).join(', ') || safeData.meta_insights.top_locations.join(', ') || insights.bestRegion || 'your strongest regions'} for the next campaign flight.
+                        Prioritize {geoRows.map((e) => e.country).join(', ') || safeData.meta_insights.top_locations.join(', ') || insights.bestRegion || 'your strongest regions'} for the next campaign flight.
                       </p>
                     </div>
                     <ExternalLink size={14} className="text-slate-500 ml-auto shrink-0" />
@@ -930,6 +1319,9 @@ export default function MetaMarketingDashboard() {
                 </div>
               </Panel>
             </div>
+
+            {/* Media plan CTA */}
+            <DeviceAndPlan data={safeData} channel={channel} />
           </div>
         )}
       </div>
