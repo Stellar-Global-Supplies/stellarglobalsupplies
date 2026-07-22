@@ -561,7 +561,7 @@ def persist_to_supabase(report, period):
         print("WARNING: Supabase credentials not configured")
         return
 
-    url = f"{SUPABASE_URL}/rest/v1/{SUPABASE_TABLE}"
+    url = f"{SUPABASE_URL}/rest/v1/{SUPABASE_TABLE}?on_conflict=period"
     payload = {
         'cached_at': report.get('generated_at'),
         'period': period,
