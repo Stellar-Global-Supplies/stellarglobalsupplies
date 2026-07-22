@@ -92,8 +92,8 @@ async function getParam(name: string): Promise<string> {
 
 async function buildSupabase(): Promise<SupabaseClient> {
   const [url, key] = await Promise.all([
-    getParam('/stellar/supabase/url'),
-    getParam('/stellar/supabase/service-role-key'),
+    getParam('/sgs-quote/supabase_url'),
+    getParam('/sgs-quote/supabase_service_role_key'),
   ]);
   return createClient(url, key, {
     auth: { persistSession: false, autoRefreshToken: false },
