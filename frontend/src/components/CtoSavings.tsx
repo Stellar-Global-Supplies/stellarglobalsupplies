@@ -60,6 +60,7 @@ interface SavingsCache {
 }
 
 type Period = 'monthly' | 'yearly' | 'tilldate';
+type ActivePeriod = Period | null;
 
 // ─── Data fetch ───────────────────────────────────────────────────────────────
 
@@ -258,7 +259,7 @@ function AppRow({ app, period, multiplier }: { app: AppBreakdown; period: Period
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function CtoSavings() {
-  const [activePeriod, setActivePeriod] = useState<Period>('monthly');
+  const [activePeriod, setActivePeriod] = useState<ActivePeriod>(null);
 
   const { data, isLoading, isError, refetch, isFetching } = useQuery<SavingsCache>({
     queryKey: ['cto-savings-cache'],
@@ -375,19 +376,29 @@ export default function CtoSavings() {
         </div>
       </div>
 
-      {/* 3 period cards */}
+      {/* 3 period cards — click to expand breakdown */}
+      {!activePeriod && (
+        <p className="text-2xs text-slate-600 mb-2 text-center">
+          Click a card to see the full app-by-app breakdown
+        </p>
+      )}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
         {periods.map((p) => (
           <PeriodCard
             key={p.period}
             {...p}
             active={activePeriod === p.period}
-            onClick={() => setActivePeriod(p.period)}
+            onClick={() => setActivePeriod(prev => prev === p.period ? null : p.period)}
           />
         ))}
       </div>
 
-      {/* Per-app breakdown table */}
+      {/* Per-app breakdown — only visible after clicking a card */}
+      <div
+        className={`overflow-hidden transition-all duration-300 ease-in-out ${
+          activePeriod ? 'max-h-[2000px] opacity-100 mt-3' : 'max-h-0 opacity-0'
+        }`}
+      >
       <div className="rounded-2xl border border-white/8 overflow-hidden">
 
         {/* Table header */}
@@ -412,7 +423,7 @@ export default function CtoSavings() {
               <AppRow
                 key={app.app_key}
                 app={app}
-                period={activePeriod}
+                period={activePeriod ?? 'monthly'}
                 multiplier={tdMonths}
               />
             ))}
@@ -427,27 +438,27 @@ export default function CtoSavings() {
               <td className="py-3.5 px-2 text-right tabular-nums">
                 <span className="text-sm font-black text-emerald-400">
                   {inrFull(
-                    activePeriod === 'monthly' ? data.monthly_our_cost
-                    : activePeriod === 'yearly' ? data.yearly_our_cost
-                    : data.tilldate_our_cost,
+                    activePeriod === 'yearly' ? data.yearly_our_cost
+                    : activePeriod === 'tilldate' ? data.tilldate_our_cost
+                    : data.monthly_our_cost,
                   )}
                 </span>
               </td>
               <td className="py-3.5 px-2 text-right tabular-nums">
                 <span className="text-sm font-bold text-red-400">
                   {inrFull(
-                    activePeriod === 'monthly' ? data.monthly_outsourced
-                    : activePeriod === 'yearly' ? data.yearly_outsourced
-                    : data.tilldate_outsourced,
+                    activePeriod === 'yearly' ? data.yearly_outsourced
+                    : activePeriod === 'tilldate' ? data.tilldate_outsourced
+                    : data.monthly_outsourced,
                   )}
                 </span>
               </td>
               <td className="py-3.5 pl-2 pr-4 text-right tabular-nums">
                 <span className="text-sm font-black text-slate-100">
                   {inrFull(
-                    activePeriod === 'monthly' ? data.monthly_saving
-                    : activePeriod === 'yearly' ? data.yearly_saving
-                    : data.tilldate_saving,
+                    activePeriod === 'yearly' ? data.yearly_saving
+                    : activePeriod === 'tilldate' ? data.tilldate_saving
+                    : data.monthly_saving,
                   )}
                 </span>
               </td>
@@ -456,7 +467,10 @@ export default function CtoSavings() {
         </table>
       </div>
 
-      {/* Legend key */}
+      </div>{/* end breakdown wrapper */}
+
+      {/* Legend key — also hidden until a card is clicked */}
+      <div className={`transition-all duration-300 ease-in-out ${activePeriod ? 'opacity-100 mt-4' : 'opacity-0 pointer-events-none h-0 overflow-hidden'}`}>
       <div className="mt-4 rounded-xl bg-white/4 border border-white/8 px-4 py-3">
         <p className="text-2xs font-semibold uppercase tracking-wider text-slate-600 mb-2">
           Outsourced cost legend
@@ -482,6 +496,8 @@ export default function CtoSavings() {
           Our AWS + Bedrock cost stays flat. Update inflation rates or app costs in Supabase — the Lambda recomputes automatically each month.
         </p>
       </div>
+
+      </div>{/* end legend wrapper */}
 
       {/* Refresh button */}
       <div className="flex justify-end mt-3">
