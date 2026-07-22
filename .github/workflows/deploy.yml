@@ -37,6 +37,7 @@ concurrency:
 # TF_VAR_facebook_page_token          Facebook Page Access Token (long-lived)
 # TF_VAR_facebook_page_id             Facebook Page ID
 # TF_VAR_instagram_business_id        Instagram Business Account ID (separate from Facebook Page ID)
+# No additional secrets needed for savings-calculator — it reuses /sgs-quote/ SSM params.
 # ─────────────────────────────────────────────────────────────────────────────
 
 env:
@@ -143,7 +144,7 @@ jobs:
       - name: Build all Lambdas
         run: |
           echo "→ Building all Lambda functions..."
-          for lambda in presign ingest agent-router google-auth email-sender social-poster doc-drive; do
+          for lambda in presign ingest agent-router google-auth email-sender social-poster doc-drive savings-calculator; do
             echo "  Building $lambda..."
             cd lambda/$lambda
             npm install
@@ -422,12 +423,16 @@ jobs:
           echo "  • Sales Analytics"
           echo "  • Meta Marketing Intelligence"
           echo "  • Order Management"
+          echo "  • CTO Cost Intelligence (savings-calculator)"
           echo ""
           echo "  Observability dashboards: https://observe.stellarglobalsupplies.com"
           echo "  • API Monitoring"
           echo "  • AWS Cost Dashboard"
           echo "  • Web Traffic Analytics"
           echo "  • Supabase Database Metrics"
+          echo ""
+          echo "  Savings recompute: EventBridge cron 1st of each month 00:05 UTC"
+          echo "  Manual trigger: POST /admin/savings/recompute"
           echo ""
           echo "  Cleanup jobs: https://github.com/Stellar-Global-Supplies/stellarglobalsupplies-cleanup"
           echo "  • DynamoDB cleanup: daily at 9am IST"

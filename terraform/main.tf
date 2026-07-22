@@ -1439,3 +1439,129 @@ resource "null_resource" "seed_agents" {
 
   depends_on = [aws_dynamodb_table.ops]
 }
+
+# ────────────────────────────────────────────────────────────────────────────────
+# LAMBDA: savings-calculator
+# Reads cto_savings_config + cto_savings_inflation from Supabase,
+# applies compound inflation, writes totals to cto_savings_cache.
+# Triggered monthly by EventBridge + manually via API Gateway POST.
+# ────────────────────────────────────────────────────────────────────────────────
+
+# ── SSM: Supabase creds shared with savings-calculator ──────────────────────────
+# These already exist in SSM under /sgs-quote/ — we reference them by ARN.
+# If you ever rotate them, update the /sgs-quote/ params; no Terraform change needed.
+
+resource "aws_iam_role" "savings_calculator" {
+  name               = "${local.prefix}-savings-calculator-role"
+  assume_role_policy = data.aws_iam_policy_document.lambda_trust.json
+}
+
+resource "aws_iam_role_policy" "savings_calculator" {
+  name = "${local.prefix}-savings-calculator-policy"
+  role = aws_iam_role.savings_calculator.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "SSMRead"
+        Effect = "Allow"
+        Action = ["ssm:GetParameter"]
+        Resource = [
+          # Reuse the same Supabase params already in SSM from the meta-processor
+          "arn:aws:ssm:*:*:parameter/sgs-quote/supabase_url",
+          "arn:aws:ssm:*:*:parameter/sgs-quote/supabase_service_role_key",
+        ]
+      },
+      {
+        Sid      = "Logs"
+        Effect   = "Allow"
+        Action   = ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"]
+        Resource = "arn:aws:logs:*:*:*"
+      }
+    ]
+  })
+}
+
+resource "aws_cloudwatch_log_group" "savings_calculator" {
+  name              = "/aws/lambda/${local.prefix}-savings-calculator"
+  retention_in_days = var.log_retention_days
+}
+
+data "archive_file" "savings_calculator" {
+  type        = "zip"
+  source_dir  = "${local.lambda_dir}/savings-calculator/dist"
+  output_path = "${path.module}/.terraform-build/savings-calculator.zip"
+}
+
+resource "aws_lambda_function" "savings_calculator" {
+  function_name    = "${local.prefix}-savings-calculator"
+  role             = aws_iam_role.savings_calculator.arn
+  handler          = "handler.handler"
+  runtime          = var.lambda_runtime
+  filename         = data.archive_file.savings_calculator.output_path
+  source_code_hash = data.archive_file.savings_calculator.output_base64sha256
+  memory_size      = 256
+  timeout          = 60 # SSM + two Supabase queries + write, easily under 60s
+
+  environment {
+    variables = {
+      ENVIRONMENT = var.environment
+      # Supabase creds are fetched from SSM at runtime — no plaintext env vars.
+      # The SSM param paths are hard-coded in the handler to match existing params.
+    }
+  }
+
+  depends_on = [aws_cloudwatch_log_group.savings_calculator]
+}
+
+# ── EventBridge schedule — 1st of every month at 00:05 IST (18:35 UTC prev day) ──
+# cron(minute hour dom month dow year)
+# IST = UTC+5:30, so 00:05 IST = 18:35 UTC the previous calendar day.
+# Using the 2nd of each month at 00:05 UTC to keep it simple and clearly "monthly".
+resource "aws_cloudwatch_event_rule" "savings_calculator_monthly" {
+  name                = "${local.prefix}-savings-calculator-monthly"
+  description         = "Trigger savings-calculator Lambda on the 1st of every month at 00:05 UTC"
+  schedule_expression = "cron(5 0 1 * ? *)"
+  state               = "ENABLED"
+
+  tags = merge(var.tags, {
+    Purpose = "CTO savings compound inflation recomputation"
+  })
+}
+
+resource "aws_cloudwatch_event_target" "savings_calculator_monthly" {
+  rule      = aws_cloudwatch_event_rule.savings_calculator_monthly.name
+  target_id = "savings-calculator-monthly"
+  arn       = aws_lambda_function.savings_calculator.arn
+}
+
+resource "aws_lambda_permission" "eventbridge_savings_calculator" {
+  statement_id  = "AllowEventBridgeInvokeSavingsCalculator"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.savings_calculator.function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.savings_calculator_monthly.arn
+}
+
+# ── API Gateway — manual trigger (POST /admin/savings/recompute) ────────────────
+resource "aws_apigatewayv2_integration" "savings_calculator" {
+  api_id                 = aws_apigatewayv2_api.ops.id
+  integration_type       = "AWS_PROXY"
+  integration_uri        = aws_lambda_function.savings_calculator.invoke_arn
+  payload_format_version = "2.0"
+  timeout_milliseconds   = 29000
+}
+
+resource "aws_apigatewayv2_route" "savings_recompute" {
+  api_id    = aws_apigatewayv2_api.ops.id
+  route_key = "POST /admin/savings/recompute"
+  target    = "integrations/${aws_apigatewayv2_integration.savings_calculator.id}"
+}
+
+resource "aws_lambda_permission" "apigw_savings_calculator" {
+  statement_id  = "AllowAPIGWInvokeSavingsCalculator"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.savings_calculator.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_apigatewayv2_api.ops.execution_arn}/*/*"
+}
