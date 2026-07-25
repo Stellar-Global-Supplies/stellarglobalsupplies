@@ -41,13 +41,15 @@ import {
   ATTR_CLOUD_REGION,
 } from '@opentelemetry/semantic-conventions';
 import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
+import { trace as apiTrace, context, SpanKind, SpanStatusCode } from '@opentelemetry/api';
+import type { Handler } from 'aws-lambda';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface TracingConfig {
   /** Service name shown in New Relic APM (default: sgs-ops-app) */
   serviceName?: string;
-  /** Sampling ratio 0.0–1.0 (default: 0.75) */
+  /** Sampling ratio 0.0–1.0 (default: 1.0 — 100% for testing) */
   sampleRate?: number;
   /** OTLP traces endpoint (default: EU endpoint) */
   otlpEndpoint?: string;
@@ -62,7 +64,7 @@ let _config: Required<TracingConfig>;
 
 const DEFAULTS: Required<TracingConfig> = {
   serviceName: 'sgs-ops-app',
-  sampleRate: 0.75,
+  sampleRate: 1.0,
   otlpEndpoint: 'https://otlp.eu01.nr-data.net/v1/traces',
   ssmPrefix: '/sgs-quote',
 };
@@ -88,10 +90,22 @@ async function fetchLicenseKey(prefix: string): Promise<string | null> {
 /**
  * Initialise OpenTelemetry with New Relic OTLP export.
  * Idempotent — safe to call multiple times.
+ *
+ * Environment variable overrides:
+ *   OTEL_SAMPLE_RATE  — override sampling ratio (0.0–1.0)
+ *   OTEL_SERVICE_NAME — override service name
  */
 export async function initTracing(config?: TracingConfig): Promise<void> {
   if (_initialised) return;
   _config = { ...DEFAULTS, ...config };
+
+  // Allow runtime override via environment variables
+  if (process.env.OTEL_SAMPLE_RATE) {
+    _config.sampleRate = parseFloat(process.env.OTEL_SAMPLE_RATE);
+  }
+  if (process.env.OTEL_SERVICE_NAME) {
+    _config.serviceName = process.env.OTEL_SERVICE_NAME;
+  }
 
   const licenseKey = await fetchLicenseKey(_config.ssmPrefix);
   if (!licenseKey) {
@@ -149,9 +163,6 @@ export async function initTracing(config?: TracingConfig): Promise<void> {
 
 // ─── Handler Wrapper ──────────────────────────────────────────────────────────
 
-import { trace as apiTrace, context, SpanKind, SpanStatusCode } from '@opentelemetry/api';
-import type { Handler } from 'aws-lambda';
-
 export interface WrappedHandler<TEvent = any, TResult = any> {
   (event: TEvent, context: any): Promise<TResult>;
 }
@@ -192,6 +203,11 @@ function wrap<TEvent = any, TResult = any>(
   fn: WrappedHandler<TEvent, TResult>,
 ): WrappedHandler<TEvent, TResult> {
   return async (event: TEvent, lambdaContext: any): Promise<TResult> => {
+    // Auto-initialize tracing if not already done (fire-and-forget on first call)
+    if (!_initialised) {
+      initTracing().catch(err => console.error('[otel] initTracing failed:', err));
+    }
+
     // Skip tracing for OPTIONS / CORS preflight
     const evt = event as any;
     if (evt?.requestContext?.http?.method === 'OPTIONS') {
