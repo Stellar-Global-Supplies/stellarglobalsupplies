@@ -32,8 +32,8 @@ import { registerInstrumentations } from '@opentelemetry/instrumentation';
 import { AwsInstrumentation } from '@opentelemetry/instrumentation-aws-sdk';
 import { HttpInstrumentation } from '@opentelemetry/instrumentation-http';
 import { Resource } from '@opentelemetry/resources';
-import { NodeSDK } from '@opentelemetry/sdk-node';
-import { BatchSpanProcessor } from '@opentelemetry/sdk-trace-base';
+import { NodeSDK, type NodeSDKConfig } from '@opentelemetry/sdk-node';
+import { BatchSpanProcessor, type SpanProcessor } from '@opentelemetry/sdk-trace-base';
 import {
   ATTR_SERVICE_NAME,
   ATTR_DEPLOYMENT_ENVIRONMENT_NAME,
@@ -51,7 +51,7 @@ export interface TracingConfig {
   serviceName?: string;
   /** Sampling ratio 0.0–1.0 (default: 1.0 — 100% for testing) */
   sampleRate?: number;
-  /** OTLP traces endpoint (default: EU endpoint) */
+  /** OTLP traces endpoint — base URL, e.g. https://otlp.eu01.nr-data.net (default: EU endpoint) */
   otlpEndpoint?: string;
   /** SSM prefix for the NR license key (default: /sgs-quote) */
   ssmPrefix?: string;
@@ -60,12 +60,14 @@ export interface TracingConfig {
 // ─── Internal state ───────────────────────────────────────────────────────────
 
 let _initialised = false;
+let _initPromise: Promise<void> | null = null;
 let _config: Required<TracingConfig>;
+let _sdk: NodeSDK | null = null;
 
 const DEFAULTS: Required<TracingConfig> = {
   serviceName: 'sgs-ops-app',
   sampleRate: 1.0,
-  otlpEndpoint: 'https://otlp.eu01.nr-data.net/v1/traces',
+  otlpEndpoint: 'https://otlp.eu01.nr-data.net',
   ssmPrefix: '/sgs-quote',
 };
 
@@ -97,6 +99,13 @@ async function fetchLicenseKey(prefix: string): Promise<string | null> {
  */
 export async function initTracing(config?: TracingConfig): Promise<void> {
   if (_initialised) return;
+  if (_initPromise) return _initPromise;
+
+  _initPromise = _doInitTracing(config);
+  return _initPromise;
+}
+
+async function _doInitTracing(config?: TracingConfig): Promise<void> {
   _config = { ...DEFAULTS, ...config };
 
   // Allow runtime override via environment variables
@@ -117,11 +126,15 @@ export async function initTracing(config?: TracingConfig): Promise<void> {
   // Enable diagnostics for troubleshooting (set OTEL_LOG_LEVEL=debug to see)
   // diag.setLogger(new DiagConsoleLogger(), DiagLogLevel.WARN);
 
+  // OTLPTraceExporter expects the full URL including /v1/traces
+  // The base URL is e.g. https://otlp.eu01.nr-data.net
+  const otlpUrl = `${_config.otlpEndpoint}/v1/traces`;
+
   const otelExporter = new OTLPTraceExporter({
-    url: `${_config.otlpEndpoint}/v1/traces`,
+    url: otlpUrl,
     headers: { 'api-key': licenseKey },
     concurrencyLimit: 10,
-    timeoutMillis: 1000, // never let telemetry delay the business API
+    timeoutMillis: 1000,
   });
 
   const spanProcessor = new BatchSpanProcessor(otelExporter, {
@@ -138,27 +151,26 @@ export async function initTracing(config?: TracingConfig): Promise<void> {
     [ATTR_CLOUD_REGION]: process.env.AWS_REGION ?? 'us-east-1',
   });
 
-  const sdk = new NodeSDK({
+  _sdk = new NodeSDK({
     resource,
     spanProcessor,
     idGenerator: new AWSXRayIdGenerator(),
     instrumentations: [
       new AwsInstrumentation({
         suppressInternalInstrumentation: true,
-        // Pre-request hook — no PII in span attributes
         preRequestHook: (_span, _request) => {
           // intentionally empty — we rely on default attribute suppression
         },
       }),
       new HttpInstrumentation({
-        ignoreIncomingRequestHook: () => true, // Don't create spans for incoming HTTP (Lambda handles this)
+        ignoreIncomingRequestHook: () => true,
       }),
     ],
   });
 
-  sdk.start();
+  _sdk.start();
   _initialised = true;
-  console.log(`[otel] Tracing initialised: ${_config.serviceName} @ ${_config.sampleRate * 100}% sampling`);
+  console.log(`[otel] Tracing initialised: ${_config.serviceName} @ ${_config.sampleRate * 100}% sampling, URL=${otlpUrl}`);
 }
 
 // ─── Handler Wrapper ──────────────────────────────────────────────────────────
@@ -203,9 +215,9 @@ function wrap<TEvent = any, TResult = any>(
   fn: WrappedHandler<TEvent, TResult>,
 ): WrappedHandler<TEvent, TResult> {
   return async (event: TEvent, lambdaContext: any): Promise<TResult> => {
-    // Auto-initialize tracing if not already done (fire-and-forget on first call)
+    // Auto-initialize tracing if not already done — AWAIT it so the SDK is ready
     if (!_initialised) {
-      initTracing().catch(err => console.error('[otel] initTracing failed:', err));
+      await initTracing().catch(err => console.error('[otel] initTracing failed:', err));
     }
 
     // Skip tracing for OPTIONS / CORS preflight
@@ -260,6 +272,15 @@ function wrap<TEvent = any, TResult = any>(
           throw err;
         } finally {
           span.end();
+          // Force flush so spans are exported before Lambda freezes
+          try {
+            const tp = apiTrace.getTracerProvider();
+            if (tp && typeof (tp as any).forceFlush === 'function') {
+              await (tp as any).forceFlush();
+            }
+          } catch (flushErr) {
+            // Non-critical — spans will be exported on next invocation
+          }
         }
       },
     );
