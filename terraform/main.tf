@@ -491,6 +491,17 @@ resource "aws_ssm_parameter" "google_oauth_client_secret" {
 
 
 # ────────────────────────────────────────────────────────────────────────────────
+# SSM PARAMETER STORE — NEW RELIC LICENSE KEY (shared across all Lambdas)
+# ────────────────────────────────────────────────────────────────────────────────
+resource "aws_ssm_parameter" "new_relic_license_key" {
+  name        = "/sgs-quote/new_relic_license_key"
+  description = "New Relic License Key for OTLP distributed tracing"
+  type        = "SecureString"
+  value       = var.new_relic_license_key
+  tags        = var.tags
+}
+
+# ────────────────────────────────────────────────────────────────────────────────
 # SSM PARAMETER STORE — SOCIAL MEDIA CREDENTIALS (SecureString)
 # ────────────────────────────────────────────────────────────────────────────────
 resource "aws_ssm_parameter" "linkedin_client_id" {

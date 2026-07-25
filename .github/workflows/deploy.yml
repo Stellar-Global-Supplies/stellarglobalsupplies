@@ -153,8 +153,12 @@ jobs:
           done
           echo "✓ All Lambdas built successfully"
           
-          # meta-processor is Python - no build needed, but ensure the zip is created
-          echo "  meta-processor is Python (no build step required)"
+          # meta-processor is Python - install OTel deps for tracing
+          echo "  Installing Python OTel dependencies for meta-processor..."
+          cd lambda/meta-processor
+          pip install -r requirements.txt -t . --quiet
+          cd ../..
+          echo "✓ Python OTel deps installed"
 
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4

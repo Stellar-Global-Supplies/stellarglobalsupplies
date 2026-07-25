@@ -19,6 +19,7 @@ import urllib.parse
 import boto3
 from datetime import datetime, timezone
 from collections import defaultdict
+from tracing import trace_lambda_handler
 
 # SSM client for fetching credentials
 ssm = boto3.client('ssm', region_name=os.environ.get('AWS_REGION', 'us-east-1'))
@@ -598,6 +599,7 @@ def persist_to_supabase(report, period):
         print(f"Supabase write error: {e}")
 
 
+@trace_lambda_handler
 def handler(event, context):
     results = {}
     for period_days, period in [(7, 'weekly'), (30, 'monthly')]:

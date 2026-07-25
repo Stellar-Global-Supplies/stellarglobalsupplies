@@ -2,19 +2,29 @@
   "name": "stellar-lambda-agent-router",
   "version": "1.0.0",
   "private": true,
-  "description": "Multi-agent AI router \u2014 Supabase business context + DynamoDB chat storage + AWS Bedrock (Claude) integration",
+  "description": "Multi-agent AI router with OpenTelemetry tracing",
   "scripts": {
     "build": "esbuild src/handler.ts --bundle --platform=node --target=node22 --format=cjs --outfile=dist/handler.js --external:@aws-sdk/*",
     "postbuild": "cp package.json dist/",
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
+    "@aws-sdk/client-bedrock-runtime": "^3.600.0",
     "@aws-sdk/client-dynamodb": "^3.600.0",
+    "@aws-sdk/client-s3": "^3.600.0",
     "@aws-sdk/client-ssm": "^3.600.0",
     "@aws-sdk/lib-dynamodb": "^3.600.0",
-    "@aws-sdk/client-bedrock-runtime": "^3.600.0",
-    "@supabase/supabase-js": "^2.50.0",
-    "@aws-sdk/client-s3": "^3.600.0"
+    "@opentelemetry/api": "^1.9.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.54.0",
+    "@opentelemetry/id-generator-aws-xray": "^1.2.0",
+    "@opentelemetry/instrumentation": "^0.54.0",
+    "@opentelemetry/instrumentation-aws-sdk": "^0.46.0",
+    "@opentelemetry/instrumentation-http": "^0.54.0",
+    "@opentelemetry/resources": "^1.27.0",
+    "@opentelemetry/sdk-node": "^0.54.0",
+    "@opentelemetry/sdk-trace-base": "^1.27.0",
+    "@opentelemetry/semantic-conventions": "^1.27.0",
+    "@supabase/supabase-js": "^2.50.0"
   },
   "devDependencies": {
     "@types/aws-lambda": "^8.10.140",
