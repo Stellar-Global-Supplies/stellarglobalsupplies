@@ -491,19 +491,10 @@ resource "aws_ssm_parameter" "google_oauth_client_secret" {
 
 
 # ────────────────────────────────────────────────────────────────────────────────
-# SSM PARAMETER STORE — NEW RELIC LICENSE KEY (shared across all Lambdas)
-# ────────────────────────────────────────────────────────────────────────────────
-resource "aws_ssm_parameter" "new_relic_license_key" {
-  name        = "/sgs-quote/new_relic_license_key"
-  description = "New Relic License Key for OTLP distributed tracing"
-  type        = "SecureString"
-  value       = var.new_relic_license_key
-  tags        = var.tags
-}
-
-# ────────────────────────────────────────────────────────────────────────────────
 # SSM PARAMETER STORE — SOCIAL MEDIA CREDENTIALS (SecureString)
 # ────────────────────────────────────────────────────────────────────────────────
+# Note: New Relic license key is stored at /sgs-quote/new_relic_license_key
+# (shared with the quote app — managed outside this Terraform)
 resource "aws_ssm_parameter" "linkedin_client_id" {
   name        = "/${local.prefix}/linkedin-client-id"
   description = "LinkedIn OAuth 2.0 Client ID for Company Page posting"
@@ -592,6 +583,12 @@ resource "aws_iam_role_policy" "presign" {
         Effect   = "Allow"
         Action   = ["s3:PutObject", "s3:GetObject"]
         Resource = "${aws_s3_bucket.attachments.arn}/attachments/*"
+      },
+      {
+        Sid      = "NRSSMLicenseKey"
+        Effect   = "Allow"
+        Action   = ["ssm:GetParameter"]
+        Resource = "arn:aws:ssm:*:*:parameter/sgs-quote/new_relic_license_key"
       },
       {
         Sid      = "Logs"

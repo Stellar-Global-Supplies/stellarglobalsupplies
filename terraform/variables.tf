@@ -179,14 +179,3 @@ variable "instagram_business_id" {
   type        = string
   sensitive   = true
 }
-
-# ─────────────────────────────────────────────────────────────────────────
-# New Relic License Key for OTLP distributed tracing
-# ─────────────────────────────────────────────────────────────────────────
-variable "new_relic_license_key" {
-  description = "New Relic License Key for OTLP distributed tracing (40-char hex string)"
-  type        = string
-  sensitive   = true
-}
-
-# ─────────────────────────────────────────────────────────────────────────
