@@ -19,9 +19,9 @@ terraform {
   # Configure via GitHub Actions secrets or a *.tfbackend file:
   #   terraform init -backend-config=backend.tfbackend
   backend "s3" {
-    key            = "stellar-global/terraform.tfstate"
-    encrypt        = true
-    use_lockfile   = true
+    key          = "stellar-global/terraform.tfstate"
+    encrypt      = true
+    use_lockfile = true
   }
 }
 
@@ -86,11 +86,11 @@ resource "aws_s3_bucket_policy" "frontend" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Sid    = "AllowCloudFrontOAC"
-      Effect = "Allow"
+      Sid       = "AllowCloudFrontOAC"
+      Effect    = "Allow"
       Principal = { Service = "cloudfront.amazonaws.com" }
-      Action   = "s3:GetObject"
-      Resource = "${aws_s3_bucket.frontend.arn}/*"
+      Action    = "s3:GetObject"
+      Resource  = "${aws_s3_bucket.frontend.arn}/*"
       Condition = {
         StringEquals = {
           "AWS:SourceArn" = aws_cloudfront_distribution.frontend.arn
@@ -148,11 +148,6 @@ resource "aws_s3_bucket_cors_configuration" "attachments" {
   }
 }
 
-
-
-
-
-
 resource "aws_s3_bucket_versioning" "data" {
   bucket = aws_s3_bucket.data.id
   versioning_configuration { status = "Enabled" }
@@ -204,7 +199,6 @@ resource "aws_s3_bucket_lifecycle_configuration" "data" {
   }
 }
 
-# ────────────────────────────────────────────────────────────────────────────────
 # ────────────────────────────────────────────────────────────────────────────────
 # CLOUDFRONT — RESPONSE HEADERS POLICY (Security Headers + CSP)
 # ────────────────────────────────────────────────────────────────────────────────
@@ -278,7 +272,6 @@ resource "aws_cloudfront_distribution" "frontend" {
     origin_access_control_id = aws_cloudfront_origin_access_control.frontend.id
   }
 
-  # Default: long-cache for hashed JS/CSS/images
   default_cache_behavior {
     allowed_methods        = ["GET", "HEAD", "OPTIONS"]
     cached_methods         = ["GET", "HEAD"]
@@ -296,7 +289,6 @@ resource "aws_cloudfront_distribution" "frontend" {
     max_ttl     = 31536000
   }
 
-  # HTML files — never cache (SPA routing requires fresh index.html)
   ordered_cache_behavior {
     path_pattern           = "*.html"
     allowed_methods        = ["GET", "HEAD"]
@@ -315,7 +307,6 @@ resource "aws_cloudfront_distribution" "frontend" {
     max_ttl     = 0
   }
 
-  # Service worker — must never be cached
   ordered_cache_behavior {
     path_pattern           = "/sw.js"
     allowed_methods        = ["GET", "HEAD"]
@@ -334,7 +325,6 @@ resource "aws_cloudfront_distribution" "frontend" {
     max_ttl     = 0
   }
 
-  # manifest.json — short cache so updates propagate quickly
   ordered_cache_behavior {
     path_pattern           = "/manifest.json"
     allowed_methods        = ["GET", "HEAD"]
@@ -353,7 +343,6 @@ resource "aws_cloudfront_distribution" "frontend" {
     max_ttl     = 3600
   }
 
-  # Redirect 403/404 to index.html (SPA client-side routing)
   custom_error_response {
     error_code            = 403
     response_code         = 200
@@ -415,35 +404,35 @@ resource "aws_dynamodb_table" "ops" {
   hash_key     = "PK"
   range_key    = "SK"
 
-attribute {
-  name = "PK"
-  type = "S"
-}
+  attribute {
+    name = "PK"
+    type = "S"
+  }
 
-attribute {
-  name = "SK"
-  type = "S"
-}
+  attribute {
+    name = "SK"
+    type = "S"
+  }
 
-attribute {
-  name = "GSI1PK"
-  type = "S"
-}
+  attribute {
+    name = "GSI1PK"
+    type = "S"
+  }
 
-attribute {
-  name = "GSI1SK"
-  type = "S"
-}
+  attribute {
+    name = "GSI1SK"
+    type = "S"
+  }
 
-attribute {
-  name = "GSI2PK"
-  type = "S"
-}
+  attribute {
+    name = "GSI2PK"
+    type = "S"
+  }
 
-attribute {
-  name = "GSI2SK"
-  type = "S"
-}
+  attribute {
+    name = "GSI2SK"
+    type = "S"
+  }
 
   global_secondary_index {
     name            = "GSI1"
@@ -465,7 +454,7 @@ attribute {
   }
 
   point_in_time_recovery { enabled = true }
-  server_side_encryption  { enabled = true }
+  server_side_encryption { enabled = true }
 
   tags = { Name = "${var.dynamodb_table_name}-${var.environment}" }
 }
@@ -489,12 +478,9 @@ resource "aws_ssm_parameter" "google_oauth_client_secret" {
   tags        = var.tags
 }
 
-
 # ────────────────────────────────────────────────────────────────────────────────
 # SSM PARAMETER STORE — SOCIAL MEDIA CREDENTIALS (SecureString)
 # ────────────────────────────────────────────────────────────────────────────────
-# Note: New Relic license key is stored at /sgs-quote/new_relic_license_key
-# (shared with the quote app — managed outside this Terraform)
 resource "aws_ssm_parameter" "linkedin_client_id" {
   name        = "/${local.prefix}/linkedin-client-id"
   description = "LinkedIn OAuth 2.0 Client ID for Company Page posting"
@@ -534,18 +520,6 @@ resource "aws_ssm_parameter" "instagram_business_id" {
   value       = var.instagram_business_id
   tags        = var.tags
 }
-
-# ────────────────────────────────────────────────────────────────────────────────
-# SSM PARAMETER STORE — META ANALYTICS CREDENTIALS (for meta-processor Lambda)
-# Uses existing parameters from /sgs-quote and /stellar-wf namespaces
-# ────────────────────────────────────────────────────────────────────────────────
-# These parameters are pre-existing in SSM and referenced by the meta-processor Lambda
-# /sgs-quote/supabase_url
-# /sgs-quote/supabase_service_role_key
-# /stellar-wf/facebook/page_id
-# /stellar-wf/instagram/access_token
-# /stellar-wf/instagram/account_id
-# /stellar-wf/facebook/access_token
 
 # ────────────────────────────────────────────────────────────────────────────────
 # IAM — SHARED LAMBDA TRUST POLICY
@@ -619,6 +593,12 @@ resource "aws_iam_role_policy" "ingest" {
         Resource = "${aws_s3_bucket.data.arn}/raw-ingest/*"
       },
       {
+        Sid      = "NRSSMLicenseKey"
+        Effect   = "Allow"
+        Action   = ["ssm:GetParameter"]
+        Resource = "arn:aws:ssm:*:*:parameter/sgs-quote/new_relic_license_key"
+      },
+      {
         Sid      = "Logs"
         Effect   = "Allow"
         Action   = ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"]
@@ -659,6 +639,7 @@ resource "aws_iam_role_policy" "agent_router" {
         Resource = [
           aws_ssm_parameter.google_oauth_client_id.arn,
           aws_ssm_parameter.google_oauth_client_secret.arn,
+          "arn:aws:ssm:*:*:parameter/sgs-quote/new_relic_license_key"
         ]
       },
       {
@@ -691,7 +672,6 @@ resource "aws_iam_role_policy" "agent_router" {
   })
 }
 
-# ---- google-auth Lambda role ----
 # ---- email-sender Lambda role ----
 resource "aws_iam_role" "email_sender" {
   name               = "${local.prefix}-email-sender-role"
@@ -715,6 +695,12 @@ resource "aws_iam_role_policy" "email_sender" {
         Effect   = "Allow"
         Action   = ["s3:PutObject", "s3:GetObject"]
         Resource = "${aws_s3_bucket.attachments.arn}/*"
+      },
+      {
+        Sid      = "NRSSMLicenseKey"
+        Effect   = "Allow"
+        Action   = ["ssm:GetParameter"]
+        Resource = "arn:aws:ssm:*:*:parameter/sgs-quote/new_relic_license_key"
       },
       {
         Sid      = "Logs"
@@ -788,6 +774,7 @@ resource "aws_iam_role_policy" "social_poster" {
           aws_ssm_parameter.facebook_page_token.arn,
           aws_ssm_parameter.facebook_page_id.arn,
           aws_ssm_parameter.instagram_business_id.arn,
+          "arn:aws:ssm:*:*:parameter/sgs-quote/new_relic_license_key"
         ]
       },
       {
@@ -829,17 +816,17 @@ resource "aws_lambda_function" "social_poster" {
 
   environment {
     variables = {
-      DYNAMODB_TABLE              = aws_dynamodb_table.ops.name
-      ATTACHMENTS_BUCKET          = aws_s3_bucket.attachments.bucket
-      LINKEDIN_CLIENT_ID_PARAM    = aws_ssm_parameter.linkedin_client_id.name
-      LINKEDIN_CLIENT_SECRET_PARAM = aws_ssm_parameter.linkedin_client_secret.name
-      LINKEDIN_REDIRECT_URI       = "${aws_apigatewayv2_api.ops.api_endpoint}/social/linkedin/callback"
-      FACEBOOK_PAGE_TOKEN_PARAM  = aws_ssm_parameter.facebook_page_token.name
-      FACEBOOK_PAGE_ID_PARAM      = aws_ssm_parameter.facebook_page_id.name
-      INSTAGRAM_BUSINESS_ID_PARAM = aws_ssm_parameter.instagram_business_id.name
-      FRONTEND_URL                = "https://${local.fqdn}"
-      ALLOWED_ORIGIN              = "https://${local.fqdn}"
-      ENVIRONMENT                 = var.environment
+      DYNAMODB_TABLE               = aws_dynamodb_table.ops.name
+      ATTACHMENTS_BUCKET           = aws_s3_bucket.attachments.bucket
+      LINKEDIN_CLIENT_ID_PARAM     = aws_ssm_parameter.linkedin_client_id.name
+      LINKEDIN_CLIENT_SECRET_PARAM  = aws_ssm_parameter.linkedin_client_secret.name
+      LINKEDIN_REDIRECT_URI        = "${aws_apigatewayv2_api.ops.api_endpoint}/social/linkedin/callback"
+      FACEBOOK_PAGE_TOKEN_PARAM   = aws_ssm_parameter.facebook_page_token.name
+      FACEBOOK_PAGE_ID_PARAM       = aws_ssm_parameter.facebook_page_id.name
+      INSTAGRAM_BUSINESS_ID_PARAM  = aws_ssm_parameter.instagram_business_id.name
+      FRONTEND_URL                 = "https://${local.fqdn}"
+      ALLOWED_ORIGIN               = "https://${local.fqdn}"
+      ENVIRONMENT                  = var.environment
     }
   }
 
@@ -870,6 +857,7 @@ resource "aws_iam_role_policy" "google_auth" {
         Resource = [
           aws_ssm_parameter.google_oauth_client_id.arn,
           aws_ssm_parameter.google_oauth_client_secret.arn,
+          "arn:aws:ssm:*:*:parameter/sgs-quote/new_relic_license_key"
         ]
       },
       {
@@ -994,21 +982,20 @@ resource "aws_lambda_function" "agent_router" {
 
   environment {
     variables = {
-      DYNAMODB_TABLE              = aws_dynamodb_table.ops.name
-      BEDROCK_MODEL               = var.bedrock_model_id
-      GOOGLE_CLIENT_ID_PARAM      = aws_ssm_parameter.google_oauth_client_id.name
-      GOOGLE_CLIENT_SECRET_PARAM  = aws_ssm_parameter.google_oauth_client_secret.name
-      ANALYTICS_BUCKET            = var.analytics_bucket_name
-      SUPABASE_URL                = var.supabase_url
-      SUPABASE_SERVICE_ROLE_KEY   = var.supabase_service_role_key
-      ALLOWED_ORIGIN              = "https://${local.fqdn}"
-      ENVIRONMENT                 = var.environment
+      DYNAMODB_TABLE            = aws_dynamodb_table.ops.name
+      BEDROCK_MODEL             = var.bedrock_model_id
+      GOOGLE_CLIENT_ID_PARAM    = aws_ssm_parameter.google_oauth_client_id.name
+      GOOGLE_CLIENT_SECRET_PARAM = aws_ssm_parameter.google_oauth_client_secret.name
+      ANALYTICS_BUCKET          = var.analytics_bucket_name
+      SUPABASE_URL              = var.supabase_url
+      SUPABASE_SERVICE_ROLE_KEY = var.supabase_service_role_key
+      ALLOWED_ORIGIN            = "https://${local.fqdn}"
+      ENVIRONMENT               = var.environment
     }
   }
 
   depends_on = [aws_cloudwatch_log_group.agent_router]
 }
-
 
 resource "aws_lambda_function" "google_auth" {
   function_name    = "${local.prefix}-google-auth"
@@ -1091,20 +1078,20 @@ resource "aws_apigatewayv2_stage" "default" {
   access_log_settings {
     destination_arn = aws_cloudwatch_log_group.apigw.arn
     format = jsonencode({
-      requestId    = "$context.requestId"
-      sourceIp     = "$context.identity.sourceIp"
-      requestTime  = "$context.requestTime"
-      httpMethod   = "$context.httpMethod"
-      routeKey     = "$context.routeKey"
-      status       = "$context.status"
-      errorMessage = "$context.error.message"
+      requestId       = "$context.requestId"
+      sourceIp        = "$context.identity.sourceIp"
+      requestTime     = "$context.requestTime"
+      httpMethod      = "$context.httpMethod"
+      routeKey        = "$context.routeKey"
+      status          = "$context.status"
+      errorMessage    = "$context.error.message"
       responseLatency = "$context.responseLatency"
     })
   }
 
   default_route_settings {
-    throttling_burst_limit = 200
-    throttling_rate_limit  = 100
+    throttling_burst_limit   = 200
+    throttling_rate_limit    = 100
     detailed_metrics_enabled = true
     logging_level            = "INFO"
   }
@@ -1217,13 +1204,11 @@ resource "aws_lambda_permission" "apigw_presign" {
   source_arn    = "${aws_apigatewayv2_api.ops.execution_arn}/*/*"
 }
 
-
 resource "aws_apigatewayv2_route" "email_send" {
   api_id    = aws_apigatewayv2_api.ops.id
   route_key = "POST /email/send"
   target    = "integrations/${aws_apigatewayv2_integration.email_sender.id}"
 }
-
 
 # ---- social-poster API Integration ----
 resource "aws_apigatewayv2_integration" "social_poster" {
@@ -1265,7 +1250,7 @@ resource "aws_apigatewayv2_route" "linkedin_post" {
   target    = "integrations/${aws_apigatewayv2_integration.social_poster.id}"
 }
 
-# Facebook routes (static token - configured at deploy time)
+# Facebook routes
 resource "aws_apigatewayv2_route" "facebook_status" {
   api_id    = aws_apigatewayv2_api.ops.id
   route_key = "GET /social/facebook/status"
@@ -1293,10 +1278,11 @@ resource "aws_lambda_permission" "apigw_social_poster" {
   principal     = "apigateway.amazonaws.com"
   source_arn    = "${aws_apigatewayv2_api.ops.execution_arn}/*/*"
 }
+
 resource "aws_apigatewayv2_integration" "email_sender" {
-  api_id           = aws_apigatewayv2_api.ops.id
-  integration_type = "AWS_PROXY"
-  integration_uri  = aws_lambda_function.email_sender.invoke_arn
+  api_id                 = aws_apigatewayv2_api.ops.id
+  integration_type       = "AWS_PROXY"
+  integration_uri        = aws_lambda_function.email_sender.invoke_arn
   payload_format_version = "2.0"
 }
 
@@ -1307,7 +1293,6 @@ resource "aws_lambda_permission" "apigw_email_sender" {
   principal     = "apigateway.amazonaws.com"
   source_arn    = "${aws_apigatewayv2_api.ops.execution_arn}/*/*"
 }
-
 
 resource "aws_lambda_permission" "apigw_agent_router" {
   statement_id  = "AllowAPIGWInvokeAgentRouter"
@@ -1326,7 +1311,7 @@ resource "aws_lambda_permission" "apigw_google_auth" {
 }
 
 # ────────────────────────────────────────────────────────────────────────────────
-# LAMBDA: meta-processor  — fetches Meta insights, writes to Supabase
+# LAMBDA: meta-processor — fetches Meta insights, writes to Supabase
 # ────────────────────────────────────────────────────────────────────────────────
 resource "aws_iam_role" "meta_processor" {
   name               = "${local.prefix}-meta-processor-role"
@@ -1351,6 +1336,7 @@ resource "aws_iam_role_policy" "meta_processor" {
           "arn:aws:ssm:*:*:parameter/stellar-wf/instagram/account_id",
           "arn:aws:ssm:*:*:parameter/stellar-wf/facebook/access_token",
           "arn:aws:ssm:*:*:parameter/stellar-wf/ad_account_id",
+          "arn:aws:ssm:*:*:parameter/sgs-quote/new_relic_license_key"
         ]
       },
       {
@@ -1368,7 +1354,6 @@ resource "aws_cloudwatch_log_group" "meta_processor" {
   retention_in_days = var.log_retention_days
 }
 
-# Python Lambda — no build step needed, source is the .py file directly
 data "archive_file" "meta_processor" {
   type        = "zip"
   source_dir  = "${local.lambda_dir}/meta-processor"
@@ -1394,7 +1379,6 @@ resource "aws_lambda_function" "meta_processor" {
   depends_on = [aws_cloudwatch_log_group.meta_processor]
 }
 
-# API Gateway integration + route + permission for on-demand meta analytics refresh
 resource "aws_apigatewayv2_integration" "meta_processor" {
   api_id                 = aws_apigatewayv2_api.ops.id
   integration_type       = "AWS_PROXY"
@@ -1455,10 +1439,6 @@ resource "null_resource" "seed_agents" {
 # Triggered monthly by EventBridge + manually via API Gateway POST.
 # ────────────────────────────────────────────────────────────────────────────────
 
-# ── SSM: Supabase creds shared with savings-calculator ──────────────────────────
-# These already exist in SSM under /sgs-quote/ — we reference them by ARN.
-# If you ever rotate them, update the /sgs-quote/ params; no Terraform change needed.
-
 resource "aws_iam_role" "savings_calculator" {
   name               = "${local.prefix}-savings-calculator-role"
   assume_role_policy = data.aws_iam_policy_document.lambda_trust.json
@@ -1475,9 +1455,9 @@ resource "aws_iam_role_policy" "savings_calculator" {
         Effect = "Allow"
         Action = ["ssm:GetParameter"]
         Resource = [
-          # Reuse the same Supabase params already in SSM from the meta-processor
           "arn:aws:ssm:*:*:parameter/sgs-quote/supabase_url",
           "arn:aws:ssm:*:*:parameter/sgs-quote/supabase_service_role_key",
+          "arn:aws:ssm:*:*:parameter/sgs-quote/new_relic_license_key"
         ]
       },
       {
@@ -1509,23 +1489,17 @@ resource "aws_lambda_function" "savings_calculator" {
   filename         = data.archive_file.savings_calculator.output_path
   source_code_hash = data.archive_file.savings_calculator.output_base64sha256
   memory_size      = 256
-  timeout          = 60 # SSM + two Supabase queries + write, easily under 60s
+  timeout          = 60
 
   environment {
     variables = {
       ENVIRONMENT = var.environment
-      # Supabase creds are fetched from SSM at runtime — no plaintext env vars.
-      # The SSM param paths are hard-coded in the handler to match existing params.
     }
   }
 
   depends_on = [aws_cloudwatch_log_group.savings_calculator]
 }
 
-# ── EventBridge schedule — 1st of every month at 00:05 IST (18:35 UTC prev day) ──
-# cron(minute hour dom month dow year)
-# IST = UTC+5:30, so 00:05 IST = 18:35 UTC the previous calendar day.
-# Using the 2nd of each month at 00:05 UTC to keep it simple and clearly "monthly".
 resource "aws_cloudwatch_event_rule" "savings_calculator_monthly" {
   name                = "${local.prefix}-savings-calculator-monthly"
   description         = "Trigger savings-calculator Lambda on the 1st of every month at 00:05 UTC"
@@ -1551,7 +1525,6 @@ resource "aws_lambda_permission" "eventbridge_savings_calculator" {
   source_arn    = aws_cloudwatch_event_rule.savings_calculator_monthly.arn
 }
 
-# ── API Gateway — manual trigger (POST /admin/savings/recompute) ────────────────
 resource "aws_apigatewayv2_integration" "savings_calculator" {
   api_id                 = aws_apigatewayv2_api.ops.id
   integration_type       = "AWS_PROXY"

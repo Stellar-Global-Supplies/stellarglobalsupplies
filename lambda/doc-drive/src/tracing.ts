@@ -5,24 +5,6 @@
  * - initTracing() — initialises OTel SDK for New Relic OTLP export
  * - trace.handler() — wrapper / decorator for Lambda handlers
  * - JSON log formatter with trace context for log correlation
- *
- * Usage:
- *   import { trace } from '../shared/tracing';
- *
- *   @trace.handler()
- *   export const handler: Handler = async (event, context) => { ... };
- *
- *   // Or without decorator:
- *   export const handler = trace.handler()(async (event, context) => { ... });
- *
- * Dependencies (add to package.json):
- *   @opentelemetry/api
- *   @opentelemetry/sdk-node
- *   @opentelemetry/exporter-trace-otlp-http
- *   @opentelemetry/semantic-conventions
- *   @opentelemetry/instrumentation-aws-sdk
- *   @opentelemetry/instrumentation-dns
- *   @opentelemetry/instrumentation-http
  */
 
 import { diag, DiagConsoleLogger, DiagLogLevel } from '@opentelemetry/api';
@@ -43,7 +25,8 @@ import {
   ATTR_CLOUD_REGION,
 } from '@opentelemetry/semantic-conventions/incubating';
 import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
-import { trace as apiTrace, context, SpanKind, SpanStatusCode } from '@opentelemetry/api';
+// FIXED: Export 'propagation' directly from @opentelemetry/api
+import { trace as apiTrace, context, propagation, SpanKind, SpanStatusCode } from '@opentelemetry/api';
 import type { Handler } from 'aws-lambda';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -84,21 +67,14 @@ async function fetchLicenseKey(prefix: string): Promise<string | null> {
     const resp = await ssm.send(cmd);
     return resp.Parameter?.Value ?? null;
   } catch (err) {
-    console.warn(`[otel] Failed to fetch NR license key from SSM: ${paramName}`);
+    const errMsg = err instanceof Error ? err.message : String(err);
+    console.warn(`[otel] Failed to fetch NR license key from SSM (${paramName}): ${errMsg}`);
     return null;
   }
 }
 
 // ─── Initialisation ───────────────────────────────────────────────────────────
 
-/**
- * Initialise OpenTelemetry with New Relic OTLP export.
- * Idempotent — safe to call multiple times.
- *
- * Environment variable overrides:
- *   OTEL_SAMPLE_RATE  — override sampling ratio (0.0–1.0)
- *   OTEL_SERVICE_NAME — override service name
- */
 export async function initTracing(config?: TracingConfig): Promise<void> {
   if (_initialised) return;
   if (_initPromise) return _initPromise;
@@ -125,11 +101,6 @@ async function _doInitTracing(config?: TracingConfig): Promise<void> {
     return;
   }
 
-  // Enable diagnostics for troubleshooting (set OTEL_LOG_LEVEL=debug to see)
-  // diag.setLogger(new DiagConsoleLogger(), DiagLogLevel.WARN);
-
-  // OTLPTraceExporter expects the full URL including /v1/traces
-  // The base URL is e.g. https://otlp.eu01.nr-data.net
   const otlpUrl = `${_config.otlpEndpoint}/v1/traces`;
 
   const otelExporter = new OTLPTraceExporter({
@@ -142,7 +113,7 @@ async function _doInitTracing(config?: TracingConfig): Promise<void> {
   const spanProcessor = new BatchSpanProcessor(otelExporter, {
     maxQueueSize: 2048,
     maxExportBatchSize: 512,
-    scheduledDelayMillis: 500,   // reduced from 5000 — Lambda invocations are short-lived
+    scheduledDelayMillis: 500,
     exportTimeoutMillis: 1000,
   });
 
@@ -160,9 +131,7 @@ async function _doInitTracing(config?: TracingConfig): Promise<void> {
     instrumentations: [
       new AwsInstrumentation({
         suppressInternalInstrumentation: true,
-        preRequestHook: (_span, _request) => {
-          // intentionally empty — we rely on default attribute suppression
-        },
+        preRequestHook: (_span, _request) => {},
       }),
       new HttpInstrumentation({
         ignoreIncomingRequestHook: () => true,
@@ -181,14 +150,6 @@ export interface WrappedHandler<TEvent = any, TResult = any> {
   (event: TEvent, context: any): Promise<TResult>;
 }
 
-/**
- * Decorator / wrapper for Lambda handlers.
- * Creates a root SERVER span for each invocation.
- *
- * @example
- *   @trace.handler()
- *   export const handler: Handler = async (event, context) => { ... };
- */
 export function handler<TEvent = any, TResult = any>(): (
   target: any,
   propertyKey?: string,
@@ -199,14 +160,12 @@ export function handler<TEvent = any, TResult = any>(): (
     _propertyKey?: string,
     descriptor?: TypedPropertyDescriptor<WrappedHandler<TEvent, TResult>>,
   ): any {
-    // Decorator form: @trace.handler()
     if (descriptor) {
       const originalMethod = descriptor.value!;
       descriptor.value = wrap(originalMethod) as WrappedHandler<TEvent, TResult>;
       return descriptor;
     }
 
-    // Direct form: export const handler = trace.handler()(async (event, ctx) => { ... })
     return (event: TEvent, lambdaContext: any): Promise<TResult> => {
       return wrap(target as WrappedHandler<TEvent, TResult>)(event, lambdaContext);
     };
@@ -217,12 +176,10 @@ function wrap<TEvent = any, TResult = any>(
   fn: WrappedHandler<TEvent, TResult>,
 ): WrappedHandler<TEvent, TResult> {
   return async (event: TEvent, lambdaContext: any): Promise<TResult> => {
-    // Auto-initialize tracing if not already done — AWAIT it so the SDK is ready
     if (!_initialised) {
       await initTracing().catch(err => console.error('[otel] initTracing failed:', err));
     }
 
-    // Skip tracing for OPTIONS / CORS preflight
     const evt = event as any;
     if (evt?.requestContext?.http?.method === 'OPTIONS') {
       return fn(event, lambdaContext);
@@ -230,14 +187,14 @@ function wrap<TEvent = any, TResult = any>(
 
     const tracer = apiTrace.getTracer(_config?.serviceName ?? 'sgs-ops-app');
 
-    // Extract W3C trace context from incoming headers (HTTP events only)
     const headers = evt?.headers ?? {};
-    const parentContext = apiTrace.propagation.extract(context.active(), {
+    
+    // FIXED: Using 'propagation.extract' instead of 'apiTrace.propagation.extract'
+    const parentContext = propagation.extract(context.active(), {
       traceparent: headers.traceparent ?? '',
       tracestate: headers.tracestate ?? '',
     });
 
-    // Detect event type so we create meaningful spans for all trigger types
     const isHttp = !!evt?.requestContext?.http?.method;
     const isS3 = Array.isArray(evt?.Records) && evt?.Records?.[0]?.eventSource === 'aws:s3';
     const isEventBridge = !!evt?.['detail-type'];
@@ -246,14 +203,12 @@ function wrap<TEvent = any, TResult = any>(
     const rawPath = evt?.rawPath ?? '/';
     const routeKey = evt?.routeKey ?? `${httpMethod} ${rawPath}`;
 
-    // Build a meaningful span name regardless of trigger type
     const spanName = isS3
       ? `S3 ${evt.Records[0]?.eventName ?? 'event'}`
       : isEventBridge
       ? `EventBridge ${evt['detail-type']}`
       : `${httpMethod} ${rawPath}`;
 
-    // Build span attributes appropriate to trigger type
     const spanAttributes: Record<string, string> = {
       'aws.lambda.function_name': lambdaContext?.functionName ?? '',
       'aws.lambda.invoked_function_arn': lambdaContext?.invokedFunctionArn ?? '',
@@ -299,14 +254,13 @@ function wrap<TEvent = any, TResult = any>(
           throw err;
         } finally {
           span.end();
-          // Force flush so spans are exported before Lambda freezes
           try {
             const tp = apiTrace.getTracerProvider();
             if (tp && typeof (tp as any).forceFlush === 'function') {
               await (tp as any).forceFlush();
             }
           } catch (flushErr) {
-            // Non-critical — spans will be exported on next invocation
+            // Non-critical
           }
         }
       },
