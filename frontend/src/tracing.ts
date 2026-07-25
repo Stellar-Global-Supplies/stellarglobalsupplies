@@ -127,8 +127,13 @@ export function initTracing(): void {
             ),
           ],
           applyCustomAttributesOnSpan(span, request, response) {
+            // Check for 'url' in request object or handle string
             const url =
-              typeof request === 'string' ? request : request.url ?? '';
+              typeof request === 'string'
+                ? request
+                : 'url' in request
+                ? request.url
+                : '';
 
             // Tag Supabase calls
             if (url.includes('supabase.co')) {
@@ -173,7 +178,7 @@ export function initTracing(): void {
         '@opentelemetry/instrumentation-xml-http-request': {
           // XHR is used for S3 uploads (uploadFileToS3 uses XMLHttpRequest)
           enabled: true,
-          applyCustomAttributesOnSpan(span, xhr) {
+          applyCustomAttributesOnSpan(span, _xhr) {
             span.setAttribute('sgs.transport', 'xhr');
             if (_userId) span.setAttribute('user.id', _userId);
           },
