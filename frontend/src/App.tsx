@@ -42,6 +42,7 @@ import OrderSummaryDashboard from '@/components/OrderSummaryDashboard';
 import QuotationsDashboard from '@/components/QuotationsDashboard';
 import DocumentsDrive from './components/DocumentsDrive';
 import WorkflowAnalytics from '@/components/WorkflowAnalytics';
+import { setUser, clearUser, recordNavigation } from '@/tracing';
 
 interface NavItem {
   section: NavSection;
@@ -181,7 +182,7 @@ function Sidebar({ session }: { session: Session | null }) {
             return (
               <button
                 key={section}
-                onClick={() => { setSection(section); if (window.innerWidth < 1024) toggleSidebar(); }}
+                onClick={() => { recordNavigation(section, activeSection); setSection(section); if (window.innerWidth < 1024) toggleSidebar(); }}
                 className={`nav-item ${isActive ? 'active' : ''}`}
                 aria-current={isActive ? 'page' : undefined}
                 title={!sidebarOpen ? label : undefined}
@@ -505,10 +506,19 @@ export default function App() {
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
       setAuthReady(true);
+      // Wire user identity into all OTLP spans
+      if (data.session?.user) {
+        setUser(data.session.user.id, data.session.user.email ?? undefined);
+      }
     });
     const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       setSession(nextSession);
       setAuthReady(true);
+      if (nextSession?.user) {
+        setUser(nextSession.user.id, nextSession.user.email ?? undefined);
+      } else {
+        clearUser();
+      }
     });
     return () => listener.subscription.unsubscribe();
   }, []);

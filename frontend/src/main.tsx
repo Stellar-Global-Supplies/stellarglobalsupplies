@@ -4,13 +4,19 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { registerSW } from 'virtual:pwa-register';
 import App from './App';
 import './index.css';
+import { initTracing } from './tracing';
+
+// ────────────────────────────────────────────────────────────────────────────
+// OTLP Tracing — initialise BEFORE React mounts so the document-load span
+// captures the full page lifecycle and all subsequent fetch spans are recorded.
+// ────────────────────────────────────────────────────────────────────────────
+initTracing();
 
 // ────────────────────────────────────────────────────────────────────────────
 // PWA Service Worker Registration
 // ────────────────────────────────────────────────────────────────────────────
 const updateSW = registerSW({
   onNeedRefresh() {
-    // Notify user a new version is available (handled by App's toast system)
     const event = new CustomEvent('pwa:update-available');
     window.dispatchEvent(event);
     console.info('[SW] New content available — call updateSW() to activate.');
@@ -22,7 +28,6 @@ const updateSW = registerSW({
   },
   onRegistered(swRegistration) {
     console.info('[SW] Service Worker registered:', swRegistration?.scope);
-    // Optionally check for updates every 60 minutes
     if (swRegistration) {
       setInterval(() => swRegistration.update(), 60 * 60 * 1000);
     }
@@ -33,7 +38,6 @@ const updateSW = registerSW({
   immediate: true,
 });
 
-// Expose update function globally so toasts can trigger it
 (window as Window & { __updateSW?: () => Promise<void> }).__updateSW = updateSW;
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -42,9 +46,9 @@ const updateSW = registerSW({
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime:          5 * 60 * 1000,  // 5 minutes
-      gcTime:             30 * 60 * 1000, // 30 minutes
-      retry:              2,
+      staleTime:            5 * 60 * 1000,
+      gcTime:               30 * 60 * 1000,
+      retry:                2,
       refetchOnWindowFocus: false,
     },
     mutations: {
