@@ -37,9 +37,11 @@ import { BatchSpanProcessor, type SpanProcessor } from '@opentelemetry/sdk-trace
 import {
   ATTR_SERVICE_NAME,
   ATTR_DEPLOYMENT_ENVIRONMENT_NAME,
+} from '@opentelemetry/semantic-conventions';
+import {
   ATTR_CLOUD_PROVIDER,
   ATTR_CLOUD_REGION,
-} from '@opentelemetry/semantic-conventions';
+} from '@opentelemetry/semantic-conventions/incubating';
 import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
 import { trace as apiTrace, context, SpanKind, SpanStatusCode } from '@opentelemetry/api';
 import type { Handler } from 'aws-lambda';
