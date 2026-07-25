@@ -1062,7 +1062,14 @@ resource "aws_apigatewayv2_api" "ops" {
 
   cors_configuration {
     allow_credentials = false
-    allow_headers     = ["Content-Type", "Authorization", "X-Amz-Date", "X-Api-Key"]
+    allow_headers     = [
+      "Content-Type",
+      "Authorization",
+      "X-Amz-Date",
+      "X-Api-Key",
+      "traceparent",
+      "tracestate"
+    ]
     allow_methods     = ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
     allow_origins     = ["https://${local.fqdn}"]
     expose_headers    = ["Content-Length", "X-Request-Id"]

@@ -61,7 +61,12 @@ resource "aws_s3_bucket_cors_configuration" "docs_drive" {
     allowed_headers = ["*"]
     allowed_methods = ["GET", "PUT", "HEAD"]
     allowed_origins = ["https://ops.stellarglobalsupplies.com"]
-    expose_headers  = ["ETag", "Content-Type", "Content-Length"]
+    expose_headers  = ["Content-Type",
+      "Authorization",
+      "X-Amz-Date",
+      "X-Api-Key",
+      "traceparent",
+      "tracestate"]
     max_age_seconds = 3600
   }
 }
