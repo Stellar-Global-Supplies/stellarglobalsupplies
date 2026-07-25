@@ -1,3 +1,4 @@
+import { trace } from '../shared/tracing';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, PutCommand } from '@aws-sdk/lib-dynamodb';
 import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
@@ -262,7 +263,7 @@ async function handleCallback(event: APIGatewayProxyEventV2): Promise<APIGateway
 // ────────────────────────────────────────────────────────────────────────────
 // Main handler
 // ────────────────────────────────────────────────────────────────────────────
-export const handler = async (
+const _handler = async (
   event: APIGatewayProxyEventV2,
 ): Promise<APIGatewayProxyResultV2> => {
   const method  = event.requestContext.http.method.toUpperCase();
@@ -282,3 +283,5 @@ export const handler = async (
 
   return jsonResponse(404, { error: `Route ${method} ${rawPath} not found.` });
 };
+
+export const handler = trace.handler()(_handler);

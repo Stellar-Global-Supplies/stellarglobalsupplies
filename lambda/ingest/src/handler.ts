@@ -6,6 +6,7 @@
  * records, finds the actual data columns, and upserts only to Supabase.
  */
 
+import { trace } from '../shared/tracing';
 import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
 import type { S3Event, S3Handler } from 'aws-lambda';
 import { Readable } from 'stream';
@@ -369,7 +370,7 @@ function groupByTable(records: ParsedRecord[]): Map<TableName, Record<string, un
   return grouped;
 }
 
-export const handler: S3Handler = async (event: S3Event) => {
+const _handler: S3Handler = async (event: S3Event) => {
   for (const rec of event.Records) {
     const bucket = rec.s3.bucket.name;
     const key = decodeURIComponent(rec.s3.object.key.replace(/\+/g, ' '));
@@ -416,3 +417,5 @@ export const handler: S3Handler = async (event: S3Event) => {
     }
   }
 };
+
+export const handler = trace.handler()(_handler);

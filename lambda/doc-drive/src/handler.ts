@@ -30,6 +30,7 @@
  *     Allows efficient listing of items under a given prefix.
  */
 
+import { trace } from '../shared/tracing';
 import { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda';
 import {
   S3Client,
@@ -77,7 +78,7 @@ function err(message: string, status = 400): APIGatewayProxyResultV2 {
 
 // ─── Handler ──────────────────────────────────────────────────────────────────
 
-export const handler = async (event: APIGatewayProxyEventV2): Promise<APIGatewayProxyResultV2> => {
+const _handler = async (event: APIGatewayProxyEventV2): Promise<APIGatewayProxyResultV2> => {
   // Handle preflight
   if (event.requestContext.http.method === 'OPTIONS') {
     return { statusCode: 204, headers: CORS, body: '' };
@@ -97,6 +98,8 @@ export const handler = async (event: APIGatewayProxyEventV2): Promise<APIGateway
     return err((e as Error).message, 500);
   }
 };
+
+export const handler = trace.handler()(_handler);
 
 // ─── List Items ───────────────────────────────────────────────────────────────
 /**

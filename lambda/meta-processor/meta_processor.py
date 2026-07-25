@@ -33,16 +33,46 @@ def get_ssm_param(name):
         print(f"SSM get_parameter failed for {name}: {e}")
         return ''
 
-# Supabase config
-SUPABASE_URL = get_ssm_param('/sgs-quote/supabase_url')
-SUPABASE_KEY = get_ssm_param('/sgs-quote/supabase_service_role_key')
-SUPABASE_TABLE = 'observe_meta_analytics_cache'
+# ── Lazy config ───────────────────────────────────────────────────────────────
+# IMPORTANT: SSM calls are deliberately deferred to first invocation, NOT
+# executed at module load time. Running them at module level caused two bugs:
+#
+#   1. The OTel TracerProvider is initialised inside trace_lambda_handler's
+#      wrapper, which runs AFTER module-level code. Any boto3 calls at import
+#      time are therefore invisible to the tracer — their spans are never
+#      recorded and the NR license-key fetch in tracing.py hasn't fired yet
+#      either, so the exporter isn't even wired up.
+#
+#   2. A module-level SSM failure (cold-start IAM race, missing parameter,
+#      etc.) silently sets globals to '' and breaks every invocation until
+#      the next cold start.
+#
+# By deferring to _load_config() we guarantee:
+#   - The tracer is fully active before any network I/O runs.
+#   - Config errors surface per-invocation with a clear exception.
+#   - Warm invocations still use the cached _CFG dict (zero extra SSM calls).
 
-# Meta API config
-TOKEN = get_ssm_param('/stellar-wf/facebook/access_token')
-IG_ID = get_ssm_param('/stellar-wf/instagram/account_id')
-AD_ACT = get_ssm_param('/stellar-wf/ad_account_id')
-PAGE_ID = get_ssm_param('/stellar-wf/facebook/page_id')
+_CFG: dict | None = None
+
+def _load_config() -> dict:
+    global _CFG
+    if _CFG is not None:
+        return _CFG
+    _CFG = {
+        'SUPABASE_URL': get_ssm_param('/sgs-quote/supabase_url'),
+        'SUPABASE_KEY': get_ssm_param('/sgs-quote/supabase_service_role_key'),
+        'TOKEN':        get_ssm_param('/stellar-wf/facebook/access_token'),
+        'IG_ID':        get_ssm_param('/stellar-wf/instagram/account_id'),
+        'AD_ACT':       get_ssm_param('/stellar-wf/ad_account_id'),
+        'PAGE_ID':      get_ssm_param('/stellar-wf/facebook/page_id'),
+    }
+    return _CFG
+
+def _cfg(key: str) -> str:
+    """Convenience accessor — always safe to call inside the handler."""
+    return _load_config()[key]
+
+SUPABASE_TABLE = 'observe_meta_analytics_cache'
 API_VER = os.environ.get('GRAPH_API_VERSION', 'v19.0')
 BASE = f'https://graph.facebook.com/{API_VER}'
 
@@ -51,7 +81,7 @@ BASE = f'https://graph.facebook.com/{API_VER}'
 # HTTP HELPER
 # ─────────────────────────────────────────
 def graph_get(path, params=None, token_override=None):
-    p = {'access_token': token_override or TOKEN}
+    p = {'access_token': token_override or _cfg('TOKEN')}
     if params:
         p.update(params)
     url = f"{BASE}/{path}?{urllib.parse.urlencode(p)}"
@@ -113,7 +143,7 @@ def get_page_token(page_id):
         print(f"Got Page Access Token for: {resp.get('name', page_id)}")
     else:
         print(f"WARNING: Could not get Page Access Token — falling back to User Token. Demographics may fail.")
-        page_token = TOKEN
+        page_token = _cfg('TOKEN')
     return page_token
 
 
@@ -121,13 +151,14 @@ def get_page_token(page_id):
 # 1. INSTAGRAM INSIGHTS
 # ─────────────────────────────────────────
 def fetch_instagram(period_days):
+    ig_id = _cfg('IG_ID')
     since, until = since_until(period_days)
 
     # Profile snapshot
-    profile = get(IG_ID, {'fields': 'followers_count,follows_count,media_count,name,username'})
+    profile = get(ig_id, {'fields': 'followers_count,follows_count,media_count,name,username'})
 
     # REACH: only metric valid for period=day WITHOUT metric_type=total_value
-    reach_resp, _ = graph_get(f"{IG_ID}/insights", {
+    reach_resp, _ = graph_get(f"{ig_id}/insights", {
         'metric': 'reach',
         'period': 'day',
         'since': since,
@@ -135,7 +166,7 @@ def fetch_instagram(period_days):
     })
 
     # ALL other time-series metrics require metric_type=total_value in v19+
-    totals_resp, _ = graph_get(f"{IG_ID}/insights", {
+    totals_resp, _ = graph_get(f"{ig_id}/insights", {
         'metric': 'profile_views,accounts_engaged,total_interactions,website_clicks',
         'period': 'day',
         'metric_type': 'total_value',
@@ -166,7 +197,7 @@ def fetch_instagram(period_days):
 
     # Follower demographics — age+gender
     age_gender = {}
-    demo_age, _ = graph_get(f"{IG_ID}/insights", {
+    demo_age, _ = graph_get(f"{ig_id}/insights", {
         'metric': 'follower_demographics',
         'period': 'lifetime',
         'timeframe': 'last_90_days',
@@ -181,7 +212,7 @@ def fetch_instagram(period_days):
                     age_gender[key] = r.get('value', 0)
 
     city_data = {}
-    demo_city, _ = graph_get(f"{IG_ID}/insights", {
+    demo_city, _ = graph_get(f"{ig_id}/insights", {
         'metric': 'follower_demographics',
         'period': 'lifetime',
         'timeframe': 'last_90_days',
@@ -196,7 +227,7 @@ def fetch_instagram(period_days):
                     city_data[key] = r.get('value', 0)
 
     # Online followers heatmap
-    online_resp, _ = graph_get(f"{IG_ID}/insights", {'metric': 'online_followers', 'period': 'lifetime'})
+    online_resp, _ = graph_get(f"{ig_id}/insights", {'metric': 'online_followers', 'period': 'lifetime'})
     online_hours = {}
     for item in safe_list(online_resp):
         if item.get('name') == 'online_followers':
@@ -206,7 +237,7 @@ def fetch_instagram(period_days):
                 online_hours = {str(h): raw.get(str(h), 0) for h in range(24)}
 
     # Top media posts
-    media = get(f"{IG_ID}/media", {
+    media = get(f"{ig_id}/media", {
         'fields': 'id,media_type,timestamp,like_count,comments_count,reach,permalink,caption',
         'limit': 50,
     })
@@ -270,11 +301,12 @@ def fetch_instagram(period_days):
 # 2. META ADS CAMPAIGNS
 # ─────────────────────────────────────────
 def fetch_ads(period_days):
+    ad_act = _cfg('AD_ACT')
     since, until = since_until(period_days)
     preset = 'last_7d' if period_days == 7 else 'last_30d'
 
     # Test for 403 upfront — if no permission, return empty struct
-    acct_resp, err = graph_get(f"{AD_ACT}/insights", {
+    acct_resp, err = graph_get(f"{ad_act}/insights", {
         'fields': 'impressions,clicks,spend,ctr,cpc,cpm,reach,frequency,actions',
         'date_preset': preset, 'level': 'account',
     })
@@ -287,7 +319,7 @@ def fetch_ads(period_days):
     actions = acct.get('actions', [])
     total_spend = flt(acct, 'spend')
 
-    daily_resp, _ = graph_get(f"{AD_ACT}/insights", {
+    daily_resp, _ = graph_get(f"{ad_act}/insights", {
         'fields': 'spend,impressions,clicks,ctr', 'time_increment': 1,
         'since': since, 'until': until, 'level': 'account',
     })
@@ -297,7 +329,7 @@ def fetch_ads(period_days):
         for d in safe_list(daily_resp)
     ]
 
-    campaigns_resp, _ = graph_get(f"{AD_ACT}/campaigns", {'fields': 'id,name,status,objective', 'limit': 50})
+    campaigns_resp, _ = graph_get(f"{ad_act}/campaigns", {'fields': 'id,name,status,objective', 'limit': 50})
     camp_list = []
     for c in safe_list(campaigns_resp):
         cid = c.get('id')
@@ -313,9 +345,9 @@ def fetch_ads(period_days):
         })
     camp_list.sort(key=lambda x: -x['spend'])
 
-    age_resp, _ = graph_get(f"{AD_ACT}/insights", {'fields': 'impressions,clicks,spend,ctr', 'breakdowns': 'age,gender', 'date_preset': preset, 'level': 'account'})
-    region_resp, _ = graph_get(f"{AD_ACT}/insights", {'fields': 'impressions,clicks,spend', 'breakdowns': 'region', 'date_preset': preset, 'level': 'account'})
-    place_resp, _ = graph_get(f"{AD_ACT}/insights", {'fields': 'impressions,clicks,spend,ctr', 'breakdowns': 'publisher_platform,platform_position', 'date_preset': preset, 'level': 'account'})
+    age_resp, _ = graph_get(f"{ad_act}/insights", {'fields': 'impressions,clicks,spend,ctr', 'breakdowns': 'age,gender', 'date_preset': preset, 'level': 'account'})
+    region_resp, _ = graph_get(f"{ad_act}/insights", {'fields': 'impressions,clicks,spend', 'breakdowns': 'region', 'date_preset': preset, 'level': 'account'})
+    place_resp, _ = graph_get(f"{ad_act}/insights", {'fields': 'impressions,clicks,spend,ctr', 'breakdowns': 'publisher_platform,platform_position', 'date_preset': preset, 'level': 'account'})
 
     age_gender = {}
     for row in safe_list(age_resp):
@@ -353,19 +385,20 @@ def fetch_ads(period_days):
 # 3. FACEBOOK PAGE INSIGHTS
 # ─────────────────────────────────────────
 def fetch_facebook(period_days):
+    page_id = _cfg('PAGE_ID')
     since, until = since_until(period_days)
 
     # Exchange User Token for Page Access Token
-    page_token = get_page_token(PAGE_ID)
+    page_token = get_page_token(page_id)
 
     # Page profile snapshot
-    page = get(PAGE_ID,
+    page = get(page_id,
                {'fields': 'name,fan_count,followers_count,talking_about_count,category'},
                token_override=page_token)
 
     def fb_metric(metric_name, alt_name=None):
         """Fetch a single day-period metric. Returns list of {date, value}."""
-        resp, err = graph_get(f"{PAGE_ID}/insights", {
+        resp, err = graph_get(f"{page_id}/insights", {
             'metric': metric_name,
             'period': 'day',
             'since': since,
@@ -373,13 +406,12 @@ def fetch_facebook(period_days):
         }, token_override=page_token)
         if err and alt_name:
             print(f"  {metric_name} failed, trying alt: {alt_name}")
-            resp, err = graph_get(f"{PAGE_ID}/insights", {
+            resp, err = graph_get(f"{page_id}/insights", {
                 'metric': alt_name,
                 'period': 'day',
                 'since': since,
                 'until': until,
             }, token_override=page_token)
-        series_key = alt_name if (err is None and alt_name) else metric_name
         values = []
         for item in safe_list(resp):
             values = item.get('values', [])
@@ -397,7 +429,6 @@ def fetch_facebook(period_days):
     daily_eng = fb_metric('page_post_engagements')
     daily_views = fb_metric('page_views_total')
 
-    # page_fan_adds/removes renamed in v17+
     fans_added = fb_metric('page_daily_follows_unique', alt_name='page_fan_adds')
     fans_removed = fb_metric('page_daily_unfollows_unique', alt_name='page_fan_removes')
 
@@ -411,13 +442,9 @@ def fetch_facebook(period_days):
     for d in fans_added:
         fan_net.append({'date': d['date'], 'value': d['value'] - removed_map.get(d['date'], 0)})
 
-    # Demographics
-    fan_ages = {}
-    fan_cities = {}
-
     def fb_lifetime(metric_name):
         """Fetch a lifetime metric silently — returns {} if unavailable."""
-        resp, err = graph_get(f"{PAGE_ID}/insights", {
+        resp, err = graph_get(f"{page_id}/insights", {
             'metric': metric_name,
             'period': 'lifetime',
         }, token_override=page_token)
@@ -434,8 +461,7 @@ def fetch_facebook(period_days):
     fan_ages = fb_lifetime('page_fans_gender_age')
     fan_cities = fb_lifetime('page_fans_city')
 
-    # Recent posts
-    posts_raw, _ = graph_get(f"{PAGE_ID}/posts", {
+    posts_raw, _ = graph_get(f"{page_id}/posts", {
         'fields': 'id,message,created_time,permalink_url,'
                   'likes.summary(true),comments.summary(true),shares',
         'limit': 50,
@@ -555,14 +581,15 @@ def persist_to_supabase(report, period):
     Upsert the report to Supabase observe_meta_analytics_cache.
     Uses ON CONFLICT (period) DO UPDATE so there is always exactly one
     row per period rather than an ever-growing append log.
-    Stores the `insights` block so the agent-router can return it
-    alongside instagram/ads/facebook without recomputing.
     """
-    if not SUPABASE_URL or not SUPABASE_KEY:
+    supabase_url = _cfg('SUPABASE_URL')
+    supabase_key = _cfg('SUPABASE_KEY')
+
+    if not supabase_url or not supabase_key:
         print("WARNING: Supabase credentials not configured")
         return
 
-    url = f"{SUPABASE_URL}/rest/v1/{SUPABASE_TABLE}?on_conflict=period"
+    url = f"{supabase_url}/rest/v1/{SUPABASE_TABLE}?on_conflict=period"
     payload = {
         'cached_at': report.get('generated_at'),
         'period': period,
@@ -576,10 +603,9 @@ def persist_to_supabase(report, period):
         url,
         data=json.dumps(payload).encode('utf-8'),
         headers={
-            'apikey': SUPABASE_KEY,
-            'Authorization': f'Bearer {SUPABASE_KEY}',
+            'apikey': supabase_key,
+            'Authorization': f'Bearer {supabase_key}',
             'Content-Type': 'application/json',
-            # Upsert: if a row with this `period` already exists, update it.
             'Prefer': 'resolution=merge-duplicates,return=minimal',
         },
         method='POST',
@@ -601,6 +627,11 @@ def persist_to_supabase(report, period):
 
 @trace_lambda_handler
 def handler(event, context):
+    # _load_config() is called here for the first time — AFTER the tracer
+    # has been initialised by @trace_lambda_handler. All subsequent SSM
+    # calls on warm invocations hit the _CFG cache with zero network I/O.
+    _load_config()
+
     results = {}
     for period_days, period in [(7, 'weekly'), (30, 'monthly')]:
         try:

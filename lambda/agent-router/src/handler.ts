@@ -1553,7 +1553,7 @@ async function handleDashboard(): Promise<APIGatewayProxyResultV2> {
 // ────────────────────────────────────────────────────────────────────────────
 // Main Lambda handler — request router
 // ────────────────────────────────────────────────────────────────────────────
-export const handler = async (
+const _handler = async (
   event: APIGatewayProxyEventV2,
 ): Promise<APIGatewayProxyResultV2> => {
   const method  = event.requestContext.http.method.toUpperCase();
@@ -1635,3 +1635,4 @@ export const handler = async (
 
   return respond(404, { error: `Route ${method} ${rawPath} not found.` });
 };
+export const handler = trace.handler()(_handler);

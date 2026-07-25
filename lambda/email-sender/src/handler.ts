@@ -182,7 +182,7 @@ async function sendViaGmail(
 
 // ── Handler ───────────────────────────────────────────────────────────────────
 
-export const handler: APIGatewayProxyHandlerV2 = async (event) => {
+const _handler: APIGatewayProxyHandlerV2 = async (event) => {
   try {
     // ── Parse & validate ───────────────────────────────────────────────────────
     let parsed: EmailRequest;
@@ -268,3 +268,4 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
 function reply(statusCode: number, body: unknown) {
   return { statusCode, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) };
 }
+export const handler = trace.handler()(_handler);

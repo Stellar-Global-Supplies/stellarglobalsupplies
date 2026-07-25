@@ -19,6 +19,7 @@
  *  - If a year has no inflation row, falls back to the most recent known rate
  */
 
+import { trace } from '../shared/tracing';
 import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import type { Handler } from 'aws-lambda';
@@ -337,7 +338,7 @@ async function upsertCache(
 
 // ─── Lambda handler ───────────────────────────────────────────────────────────
 
-export const handler: Handler = async (event) => {
+const _handler: Handler = async (event) => {
   console.log('[savings-calculator] invoked', JSON.stringify(event).slice(0, 200));
 
   try {
@@ -402,3 +403,4 @@ export const handler: Handler = async (event) => {
     };
   }
 };
+export const handler = trace.handler()(_handler);

@@ -140,7 +140,7 @@ async function _doInitTracing(config?: TracingConfig): Promise<void> {
   const spanProcessor = new BatchSpanProcessor(otelExporter, {
     maxQueueSize: 2048,
     maxExportBatchSize: 512,
-    scheduledDelayMillis: 5000,
+    scheduledDelayMillis: 500,   // reduced from 5000 — Lambda invocations are short-lived
     exportTimeoutMillis: 1000,
   });
 
@@ -228,28 +228,53 @@ function wrap<TEvent = any, TResult = any>(
 
     const tracer = apiTrace.getTracer(_config?.serviceName ?? 'sgs-ops-app');
 
-    // Extract W3C trace context from incoming headers
+    // Extract W3C trace context from incoming headers (HTTP events only)
     const headers = evt?.headers ?? {};
     const parentContext = apiTrace.propagation.extract(context.active(), {
       traceparent: headers.traceparent ?? '',
       tracestate: headers.tracestate ?? '',
     });
 
-    const httpMethod = evt?.requestContext?.http?.method ?? 'UNKNOWN';
+    // Detect event type so we create meaningful spans for all trigger types
+    const isHttp = !!evt?.requestContext?.http?.method;
+    const isS3 = Array.isArray(evt?.Records) && evt?.Records?.[0]?.eventSource === 'aws:s3';
+    const isEventBridge = !!evt?.['detail-type'];
+
+    const httpMethod = evt?.requestContext?.http?.method ?? 'INVOKE';
     const rawPath = evt?.rawPath ?? '/';
-    const routeKey = evt?.routeKey ?? 'unknown';
+    const routeKey = evt?.routeKey ?? `${httpMethod} ${rawPath}`;
+
+    // Build a meaningful span name regardless of trigger type
+    const spanName = isS3
+      ? `S3 ${evt.Records[0]?.eventName ?? 'event'}`
+      : isEventBridge
+      ? `EventBridge ${evt['detail-type']}`
+      : `${httpMethod} ${rawPath}`;
+
+    // Build span attributes appropriate to trigger type
+    const spanAttributes: Record<string, string> = {
+      'aws.lambda.function_name': lambdaContext?.functionName ?? '',
+      'aws.lambda.invoked_function_arn': lambdaContext?.invokedFunctionArn ?? '',
+    };
+    if (isHttp) {
+      spanAttributes['http.request.method'] = httpMethod;
+      spanAttributes['http.route'] = routeKey;
+      spanAttributes['url.path'] = rawPath;
+    }
+    if (isS3) {
+      spanAttributes['aws.s3.bucket'] = evt.Records[0]?.s3?.bucket?.name ?? '';
+      spanAttributes['aws.s3.key'] = evt.Records[0]?.s3?.object?.key ?? '';
+    }
+    if (isEventBridge) {
+      spanAttributes['eventbridge.detail_type'] = evt['detail-type'];
+      spanAttributes['eventbridge.source'] = evt.source ?? '';
+    }
 
     return tracer.startActiveSpan(
-      `${httpMethod} ${rawPath}`,
+      spanName,
       {
         kind: SpanKind.SERVER,
-        attributes: {
-          'http.request.method': httpMethod,
-          'http.route': routeKey,
-          'url.path': rawPath,
-          'aws.lambda.function_name': lambdaContext?.functionName ?? '',
-          'aws.lambda.invoked_function_arn': lambdaContext?.invokedFunctionArn ?? '',
-        },
+        attributes: spanAttributes,
       },
       parentContext,
       async (span) => {
@@ -259,11 +284,11 @@ function wrap<TEvent = any, TResult = any>(
             result && typeof result === 'object' && 'statusCode' in (result as any)
               ? (result as any).statusCode
               : 200;
-          span.setAttribute('http.response.status_code', statusCode);
+          if (isHttp) span.setAttribute('http.response.status_code', statusCode);
           span.setStatus({ code: SpanStatusCode.OK });
           return result;
         } catch (err: any) {
-          span.setAttribute('http.response.status_code', 500);
+          if (isHttp) span.setAttribute('http.response.status_code', 500);
           span.setStatus({
             code: SpanStatusCode.ERROR,
             message: err?.message ?? String(err),

@@ -1,3 +1,4 @@
+import { trace } from '../shared/tracing';
 import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda';
@@ -95,7 +96,7 @@ function getFileExtension(filename: string, contentType: string): string | null 
 // ────────────────────────────────────────────────────────────────────────────
 // Lambda handler
 // ────────────────────────────────────────────────────────────────────────────
-export const handler = async (
+const _handler = async (
   event: APIGatewayProxyEventV2,
 ): Promise<APIGatewayProxyResultV2> => {
   // Handle CORS preflight
@@ -217,3 +218,4 @@ export const handler = async (
     return respond(500, { error: 'Failed to generate upload URL. Please try again.' });
   }
 };
+export const handler = trace.handler()(_handler);

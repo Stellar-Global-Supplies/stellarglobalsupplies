@@ -1,3 +1,4 @@
+import { trace } from '../shared/tracing';
 import {
   DynamoDBClient,
 } from '@aws-sdk/client-dynamodb';
@@ -508,7 +509,7 @@ async function handlePostToLinkedIn(event: APIGatewayProxyEventV2): Promise<APIG
 // Main Router
 // ────────────────────────────────────────────────────────────────────────────
 
-export const handler = async (event: APIGatewayProxyEventV2): Promise<APIGatewayProxyResultV2> => {
+const _handler = async (event: APIGatewayProxyEventV2): Promise<APIGatewayProxyResultV2> => {
   try {
     const routeKey = event.routeKey;
     console.log('Social poster route:', routeKey);
@@ -550,3 +551,4 @@ export const handler = async (event: APIGatewayProxyEventV2): Promise<APIGateway
     };
   }
 };
+export const handler = trace.handler()(_handler);
