@@ -19,7 +19,7 @@
  *  - If a year has no inflation row, falls back to the most recent known rate
  */
 
-import { trace } from '../shared/tracing';
+import { trace } from './tracing';
 import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import type { Handler } from 'aws-lambda';

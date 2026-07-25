@@ -6,7 +6,7 @@
  * records, finds the actual data columns, and upserts only to Supabase.
  */
 
-import { trace } from '../shared/tracing';
+import { trace } from './tracing';
 import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
 import type { S3Event, S3Handler } from 'aws-lambda';
 import { Readable } from 'stream';

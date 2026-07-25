@@ -30,7 +30,7 @@
  *     Allows efficient listing of items under a given prefix.
  */
 
-import { trace } from '../shared/tracing';
+import { trace } from './tracing';
 import { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda';
 import {
   S3Client,

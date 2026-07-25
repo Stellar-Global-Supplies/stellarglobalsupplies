@@ -1,4 +1,4 @@
-import { trace } from '../shared/tracing';
+import { trace } from './tracing';
 import {
   DynamoDBClient,
 } from '@aws-sdk/client-dynamodb';
