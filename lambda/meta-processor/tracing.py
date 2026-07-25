@@ -147,7 +147,11 @@ def configure_json_logging(logger_name: str | None = None) -> logging.Logger:
 
 
 def trace_lambda_handler(handler: Callable) -> Callable:
-    """Decorator: creates root SERVER span for Lambda invocation."""
+    """Decorator: creates root SERVER span for Lambda invocation.
+
+    Uses start_as_current_span so the span is activated in the context,
+    enabling log correlation via TraceJsonFormatter and child span linking.
+    """
 
     @functools.wraps(handler)
     def wrapper(event: dict, context: object) -> dict:
@@ -169,7 +173,10 @@ def trace_lambda_handler(handler: Callable) -> Callable:
         span_name = f"{http_method} {raw_path}"
 
         tracer = _get_tracer()
-        span = tracer.start_span(
+
+        # Use start_as_current_span so the span is activated in the context,
+        # enabling log correlation via TraceJsonFormatter and child span linking
+        with tracer.start_as_current_span(
             span_name,
             context=ctx,
             kind=SpanKind.SERVER,
@@ -178,26 +185,24 @@ def trace_lambda_handler(handler: Callable) -> Callable:
                 "http.route": route_key,
                 "url.path": raw_path,
             },
-        )
-
-        try:
-            response = handler(event, context)
-            status_code = response.get("statusCode", 200) if isinstance(response, dict) else 200
-            span.set_attribute("http.response.status_code", status_code)
-            return response
-
-        except Exception as exc:
-            span.set_attribute("http.response.status_code", 500)
-            span.set_status(Status(StatusCode.ERROR, str(exc)))
-            span.record_exception(exc)
-            raise
-
-        finally:
-            span.end()
+        ) as span:
             try:
-                tp = _get_tracer_provider()
-                tp.force_flush(timeout_millis=1500)
-            except Exception:
-                logger.warning("Telemetry force_flush failed; continuing")
+                response = handler(event, context)
+                status_code = response.get("statusCode", 200) if isinstance(response, dict) else 200
+                span.set_attribute("http.response.status_code", status_code)
+                return response
+
+            except Exception as exc:
+                span.set_attribute("http.response.status_code", 500)
+                span.set_status(Status(StatusCode.ERROR, str(exc)))
+                span.record_exception(exc)
+                raise
+
+            finally:
+                try:
+                    tp = _get_tracer_provider()
+                    tp.force_flush(timeout_millis=1500)
+                except Exception:
+                    logger.warning("Telemetry force_flush failed; continuing")
 
     return wrapper
