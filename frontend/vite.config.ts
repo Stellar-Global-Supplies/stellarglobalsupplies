@@ -27,16 +27,6 @@ export default defineConfig(({ mode }) => {
           clientsClaim: true,
           runtimeCaching: [
             {
-              // Cache API responses with stale-while-revalidate
-              urlPattern: ({ url }) => url.pathname.startsWith('/agents'),
-              handler: 'StaleWhileRevalidate',
-              options: {
-                cacheName: 'api-agents-cache',
-                expiration: { maxAgeSeconds: 300, maxEntries: 20 },
-                cacheableResponse: { statuses: [0, 200] },
-              },
-            },
-            {
               // Analytics — short TTL cache
               urlPattern: ({ url }) => url.pathname.startsWith('/analytics'),
               handler: 'NetworkFirst',
@@ -96,7 +86,6 @@ export default defineConfig(({ mode }) => {
       port: 3000,
       proxy: {
         '/upload':    { target: env.VITE_API_BASE_URL, changeOrigin: true, rewrite: p => p },
-        '/agents':    { target: env.VITE_API_BASE_URL, changeOrigin: true, rewrite: p => p },
         '/analytics': { target: env.VITE_API_BASE_URL, changeOrigin: true, rewrite: p => p },
         // aws-costs uses the same shared API Gateway — no separate gateway needed
         '/aws-costs': { target: env.VITE_API_BASE_URL, changeOrigin: true, rewrite: p => p },

@@ -1,8 +1,5 @@
 import type {
-  AgentProfile,
   AnalyticsSummary,
-  ChatRequest,
-  ChatResponse,
   GoogleConnectionStatus,
   PresignRequest,
   PresignResponse,
@@ -50,28 +47,6 @@ async function request<T>(
   if (response.status === 204) return null as T;
 
   return response.json() as Promise<T>;
-}
-
-// ────────────────────────────────────────────────────────────────────────────
-// Agents
-// ────────────────────────────────────────────────────────────────────────────
-
-export async function listAgents(): Promise<AgentProfile[]> {
-  return request<AgentProfile[]>('/agents');
-}
-
-// ────────────────────────────────────────────────────────────────────────────
-// Chat
-// ────────────────────────────────────────────────────────────────────────────
-
-export async function sendChatMessage(
-  agentId: string,
-  payload: ChatRequest,
-): Promise<ChatResponse> {
-  return request<ChatResponse>(`/agents/${agentId}/chat`, {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  });
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -228,7 +203,7 @@ export async function fetchApiMetrics(
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// Google OAuth — personal Calendar/Gmail access (Executive Assistant agent)
+// Google OAuth — personal Calendar/Gmail access (used by Email Campaign Widget)
 // ────────────────────────────────────────────────────────────────────────────
 
 /**

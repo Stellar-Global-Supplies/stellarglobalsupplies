@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { v4 as uuidv4 } from 'uuid';
-import type { AppNotification, NavSection, ChatSession, ChatMessage } from '@/types';
+import type { AppNotification, NavSection } from '@/types';
 
 // ────────────────────────────────────────────────────────────────────────────
 // Notification store
@@ -75,81 +75,5 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
   toggleTheme: () => {
     const newTheme = get().theme === 'dark' ? 'light' : 'dark';
     get().setTheme(newTheme);
-  },
-}));
-
-// ────────────────────────────────────────────────────────────────────────────
-// Chat session store — manages all in-memory sessions keyed by agentId
-// ────────────────────────────────────────────────────────────────────────────
-interface ChatState {
-  sessions: Record<string, ChatSession>;  // agentId → session
-  activeAgentId: string | null;
-
-  setActiveAgent: (agentId: string) => void;
-  getOrCreateSession: (agentId: string, userId: string) => ChatSession;
-  appendMessage: (agentId: string, msg: ChatMessage) => void;
-  updateLastMessage: (agentId: string, patch: Partial<ChatMessage>) => void;
-  clearSession: (agentId: string) => void;
-}
-
-export const useChatStore = create<ChatState>((set, get) => ({
-  sessions: {},
-  activeAgentId: null,
-
-  setActiveAgent(agentId) {
-    set({ activeAgentId: agentId });
-  },
-
-  getOrCreateSession(agentId, userId) {
-    const existing = get().sessions[agentId];
-    if (existing) return existing;
-
-    const session: ChatSession = {
-      session_id: uuidv4(),
-      agent_id:   agentId,
-      user_id:    userId,
-      started_at: new Date().toISOString(),
-      messages:   [],
-    };
-
-    set((s) => ({ sessions: { ...s.sessions, [agentId]: session } }));
-    return session;
-  },
-
-  appendMessage(agentId, msg) {
-    set((s) => {
-      const session = s.sessions[agentId];
-      if (!session) return s;
-      return {
-        sessions: {
-          ...s.sessions,
-          [agentId]: { ...session, messages: [...session.messages, msg] },
-        },
-      };
-    });
-  },
-
-  updateLastMessage(agentId, patch) {
-    set((s) => {
-      const session = s.sessions[agentId];
-      if (!session || session.messages.length === 0) return s;
-
-      const msgs = [...session.messages];
-      msgs[msgs.length - 1] = { ...msgs[msgs.length - 1], ...patch };
-
-      return {
-        sessions: {
-          ...s.sessions,
-          [agentId]: { ...session, messages: msgs },
-        },
-      };
-    });
-  },
-
-  clearSession(agentId) {
-    set((s) => {
-      const { [agentId]: _, ...rest } = s.sessions;
-      return { sessions: rest };
-    });
   },
 }));

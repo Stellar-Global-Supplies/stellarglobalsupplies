@@ -53,48 +53,6 @@ export interface POLineItem {
 }
 
 // -----------------------------------------------------------
-// AI Agent types
-// -----------------------------------------------------------
-
-export type AgentRole =
-  | 'sales-analyst'
-  | 'sales-strategist'
-  | 'business-analyst'
-  | 'cloud-engineer'
-  | 'marketing-manager'
-  | 'executive-assistant'
-  | 'demand-forecasting';
-
-export interface AgentProfile {
-  agent_id:    string;
-  name:        string;
-  role:        AgentRole;
-  description: string;
-  color:       string;       // Hex color for avatar/accent
-  icon:        string;       // lucide-react icon name
-  model:       string;
-  created_at:  string;
-}
-
-export interface ChatMessage {
-  message_id:  string;
-  session_id:  string;
-  role:        'user' | 'assistant' | 'system';
-  content:     string;
-  timestamp:   string;
-  isStreaming?: boolean;
-  toolsUsed?:  string[];
-}
-
-export interface ChatSession {
-  session_id:  string;
-  agent_id:    string;
-  user_id:     string;
-  started_at:  string;
-  messages:    ChatMessage[];
-}
-
-// -----------------------------------------------------------
 // API request/response shapes
 // -----------------------------------------------------------
 
@@ -109,26 +67,6 @@ export interface PresignResponse {
   key:         string;
   expires_in:  number;
   read_url?:   string;
-}
-
-export interface ChatRequest {
-  session_id?: string;
-  message:     string;
-  user_id:     string;
-}
-
-export interface ChatResponse {
-  session_id:  string;
-  message_id:  string;
-  content:     string;
-  agent_id:    string;
-  timestamp:   string;
-  context_used: {
-    sales_records:    number;
-    recent_invoices:  number;
-    analytics_snap:   boolean;
-    tools_used?: string[];
-  };
 }
 
 export interface GoogleConnectionStatus {
@@ -247,10 +185,6 @@ export interface UploadJob {
   started_at: string;
   completed_at?: string;
 }
-
-// -----------------------------------------------------------
-// UI state
-// -----------------------------------------------------------
 
 // -----------------------------------------------------------
 // Analytics types (for web traffic and meta marketing)
@@ -469,7 +403,6 @@ export interface Quote {
 
 export type NavSection =
   | 'dashboard'
-  | 'agents'
   | 'ingest'
   | 'inventory'
   | 'analytics'
@@ -478,7 +411,6 @@ export type NavSection =
   | 'tasks'
   | 'orders'
   | 'quotations'
-  | 'documents'
   | 'workflow-analytics';
 
 // ────────────────────────────────────────────────────────────────────────────

@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
   LayoutDashboard,
-  Bot,
   Upload,
   BarChart3,
   Menu,
@@ -21,7 +20,6 @@ import {
   ClipboardList,
   Sun,
   Moon,
-  HardDrive,
   Activity,
 } from 'lucide-react';
 import type { Session } from '@supabase/supabase-js';
@@ -31,7 +29,6 @@ import type { NavSection } from '@/types';
 import { supabase } from '@/lib/supabase';
 import Dashboard from '@/components/Dashboard';
 import MetaMarketingDashboard from '@/components/MetaMarketingDashboard';
-import AgentPanel from '@/components/AgentPanel';
 import DataIngestion from '@/components/DataIngestion';
 import Analytics from '@/components/Analytics';
 import InventoryDashboard from '@/components/InventoryDashboard';
@@ -40,7 +37,6 @@ import AuthPage from '@/components/AuthPage';
 import TasksPage from '@/pages/tasks/TasksPage';
 import OrderSummaryDashboard from '@/components/OrderSummaryDashboard';
 import QuotationsDashboard from '@/components/QuotationsDashboard';
-import DocumentsDrive from './components/DocumentsDrive';
 import WorkflowAnalytics from '@/components/WorkflowAnalytics';
 import { setUser, clearUser, recordNavigation } from '@/tracing';
 
@@ -53,7 +49,6 @@ interface NavItem {
 
 const CEO_ITEMS: NavItem[] = [
   { section: 'dashboard',  label: 'Command Center',    Icon: LayoutDashboard, badge: 'LIVE' },
-  { section: 'agents',     label: 'AI Agents',         Icon: Bot              },
   { section: 'ingest',     label: 'Data Ingest',       Icon: Upload           },
   { section: 'inventory',  label: 'Inventory',         Icon: Package          },
   { section: 'analytics',  label: 'Analytics',         Icon: BarChart3        },
@@ -62,7 +57,6 @@ const CEO_ITEMS: NavItem[] = [
   { section: 'tasks',      label: 'Tasks',             Icon: CheckSquare      },
   { section: 'orders',     label: 'Order Summary',     Icon: ClipboardList    },
   { section: 'quotations', label: 'Quotations',        Icon: FileText         },
-  { section: 'documents', label: 'Documents', Icon: HardDrive },
   { section: 'workflow-analytics', label: 'Workflow Analytics', Icon: Activity },
 ];
 
@@ -382,13 +376,12 @@ function PWAUpdateBanner() {
 }
 
 // ─── Main Content ─────────────────────────────────────────────────────────────
-function MainContent({ session }: { session: Session | null }) {
+function MainContent(_props: { session: Session | null }) {
   const { activeSection, sidebarOpen, toggleSidebar } = useNavStore();
 
   const content = (() => {
     switch (activeSection) {
       case 'dashboard':  return <Dashboard />;
-      case 'agents':     return <AgentPanel session={session} />;
       case 'ingest':     return <DataIngestion />;
       case 'inventory':  return <InventoryDashboard />;
       case 'analytics':  return <Analytics />;
@@ -397,7 +390,6 @@ function MainContent({ session }: { session: Session | null }) {
       case 'tasks':      return <TasksPage />;
       case 'orders':     return <OrderSummaryDashboard />;
       case 'quotations': return <QuotationsDashboard />;
-      case 'documents':  return <DocumentsDrive />;
       case 'workflow-analytics': return <WorkflowAnalytics />;
       default:           return <Dashboard />;
     }
